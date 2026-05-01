@@ -1,0 +1,16 @@
+{
+  "name": "ai-vr-cad-editor-backend",
+  "version": "1.0.0",
+  "description": "Backend for AI-powered VR CAD Editor, proxying OpenAI API requests.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "dotenv": "^16.4.5",
+    "cors": "^2.8.5",
+    "openai": "^4.0.0"
+  }
+}
