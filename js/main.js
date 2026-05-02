@@ -1,8 +1,8 @@
-﻿        // THREE.js is now available globally
+﻿import { state } from './state.js';
+
+        // THREE.js is now available globally
         console.log("THREE.js loaded:", typeof THREE !== 'undefined');
 
-        // Global map to store dropped files by their relative path (e.g., "scene.bin", "textures/image.png")
-        const droppedFileBlobs = new Map();
 
         // List of random GLB model URLs
         const RANDOM_MODEL_URLS = [
@@ -13,32 +13,16 @@
             'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb'
         ];
 
-        let uploadedFile = null, scene, camera, renderer, controls;
-        let recognition;
-        let synth;
-        let isVoiceAssistActive = false;
-        let raycaster;
-        let mouse;
-        let selectedObject = null; // This will hold the currently selected THREE.Mesh part
-        // Stores original material properties for deselection, now includes color and emissive
-        // Changed to store an array of properties for multi-material objects
-        const originalMaterialProperties = new Map(); // Stores { uuid: [originalMaterial1, originalMaterial2, ...] or originalMaterial }
-        // New map to store original materials for "select all" highlight
-        const allHighlightsOriginalMaterials = new Map(); // Stores { uuid: [originalMaterial1, originalMaterial2, ...] or originalMaterial }
-        // NEW: This array will hold the actual objects selected by "select all" for functional editing
-        let currentlySelectedObjectsForEditing = [];
-
-        let transformControls;
 
         // UNIFIED SELECTION SYSTEM
         function getSelectedObjects() {
             // Return array of currently selected objects
-            if (currentlySelectedObjectsForEditing.length > 0) {
+            if (state.currentlySelectedObjectsForEditing.length > 0) {
                 // Multi-selection mode (from "select all")
-                return [...currentlySelectedObjectsForEditing];
-            } else if (selectedObject) {
+                return [...state.currentlySelectedObjectsForEditing];
+            } else if (state.selectedObject) {
                 // Single selection mode
-                return [selectedObject];
+                return [state.selectedObject];
             } else {
                 // No selection
                 return [];
@@ -59,14 +43,14 @@
                 selectObject(objects[0]);
             } else {
                 // Multi-object selection - use the highlight system
-                currentlySelectedObjectsForEditing = [...objects];
+                state.currentlySelectedObjectsForEditing = [...objects];
 
                 // Apply highlight to each object
                 objects.forEach(obj => {
                     if (obj && obj.material) {
                         // Store original material
                         const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
-                        allHighlightsOriginalMaterials.set(obj.uuid, materials.map(mat => mat.clone()));
+                        state.allHighlightsOriginalMaterials.set(obj.uuid, materials.map(mat => mat.clone()));
 
                         // Apply highlight
                         materials.forEach(mat => {
@@ -81,27 +65,21 @@
         }
 
         // Variables for dynamic grid
-        let currentGridHelper = null;
-        let currentGridLabels = [];
 
         // Global array to store all loaded GLTF scenes
-        let loadedModels = []; // This will now hold all top-level GLTF scenes
 
         // --- Undo/Redo History ---
-        let undoStack = [];
-        let redoStack = [];
         const MAX_HISTORY_SIZE = 20; // Limit history size to prevent excessive memory usage
 
         // GROUPED UNDO SYSTEM
-        let currentUndoGroup = null;
 
         function beginUndoGroup(actionName) {
-            if (currentUndoGroup) {
+            if (state.currentUndoGroup) {
                 console.warn('[beginUndoGroup] Already in undo group, ending previous group');
                 endUndoGroup();
             }
 
-            currentUndoGroup = {
+            state.currentUndoGroup = {
                 name: actionName,
                 actions: [],
                 beforeState: getCurrentState()
@@ -110,48 +88,45 @@
         }
 
         function addUndoAction(action) {
-            if (!currentUndoGroup) {
+            if (!state.currentUndoGroup) {
                 console.warn('[addUndoAction] No active undo group, creating temporary group');
                 beginUndoGroup('Temporary Action');
             }
 
-            currentUndoGroup.actions.push(action);
+            state.currentUndoGroup.actions.push(action);
         }
 
         function endUndoGroup() {
-            if (!currentUndoGroup) {
+            if (!state.currentUndoGroup) {
                 console.warn('[endUndoGroup] No active undo group');
                 return;
             }
 
-            if (currentUndoGroup.actions.length > 0) {
+            if (state.currentUndoGroup.actions.length > 0) {
                 // Save the grouped action to undo stack
-                undoStack.push({
-                    name: currentUndoGroup.name,
-                    beforeState: currentUndoGroup.beforeState,
+                state.undoStack.push({
+                    name: state.currentUndoGroup.name,
+                    beforeState: state.currentUndoGroup.beforeState,
                     afterState: getCurrentState(),
-                    actions: currentUndoGroup.actions
+                    actions: state.currentUndoGroup.actions
                 });
 
                 // Limit stack size
-                if (undoStack.length > MAX_HISTORY_SIZE) {
-                    undoStack.shift();
+                if (state.undoStack.length > MAX_HISTORY_SIZE) {
+                    state.undoStack.shift();
                 }
 
                 // Clear redo stack
-                redoStack = [];
+                state.redoStack = [];
 
-                console.log(`[endUndoGroup] Completed group: ${currentUndoGroup.name} with ${currentUndoGroup.actions.length} actions`);
+                console.log(`[endUndoGroup] Completed group: ${state.currentUndoGroup.name} with ${state.currentUndoGroup.actions.length} actions`);
             }
 
-            currentUndoGroup = null;
+            state.currentUndoGroup = null;
             updateUndoRedoButtons();
         }
 
-        // New scene and camera for the static view axes helper
-        let viewAxesScene, viewAxesCamera, viewAxesRenderer;
-        let viewAxesHelper; // The actual AxesHelper object
-        let viewAxesSceneRendered = false; // Flag to ensure helper is initialized only once
+        // New state.scene and state.camera for the static view axes helper
 
         // Get references to HTML elements
         const fileInput = document.getElementById('fileInput');
@@ -202,7 +177,6 @@
         const applyObjectColorBtn = document.getElementById('applyObjectColorBtn');
 
         // Debugging: Raycast hit visualizer
-        let raycastDebugSphere;
 
 
         // --- Expose functions globally for HTML onclick attributes ---
@@ -227,9 +201,9 @@
 
         window.setScaleMode = function() {
             // If multiple objects are selected, use direct scaling
-            if (currentlySelectedObjectsForEditing.length > 1) {
+            if (state.currentlySelectedObjectsForEditing.length > 1) {
                 console.log("Multiple objects selected - using direct scaling");
-                addMessageToLog('System', `Scale mode: Use scaleAllObjects(1.5) to scale ${currentlySelectedObjectsForEditing.length} objects together`);
+                addMessageToLog('System', `Scale mode: Use scaleAllObjects(1.5) to scale ${state.currentlySelectedObjectsForEditing.length} objects together`);
                 console.log("Available commands:");
                 console.log("- scaleAllObjects(1.5) - Make all objects 1.5x bigger");
                 console.log("- scaleAllObjects(2) - Make all objects 2x bigger");
@@ -237,13 +211,13 @@
                 return;
             }
 
-            if (transformControls) {
-                transformControls.setMode('scale');
+            if (state.transformControls) {
+                state.transformControls.setMode('scale');
                 console.log("✅ Transform mode set to SCALE");
                 addMessageToLog('System', 'Transform mode: Scale (resize objects)');
 
                 // Reset group helper scale if it exists
-                const groupHelper = scene.getObjectByProperty('name', 'GroupMovementHelper');
+                const groupHelper = state.scene.getObjectByProperty('name', 'GroupMovementHelper');
                 if (groupHelper) {
                     groupHelper.scale.set(1, 1, 1);
                     console.log("Reset group helper scale for new scaling operation");
@@ -253,9 +227,9 @@
 
         window.setRotateMode = function() {
             // If multiple objects are selected, use direct rotation
-            if (currentlySelectedObjectsForEditing.length > 1) {
+            if (state.currentlySelectedObjectsForEditing.length > 1) {
                 console.log("Multiple objects selected - using direct rotation");
-                addMessageToLog('System', `Rotate mode: Use rotateAllObjects() to rotate ${currentlySelectedObjectsForEditing.length} objects together`);
+                addMessageToLog('System', `Rotate mode: Use rotateAllObjects() to rotate ${state.currentlySelectedObjectsForEditing.length} objects together`);
                 console.log("Available commands:");
                 console.log("- rotateAllObjects(0, Math.PI/4, 0) - Rotate all 45° around Y");
                 console.log("- rotateAllObjects(0, Math.PI/2, 0) - Rotate all 90° around Y");
@@ -263,13 +237,13 @@
                 return;
             }
 
-            if (transformControls) {
-                transformControls.setMode('rotate');
+            if (state.transformControls) {
+                state.transformControls.setMode('rotate');
                 console.log("✅ Transform mode set to ROTATE");
                 addMessageToLog('System', 'Transform mode: Rotate (turn objects)');
 
                 // Reset group helper rotation if it exists
-                const groupHelper = scene.getObjectByProperty('name', 'GroupMovementHelper');
+                const groupHelper = state.scene.getObjectByProperty('name', 'GroupMovementHelper');
                 if (groupHelper) {
                     groupHelper.rotation.set(0, 0, 0);
                     console.log("Reset group helper rotation for new rotation operation");
@@ -279,9 +253,9 @@
 
         window.setTranslateMode = function() {
             // If multiple objects are selected, use direct movement
-            if (currentlySelectedObjectsForEditing.length > 1) {
+            if (state.currentlySelectedObjectsForEditing.length > 1) {
                 console.log("Multiple objects selected - using direct movement");
-                addMessageToLog('System', `Move mode: Use moveAllObjects() to move ${currentlySelectedObjectsForEditing.length} objects together`);
+                addMessageToLog('System', `Move mode: Use moveAllObjects() to move ${state.currentlySelectedObjectsForEditing.length} objects together`);
                 console.log("Available commands:");
                 console.log("- moveAllObjects(2, 0, 0) - Move all right by 2");
                 console.log("- moveAllObjects(0, 1, 0) - Move all up by 1");
@@ -289,8 +263,8 @@
                 return;
             }
 
-            if (transformControls) {
-                transformControls.setMode('translate');
+            if (state.transformControls) {
+                state.transformControls.setMode('translate');
                 console.log("✅ Transform mode set to TRANSLATE");
                 addMessageToLog('System', 'Transform mode: Translate (move objects)');
             }
@@ -300,23 +274,23 @@
         window.duplicateAll = function() {
             console.log("=== DUPLICATING ALL OBJECTS ===");
 
-            if (loadedModels.length === 0) {
+            if (state.loadedModels.length === 0) {
                 console.log("❌ No objects to duplicate");
                 addMessageToLog('System', 'No objects found to duplicate.');
                 return;
             }
 
-            console.log(`Duplicating ${loadedModels.length} objects...`);
+            console.log(`Duplicating ${state.loadedModels.length} objects...`);
 
             // Save state for undo
             const currentState = getCurrentState();
-            undoStack.push(currentState);
-            redoStack = [];
+            state.undoStack.push(currentState);
+            state.redoStack = [];
 
             const duplicatedObjects = [];
 
             // Duplicate each object
-            loadedModels.forEach((original, index) => {
+            state.loadedModels.forEach((original, index) => {
                 try {
                     const clone = original.clone();
 
@@ -330,9 +304,9 @@
                     // Copy userData
                     clone.userData = { ...original.userData };
 
-                    // Add to scene
-                    scene.add(clone);
-                    loadedModels.push(clone);
+                    // Add to state.scene
+                    state.scene.add(clone);
+                    state.loadedModels.push(clone);
                     duplicatedObjects.push(clone);
 
                     console.log(`✅ Duplicated: ${original.name} → ${clone.name}`);
@@ -363,19 +337,19 @@
 
             try {
                 // Check if we have objects
-                if (!loadedModels || loadedModels.length === 0) {
+                if (!state.loadedModels || state.loadedModels.length === 0) {
                     console.log("❌ No objects to duplicate");
                     alert("No objects to duplicate! Create some objects first.");
                     return;
                 }
 
-                const originalCount = loadedModels.length;
+                const originalCount = state.loadedModels.length;
                 console.log(`Starting duplication of ${originalCount} objects...`);
 
                 // Create array of objects to duplicate (snapshot)
                 const objectsToClone = [];
                 for (let i = 0; i < originalCount; i++) {
-                    objectsToClone.push(loadedModels[i]);
+                    objectsToClone.push(state.loadedModels[i]);
                 }
 
                 // Duplicate each object
@@ -404,9 +378,9 @@
                             };
                         }
 
-                        // Add to scene
-                        scene.add(clone);
-                        loadedModels.push(clone);
+                        // Add to state.scene
+                        state.scene.add(clone);
+                        state.loadedModels.push(clone);
 
                         console.log(`✅ Successfully duplicated: ${clone.name}`);
 
@@ -471,8 +445,8 @@
                                 initialMaterial: material.clone()
                             };
 
-                            scene.add(fallbackMesh);
-                            loadedModels.push(fallbackMesh);
+                            state.scene.add(fallbackMesh);
+                            state.loadedModels.push(fallbackMesh);
 
                             console.log(`✅ Fallback creation successful: ${fallbackMesh.name}`);
 
@@ -482,7 +456,7 @@
                     }
                 }
 
-                const finalCount = loadedModels.length;
+                const finalCount = state.loadedModels.length;
                 const duplicatedCount = finalCount - originalCount;
 
                 console.log(`✅ Duplication complete!`);
@@ -493,8 +467,8 @@
                 alert(`Success! Duplicated ${duplicatedCount} objects. Total objects: ${finalCount}`);
 
                 // Force render update
-                if (renderer && scene && camera) {
-                    renderer.render(scene, camera);
+                if (state.renderer && state.scene && state.camera) {
+                    state.renderer.render(state.scene, state.camera);
                 }
 
             } catch (mainError) {
@@ -507,22 +481,22 @@
         window.duplicateEverything = function() {
             console.log("=== DUPLICATING EVERYTHING (SIMPLE) ===");
 
-            if (loadedModels.length === 0) {
+            if (state.loadedModels.length === 0) {
                 console.log("❌ No objects to duplicate");
                 addMessageToLog('System', 'No objects found to duplicate.');
                 return;
             }
 
-            const originalCount = loadedModels.length;
+            const originalCount = state.loadedModels.length;
             console.log(`Duplicating ${originalCount} objects...`);
 
             // Save state for undo
             const currentState = getCurrentState();
-            undoStack.push(currentState);
-            redoStack = [];
+            state.undoStack.push(currentState);
+            state.redoStack = [];
 
             // Get all current objects
-            const objectsToDuplicate = [...loadedModels];
+            const objectsToDuplicate = [...state.loadedModels];
 
             // Duplicate each one
             objectsToDuplicate.forEach(original => {
@@ -532,14 +506,14 @@
                 clone.name = `${original.name} (Copy)`;
                 clone.userData = { ...original.userData };
 
-                scene.add(clone);
-                loadedModels.push(clone);
+                state.scene.add(clone);
+                state.loadedModels.push(clone);
             });
 
             console.log(`✅ Duplicated ${originalCount} objects`);
-            console.log(`✅ Total objects: ${loadedModels.length}`);
+            console.log(`✅ Total objects: ${state.loadedModels.length}`);
 
-            addMessageToLog('System', `Duplicated ${originalCount} objects. Total: ${loadedModels.length}`);
+            addMessageToLog('System', `Duplicated ${originalCount} objects. Total: ${state.loadedModels.length}`);
             updateUndoRedoButtons();
         };
 
@@ -555,8 +529,8 @@
 
             setTimeout(() => {
                 console.log("2. Objects created:");
-                console.log("   - loadedModels.length:", loadedModels.length);
-                console.log("   - Objects:", loadedModels.map(obj => obj.name));
+                console.log("   - state.loadedModels.length:", state.loadedModels.length);
+                console.log("   - Objects:", state.loadedModels.map(obj => obj.name));
 
                 // Step 2: Select all
                 console.log("3. Calling highlightAllModels()...");
@@ -564,9 +538,9 @@
 
                 setTimeout(() => {
                     console.log("4. After select all:");
-                    console.log("   - selectedObject:", selectedObject ? selectedObject.name : 'null');
-                    console.log("   - currentlySelectedObjectsForEditing.length:", currentlySelectedObjectsForEditing.length);
-                    console.log("   - Selected objects:", currentlySelectedObjectsForEditing.map(obj => obj.name || obj.type));
+                    console.log("   - state.selectedObject:", state.selectedObject ? state.selectedObject.name : 'null');
+                    console.log("   - state.currentlySelectedObjectsForEditing.length:", state.currentlySelectedObjectsForEditing.length);
+                    console.log("   - Selected objects:", state.currentlySelectedObjectsForEditing.map(obj => obj.name || obj.type));
 
                     // Step 3: Try duplicate
                     console.log("5. Calling duplicateNow()...");
@@ -574,11 +548,11 @@
 
                     setTimeout(() => {
                         console.log("6. After duplicate:");
-                        console.log("   - loadedModels.length:", loadedModels.length);
+                        console.log("   - state.loadedModels.length:", state.loadedModels.length);
                         console.log("   - Expected: 6 objects");
-                        console.log("   - Actual objects:", loadedModels.map(obj => obj.name));
+                        console.log("   - Actual objects:", state.loadedModels.map(obj => obj.name));
 
-                        if (loadedModels.length === 6) {
+                        if (state.loadedModels.length === 6) {
                             console.log("✅ SUCCESS: Duplication worked!");
                         } else {
                             console.error("❌ FAILED: Duplication didn't work properly");
@@ -592,39 +566,39 @@
         window.justDuplicate = function() {
             console.log("=== JUST DUPLICATE (NO SELECTION) ===");
 
-            if (loadedModels.length === 0) {
+            if (state.loadedModels.length === 0) {
                 alert("Create some objects first!");
                 return;
             }
 
-            const count = loadedModels.length;
+            const count = state.loadedModels.length;
             console.log(`Duplicating ${count} objects...`);
 
             // Simple loop - duplicate each object
             for (let i = 0; i < count; i++) {
-                const original = loadedModels[i];
+                const original = state.loadedModels[i];
 
                 // Create exact copy using clone
                 const copy = original.clone();
                 copy.position.x += 3; // Move to right
                 copy.name = original.name + " Copy";
 
-                scene.add(copy);
-                loadedModels.push(copy);
+                state.scene.add(copy);
+                state.loadedModels.push(copy);
 
                 console.log(`Copied: ${original.name} → ${copy.name}`);
             }
 
-            console.log(`Done! Total objects: ${loadedModels.length}`);
+            console.log(`Done! Total objects: ${state.loadedModels.length}`);
             alert(`Duplicated ${count} objects!`);
         };
 
         // MULTI-OBJECT EDITING SYSTEM - Edit many objects at once
         window.editSelected = function(action, ...params) {
-            console.log(`=== EDITING ${currentlySelectedObjectsForEditing.length} SELECTED OBJECTS ===`);
+            console.log(`=== EDITING ${state.currentlySelectedObjectsForEditing.length} SELECTED OBJECTS ===`);
             console.log(`Action: ${action}`, params);
 
-            if (currentlySelectedObjectsForEditing.length === 0) {
+            if (state.currentlySelectedObjectsForEditing.length === 0) {
                 console.log("❌ No objects selected. Use highlightAllModels() first.");
                 addMessageToLog('System', 'No objects selected. Use "select all" first.');
                 return;
@@ -632,14 +606,14 @@
 
             // Save state for undo
             const currentState = getCurrentState();
-            undoStack.push(currentState);
-            redoStack = [];
+            state.undoStack.push(currentState);
+            state.redoStack = [];
 
             let successCount = 0;
 
             // Get unique top-level objects to edit
-            const objectsToEdit = loadedModels.filter(model =>
-                currentlySelectedObjectsForEditing.some(selected =>
+            const objectsToEdit = state.loadedModels.filter(model =>
+                state.currentlySelectedObjectsForEditing.some(selected =>
                     selected === model || model.getObjectById(selected.id)
                 )
             );
@@ -655,8 +629,8 @@
                             clone.position.x += 3;
                             clone.name = `${obj.name || 'Object'} (Copy)`;
                             clone.userData = { ...obj.userData };
-                            scene.add(clone);
-                            loadedModels.push(clone);
+                            state.scene.add(clone);
+                            state.loadedModels.push(clone);
                             successCount++;
                             break;
 
@@ -708,10 +682,10 @@
 
                         case 'delete':
                         case 'remove':
-                            scene.remove(obj);
-                            const index = loadedModels.indexOf(obj);
+                            state.scene.remove(obj);
+                            const index = state.loadedModels.indexOf(obj);
                             if (index > -1) {
-                                loadedModels.splice(index, 1);
+                                state.loadedModels.splice(index, 1);
                             }
                             // Dispose geometry and materials
                             obj.traverse(child => {
@@ -758,21 +732,21 @@
             console.log("=== DUPLICATING ALL OBJECTS ===");
 
             // Check if we have objects
-            if (!loadedModels || loadedModels.length === 0) {
+            if (!state.loadedModels || state.loadedModels.length === 0) {
                 console.log("❌ No objects found");
                 alert("No objects to duplicate. Create some objects first!");
                 return;
             }
 
-            console.log(`Starting duplication of ${loadedModels.length} objects...`);
+            console.log(`Starting duplication of ${state.loadedModels.length} objects...`);
 
             // Store original count
-            const originalCount = loadedModels.length;
+            const originalCount = state.loadedModels.length;
 
             // Get snapshot of current objects
             const objectsToClone = [];
             for (let i = 0; i < originalCount; i++) {
-                objectsToClone.push(loadedModels[i]);
+                objectsToClone.push(state.loadedModels[i]);
             }
 
             console.log("Objects to clone:", objectsToClone.map(obj => obj.name || obj.type));
@@ -799,11 +773,11 @@
                         clone.userData = JSON.parse(JSON.stringify(original.userData));
                     }
 
-                    // Add to scene
-                    scene.add(clone);
+                    // Add to state.scene
+                    state.scene.add(clone);
 
                     // Add to our tracking array
-                    loadedModels.push(clone);
+                    state.loadedModels.push(clone);
 
                     console.log(`✅ Successfully cloned: ${clone.name}`);
 
@@ -813,7 +787,7 @@
                 }
             }
 
-            const finalCount = loadedModels.length;
+            const finalCount = state.loadedModels.length;
             console.log(`✅ Duplication complete!`);
             console.log(`✅ Objects before: ${originalCount}`);
             console.log(`✅ Objects after: ${finalCount}`);
@@ -823,8 +797,8 @@
             alert(`Success! Duplicated ${originalCount} objects. Total objects: ${finalCount}`);
 
             // Force render update
-            if (renderer && scene && camera) {
-                renderer.render(scene, camera);
+            if (state.renderer && state.scene && state.camera) {
+                state.renderer.render(state.scene, state.camera);
             }
         };
 
@@ -832,8 +806,8 @@
         window.duplicateAfterSelectAll = function() {
             console.log("=== DUPLICATE AFTER SELECT ALL ===");
             console.log("Current state:");
-            console.log("- loadedModels.length:", loadedModels.length);
-            console.log("- currentlySelectedObjectsForEditing.length:", currentlySelectedObjectsForEditing.length);
+            console.log("- state.loadedModels.length:", state.loadedModels.length);
+            console.log("- state.currentlySelectedObjectsForEditing.length:", state.currentlySelectedObjectsForEditing.length);
 
             // Just duplicate all objects regardless of selection
             justDuplicate();
@@ -843,18 +817,18 @@
         window.duplicateMultiple = function() {
             console.log("=== DUPLICATING MULTIPLE OBJECTS ===");
 
-            if (!loadedModels || loadedModels.length === 0) {
+            if (!state.loadedModels || state.loadedModels.length === 0) {
                 alert("No objects to duplicate! Create some objects first.");
                 return;
             }
 
-            const beforeCount = loadedModels.length;
+            const beforeCount = state.loadedModels.length;
             console.log(`Before: ${beforeCount} objects`);
 
             // Create array of objects to duplicate (snapshot to avoid infinite loop)
             const objectsToClone = [];
             for (let i = 0; i < beforeCount; i++) {
-                objectsToClone.push(loadedModels[i]);
+                objectsToClone.push(state.loadedModels[i]);
             }
 
             console.log("Objects to clone:", objectsToClone.map(obj => obj.name));
@@ -889,14 +863,14 @@
                     };
                 }
 
-                // Add to scene and tracking array
-                scene.add(duplicate);
-                loadedModels.push(duplicate);
+                // Add to state.scene and tracking array
+                state.scene.add(duplicate);
+                state.loadedModels.push(duplicate);
 
                 console.log(`✅ Created: ${duplicate.name}`);
             });
 
-            const afterCount = loadedModels.length;
+            const afterCount = state.loadedModels.length;
             const duplicatedCount = afterCount - beforeCount;
 
             console.log(`After: ${afterCount} objects`);
@@ -914,16 +888,16 @@
         window.duplicateMultipleObjects = function() {
             console.log("=== DUPLICATING MULTIPLE OBJECTS ===");
 
-            if (!loadedModels || loadedModels.length === 0) {
+            if (!state.loadedModels || state.loadedModels.length === 0) {
                 alert("No objects to duplicate! Create some objects first.");
                 return false;
             }
 
-            const originalCount = loadedModels.length;
+            const originalCount = state.loadedModels.length;
             console.log(`Starting duplication of ${originalCount} objects`);
 
             // Filter out helper objects and only get real objects
-            const objectsToClone = loadedModels.filter(obj => {
+            const objectsToClone = state.loadedModels.filter(obj => {
                 // Skip helper objects
                 if (obj.name === 'GroupMovementHelper' ||
                     obj.userData?.isGroupHelper ||
@@ -969,9 +943,9 @@
                         initialMaterial: duplicate.material ? duplicate.material.clone() : null
                     };
 
-                    // Add to scene
-                    scene.add(duplicate);
-                    loadedModels.push(duplicate);
+                    // Add to state.scene
+                    state.scene.add(duplicate);
+                    state.loadedModels.push(duplicate);
                     successCount++;
 
                     console.log(`✅ Successfully duplicated: ${duplicate.name}`);
@@ -981,7 +955,7 @@
                 }
             });
 
-            const finalCount = loadedModels.length;
+            const finalCount = state.loadedModels.length;
             console.log(`Duplication complete: ${successCount} real objects duplicated`);
             console.log(`Total objects: ${originalCount} → ${finalCount}`);
 
@@ -1017,8 +991,8 @@
             createPrimitive('cone');
 
             setTimeout(() => {
-                console.log(`2. Created ${loadedModels.length} objects`);
-                console.log("   Objects:", loadedModels.map(obj => obj.name));
+                console.log(`2. Created ${state.loadedModels.length} objects`);
+                console.log("   Objects:", state.loadedModels.map(obj => obj.name));
 
                 // Step 2: Select all
                 console.log("3. Selecting all objects...");
@@ -1026,8 +1000,8 @@
 
                 setTimeout(() => {
                     console.log("4. Selection complete:");
-                    console.log("   - selectedObject:", selectedObject ? selectedObject.name : 'none');
-                    console.log("   - currentlySelectedObjectsForEditing.length:", currentlySelectedObjectsForEditing.length);
+                    console.log("   - state.selectedObject:", state.selectedObject ? state.selectedObject.name : 'none');
+                    console.log("   - state.currentlySelectedObjectsForEditing.length:", state.currentlySelectedObjectsForEditing.length);
 
                     // Step 3: Duplicate
                     console.log("5. Duplicating selected objects...");
@@ -1035,15 +1009,15 @@
 
                     setTimeout(() => {
                         console.log("6. Duplication complete:");
-                        console.log(`   - Total objects: ${loadedModels.length}`);
+                        console.log(`   - Total objects: ${state.loadedModels.length}`);
                         console.log("   - Expected: 8 objects (4 originals + 4 copies)");
 
-                        if (loadedModels.length === 8) {
+                        if (state.loadedModels.length === 8) {
                             console.log("✅ SUCCESS: Select all + duplicate working!");
                             alert("✅ SUCCESS! Select all + duplicate works perfectly!");
                         } else {
-                            console.error("❌ ISSUE: Expected 8 objects, got", loadedModels.length);
-                            alert(`❌ Issue: Expected 8 objects, got ${loadedModels.length}`);
+                            console.error("❌ ISSUE: Expected 8 objects, got", state.loadedModels.length);
+                            alert(`❌ Issue: Expected 8 objects, got ${state.loadedModels.length}`);
                         }
                     }, 500);
                 }, 500);
@@ -1108,17 +1082,17 @@
                     // Set name for the clone
                     clone.name = `${srcObject.name || 'Object'} (Copy)`;
 
-                    // Add to the SAME parent as the original, not scene root
-                    const parent = srcObject.parent || scene;
+                    // Add to the SAME parent as the original, not state.scene root
+                    const parent = srcObject.parent || state.scene;
                     parent.add(clone);
 
                     // Offset the clone so it's visible next to the original
                     clone.position.copy(srcObject.position);
                     clone.position.add(new THREE.Vector3(2, 0, 0)); // Move 2 units to the right
 
-                    // Add to loadedModels if the original was a top-level model
-                    if (loadedModels.includes(srcObject)) {
-                        loadedModels.push(clone);
+                    // Add to state.loadedModels if the original was a top-level model
+                    if (state.loadedModels.includes(srcObject)) {
+                        state.loadedModels.push(clone);
                     }
 
                     createdObjects.push(clone);
@@ -1130,9 +1104,9 @@
                         parent: parent,
                         revert: () => {
                             parent.remove(clone);
-                            const modelIndex = loadedModels.indexOf(clone);
+                            const modelIndex = state.loadedModels.indexOf(clone);
                             if (modelIndex !== -1) {
-                                loadedModels.splice(modelIndex, 1);
+                                state.loadedModels.splice(modelIndex, 1);
                             }
                         }
                     });
@@ -1161,9 +1135,9 @@
                     if (obj.parent) {
                         obj.parent.remove(obj);
                     }
-                    const modelIndex = loadedModels.indexOf(obj);
+                    const modelIndex = state.loadedModels.indexOf(obj);
                     if (modelIndex !== -1) {
-                        loadedModels.splice(modelIndex, 1);
+                        state.loadedModels.splice(modelIndex, 1);
                     }
                 });
 
@@ -1179,13 +1153,13 @@
         window.testSelectAllDuplicate = function() {
             console.log("=== TESTING SELECT ALL → DUPLICATE ===");
 
-            // Step 1: Check current scene
-            console.log("1. Current scene state:");
-            console.log(`   - loadedModels.length: ${loadedModels.length}`);
-            console.log(`   - scene.children.length: ${scene.children.length}`);
+            // Step 1: Check current state.scene
+            console.log("1. Current state.scene state:");
+            console.log(`   - state.loadedModels.length: ${state.loadedModels.length}`);
+            console.log(`   - state.scene.children.length: ${state.scene.children.length}`);
 
-            if (loadedModels.length === 0) {
-                console.log("❌ No objects in scene. Creating test objects...");
+            if (state.loadedModels.length === 0) {
+                console.log("❌ No objects in state.scene. Creating test objects...");
 
                 // Create test objects
                 const geometry1 = new THREE.BoxGeometry(1, 1, 1);
@@ -1193,16 +1167,16 @@
                 const cube1 = new THREE.Mesh(geometry1, material1);
                 cube1.position.set(-2, 0, 0);
                 cube1.name = "Test Cube 1";
-                scene.add(cube1);
-                loadedModels.push(cube1);
+                state.scene.add(cube1);
+                state.loadedModels.push(cube1);
 
                 const geometry2 = new THREE.SphereGeometry(0.5, 32, 32);
                 const material2 = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
                 const sphere1 = new THREE.Mesh(geometry2, material2);
                 sphere1.position.set(2, 0, 0);
                 sphere1.name = "Test Sphere 1";
-                scene.add(sphere1);
-                loadedModels.push(sphere1);
+                state.scene.add(sphere1);
+                state.loadedModels.push(sphere1);
 
                 console.log("✅ Created 2 test objects");
             }
@@ -1213,7 +1187,7 @@
 
             setTimeout(() => {
                 console.log("3. Selection state after Select All:");
-                console.log(`   - currentlySelectedObjectsForEditing.length: ${currentlySelectedObjectsForEditing.length}`);
+                console.log(`   - state.currentlySelectedObjectsForEditing.length: ${state.currentlySelectedObjectsForEditing.length}`);
                 console.log(`   - getSelectedObjects().length: ${getSelectedObjects().length}`);
 
                 // Step 3: Duplicate
@@ -1222,12 +1196,12 @@
 
                 setTimeout(() => {
                     console.log("5. Final state after Duplicate:");
-                    console.log(`   - loadedModels.length: ${loadedModels.length}`);
+                    console.log(`   - state.loadedModels.length: ${state.loadedModels.length}`);
                     console.log(`   - getSelectedObjects().length: ${getSelectedObjects().length}`);
-                    console.log(`   - undoStack.length: ${undoStack.length}`);
+                    console.log(`   - state.undoStack.length: ${state.undoStack.length}`);
 
-                    const expectedCount = loadedModels.length / 2; // Should be double the original
-                    if (loadedModels.length >= 4) {
+                    const expectedCount = state.loadedModels.length / 2; // Should be double the original
+                    if (state.loadedModels.length >= 4) {
                         console.log("✅ TEST PASSED: Objects were duplicated");
                     } else {
                         console.log("❌ TEST FAILED: Not enough objects created");
@@ -1238,9 +1212,9 @@
 
                     setTimeout(() => {
                         console.log("7. State after Undo:");
-                        console.log(`   - loadedModels.length: ${loadedModels.length}`);
+                        console.log(`   - state.loadedModels.length: ${state.loadedModels.length}`);
 
-                        if (loadedModels.length === 2) {
+                        if (state.loadedModels.length === 2) {
                             console.log("✅ UNDO TEST PASSED: Back to original count");
                         } else {
                             console.log("❌ UNDO TEST FAILED: Wrong object count");
@@ -1365,7 +1339,7 @@
             console.log("=== TESTING TRANSFORM UNDO/REDO SYSTEM ===");
 
             // Step 1: Create test objects if needed
-            if (loadedModels.length === 0) {
+            if (state.loadedModels.length === 0) {
                 console.log("1. Creating test objects...");
 
                 const geometry1 = new THREE.BoxGeometry(1, 1, 1);
@@ -1373,16 +1347,16 @@
                 const cube1 = new THREE.Mesh(geometry1, material1);
                 cube1.position.set(-2, 0, 0);
                 cube1.name = "Test Cube 1";
-                scene.add(cube1);
-                loadedModels.push(cube1);
+                state.scene.add(cube1);
+                state.loadedModels.push(cube1);
 
                 const geometry2 = new THREE.SphereGeometry(0.5, 32, 32);
                 const material2 = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
                 const sphere1 = new THREE.Mesh(geometry2, material2);
                 sphere1.position.set(2, 0, 0);
                 sphere1.name = "Test Sphere 1";
-                scene.add(sphere1);
-                loadedModels.push(sphere1);
+                state.scene.add(sphere1);
+                state.loadedModels.push(sphere1);
 
                 console.log("✅ Created 2 test objects");
             }
@@ -1410,7 +1384,7 @@
 
                         setTimeout(() => {
                             console.log("4. Testing undo sequence...");
-                            console.log(`   Current undo stack size: ${undoStack.length}`);
+                            console.log(`   Current undo stack size: ${state.undoStack.length}`);
 
                             // Undo 1: Rotation
                             console.log("   4a. Undoing rotation...");
@@ -1428,7 +1402,7 @@
 
                                     setTimeout(() => {
                                         console.log("5. Testing redo sequence...");
-                                        console.log(`   Current redo stack size: ${redoStack.length}`);
+                                        console.log(`   Current redo stack size: ${state.redoStack.length}`);
 
                                         // Redo 1: Move
                                         console.log("   5a. Redoing move...");
@@ -1446,10 +1420,10 @@
 
                                                 setTimeout(() => {
                                                     console.log("✅ TRANSFORM UNDO/REDO TEST COMPLETE");
-                                                    console.log(`   Final undo stack size: ${undoStack.length}`);
-                                                    console.log(`   Final redo stack size: ${redoStack.length}`);
+                                                    console.log(`   Final undo stack size: ${state.undoStack.length}`);
+                                                    console.log(`   Final redo stack size: ${state.redoStack.length}`);
 
-                                                    if (undoStack.length === 3 && redoStack.length === 0) {
+                                                    if (state.undoStack.length === 3 && state.redoStack.length === 0) {
                                                         console.log("✅ TEST PASSED: Undo/Redo working correctly");
                                                     } else {
                                                         console.log("❌ TEST FAILED: Unexpected stack sizes");
@@ -1468,11 +1442,11 @@
 
         // NATURAL LANGUAGE OBJECT TARGETING SYSTEM
 
-        // Scene indexing for object targeting
-        function indexScene(scene) {
+        // state.scene indexing for object targeting
+        function indexScene(state.scene) {
             const index = [];
 
-            loadedModels.forEach(obj => {
+            state.loadedModels.forEach(obj => {
                 if (!obj || !obj.uuid) return;
 
                 // Extract object information
@@ -1573,7 +1547,7 @@
             const removedObjects = [];
 
             uuids.forEach(uuid => {
-                const obj = scene.getObjectByProperty('uuid', uuid);
+                const obj = state.scene.getObjectByProperty('uuid', uuid);
                 if (obj && obj.parent) {
                     removedObjects.push({
                         object: obj,
@@ -1583,10 +1557,10 @@
 
                     obj.parent.remove(obj);
 
-                    // Remove from loadedModels
-                    const modelIndex = loadedModels.indexOf(obj);
+                    // Remove from state.loadedModels
+                    const modelIndex = state.loadedModels.indexOf(obj);
                     if (modelIndex !== -1) {
-                        loadedModels.splice(modelIndex, 1);
+                        state.loadedModels.splice(modelIndex, 1);
                     }
 
                     // Add undo action
@@ -1598,7 +1572,7 @@
                         revert: () => {
                             obj.parent.add(obj);
                             if (modelIndex !== -1) {
-                                loadedModels.splice(modelIndex, 0, obj);
+                                state.loadedModels.splice(modelIndex, 0, obj);
                             }
                         }
                     });
@@ -1624,7 +1598,7 @@
             const transformedObjects = [];
 
             uuids.forEach(uuid => {
-                const obj = scene.getObjectByProperty('uuid', uuid);
+                const obj = state.scene.getObjectByProperty('uuid', uuid);
                 if (!obj) return;
 
                 // Store original transform values
@@ -1712,19 +1686,18 @@
         }
 
         // Disambiguation state
-        let pendingDisambiguation = null;
         let pendingIntent = null;
 
         // Clear pending operations when selection changes
         function onSelectionChanged() {
             console.log('[onSelectionChanged] Clearing pending operations');
-            pendingDisambiguation = null;      // Cancel candidate selection waiting
+            state.pendingDisambiguation = null;      // Cancel candidate selection waiting
             pendingIntent = null;              // ⛔ Discard previous intent
         }
 
         // Get currently active object for operations
         function getActiveObject() {
-            return selectedObject || (currentlySelectedObjectsForEditing.length > 0 ? currentlySelectedObjectsForEditing[0] : null);
+            return state.selectedObject || (state.currentlySelectedObjectsForEditing.length > 0 ? state.currentlySelectedObjectsForEditing[0] : null);
         }
 
         // Build exact face boundary polygon (not convex hull) - PRECISE VERSION
@@ -1831,9 +1804,9 @@
 
         // Enable/disable multi-face selection mode
         function enableMultiFaceSelection(enable) {
-            if (faceEditState.isActive) {
-                faceEditState.multiSelect = !!enable;
-                console.log('[enableMultiFaceSelection] Multi-select mode:', faceEditState.multiSelect);
+            if (state.faceEditState.isActive) {
+                state.faceEditState.multiSelect = !!enable;
+                console.log('[enableMultiFaceSelection] Multi-select mode:', state.faceEditState.multiSelect);
                 addMessageToLog('System', `Multi-face selection ${enable ? 'enabled' : 'disabled'}. ${enable ? 'Hold Ctrl and click faces.' : ''}`);
                 return true;
             } else {
@@ -1844,14 +1817,14 @@
 
         // DEBUG: Test multi-select by selecting first two faces
         function testMultiSelect() {
-            if (!faceEditState.isActive) {
+            if (!state.faceEditState.isActive) {
                 console.log('[testMultiSelect] Face mode not active');
                 testFaceEditing();
                 setTimeout(() => testMultiSelect(), 1000);
                 return;
             }
 
-            if (faceEditState.groups.length < 2) {
+            if (state.faceEditState.groups.length < 2) {
                 console.log('[testMultiSelect] Need at least 2 face groups');
                 return;
             }
@@ -1859,19 +1832,19 @@
             console.log('[testMultiSelect] Enabling multi-select and selecting first 2 faces');
 
             // Enable multi-select
-            faceEditState.multiSelect = true;
+            state.faceEditState.multiSelect = true;
 
             // Select first two faces
-            faceEditState.selectedFaceIds.clear();
-            faceEditState.selectedFaceIds.add(faceEditState.groups[0].id);
-            faceEditState.selectedFaceIds.add(faceEditState.groups[1].id);
+            state.faceEditState.selectedFaceIds.clear();
+            state.faceEditState.selectedFaceIds.add(state.faceEditState.groups[0].id);
+            state.faceEditState.selectedFaceIds.add(state.faceEditState.groups[1].id);
 
             // Update legacy compatibility
-            faceEditState.selectedGroupId = faceEditState.groups[0].id;
+            state.faceEditState.selectedGroupId = state.faceEditState.groups[0].id;
 
             // Update visual state
-            faceEditState.groups.forEach(group => {
-                const isSelected = faceEditState.selectedFaceIds.has(group.id);
+            state.faceEditState.groups.forEach(group => {
+                const isSelected = state.faceEditState.selectedFaceIds.has(group.id);
                 if (group.overlay && group.overlay.material) {
                     group.overlay.material.opacity = isSelected ? 0.7 : 0.4;
                     group.overlay.material.color.setHex(isSelected ? 0xff0000 : 0x00ff00);
@@ -1881,16 +1854,16 @@
                 }
             });
 
-            console.log('[testMultiSelect] Selected faces:', Array.from(faceEditState.selectedFaceIds));
-            addMessageToLog('System', `${faceEditState.selectedFaceIds.size} faces selected. Press E to extrude.`);
+            console.log('[testMultiSelect] Selected faces:', Array.from(state.faceEditState.selectedFaceIds));
+            addMessageToLog('System', `${state.faceEditState.selectedFaceIds.size} faces selected. Press E to extrude.`);
         }
 
         // Update face highlights based on selection
         function updateFaceHighlights() {
-            if (!faceEditState.isActive) return;
+            if (!state.faceEditState.isActive) return;
 
-            faceEditState.groups.forEach(group => {
-                const isSelected = faceEditState.selectedFaceIds.has(group.id);
+            state.faceEditState.groups.forEach(group => {
+                const isSelected = state.faceEditState.selectedFaceIds.has(group.id);
                 if (group.overlay && group.overlay.material) {
                     group.overlay.material.opacity = isSelected ? 0.7 : 0.4;
                     group.overlay.material.color.setHex(isSelected ? 0xff0000 : 0x00ff00);
@@ -1906,25 +1879,25 @@
         // DEBUG: Check multi-select state
         function checkMultiSelectState() {
             console.log('=== MULTI-SELECT STATE ===');
-            console.log('Face mode active:', faceEditState.isActive);
-            console.log('Multi-select enabled:', faceEditState.multiSelect);
-            console.log('Selected face IDs:', Array.from(faceEditState.selectedFaceIds));
-            console.log('Selected count:', faceEditState.selectedFaceIds.size);
-            console.log('Legacy selectedGroupId:', faceEditState.selectedGroupId);
+            console.log('Face mode active:', state.faceEditState.isActive);
+            console.log('Multi-select enabled:', state.faceEditState.multiSelect);
+            console.log('Selected face IDs:', Array.from(state.faceEditState.selectedFaceIds));
+            console.log('Selected count:', state.faceEditState.selectedFaceIds.size);
+            console.log('Legacy selectedGroupId:', state.faceEditState.selectedGroupId);
 
-            if (faceEditState.isActive) {
-                console.log('Available groups:', faceEditState.groups.length);
-                faceEditState.groups.forEach((group, i) => {
-                    const isSelected = faceEditState.selectedFaceIds.has(group.id);
+            if (state.faceEditState.isActive) {
+                console.log('Available groups:', state.faceEditState.groups.length);
+                state.faceEditState.groups.forEach((group, i) => {
+                    const isSelected = state.faceEditState.selectedFaceIds.has(group.id);
                     console.log(`Group ${i}: ${group.id} - Selected: ${isSelected}`);
                 });
             }
 
             return {
-                active: faceEditState.isActive,
-                multiSelect: faceEditState.multiSelect,
-                selectedCount: faceEditState.selectedFaceIds.size,
-                selectedIds: Array.from(faceEditState.selectedFaceIds)
+                active: state.faceEditState.isActive,
+                multiSelect: state.faceEditState.multiSelect,
+                selectedCount: state.faceEditState.selectedFaceIds.size,
+                selectedIds: Array.from(state.faceEditState.selectedFaceIds)
             };
         }
 
@@ -1932,7 +1905,7 @@
         function testUXAcceptance() {
             console.log('=== UX ACCEPTANCE TEST ===');
 
-            if (!faceEditState.isActive) {
+            if (!state.faceEditState.isActive) {
                 console.log('Starting face mode...');
                 testFaceEditing();
                 setTimeout(() => testUXAcceptance(), 1000);
@@ -1953,15 +1926,15 @@
             console.log('\n--- Testing Multi-Select ---');
             enableMultiFaceSelection(true);
 
-            if (faceEditState.groups.length >= 2) {
+            if (state.faceEditState.groups.length >= 2) {
                 // Select first two faces
-                faceEditState.selectedFaceIds.clear();
-                faceEditState.selectedFaceIds.add(faceEditState.groups[0].id);
-                faceEditState.selectedFaceIds.add(faceEditState.groups[1].id);
+                state.faceEditState.selectedFaceIds.clear();
+                state.faceEditState.selectedFaceIds.add(state.faceEditState.groups[0].id);
+                state.faceEditState.selectedFaceIds.add(state.faceEditState.groups[1].id);
 
                 // Update visuals
-                faceEditState.groups.forEach(group => {
-                    const isSelected = faceEditState.selectedFaceIds.has(group.id);
+                state.faceEditState.groups.forEach(group => {
+                    const isSelected = state.faceEditState.selectedFaceIds.has(group.id);
                     if (group.overlay && group.overlay.material) {
                         group.overlay.material.opacity = isSelected ? 0.7 : 0.4;
                         group.overlay.material.color.setHex(isSelected ? 0xff0000 : 0x00ff00);
@@ -1971,8 +1944,8 @@
                     }
                 });
 
-                console.log('✅ Multi-select test: Selected', faceEditState.selectedFaceIds.size, 'faces');
-                addMessageToLog('System', `Multi-select test: ${faceEditState.selectedFaceIds.size} faces selected. Press E to test extrude.`);
+                console.log('✅ Multi-select test: Selected', state.faceEditState.selectedFaceIds.size, 'faces');
+                addMessageToLog('System', `Multi-select test: ${state.faceEditState.selectedFaceIds.size} faces selected. Press E to test extrude.`);
             }
 
             console.log('\n--- Ready for Manual Testing ---');
@@ -1986,57 +1959,57 @@
         // DEBUG: Check face editing status
         function getFaceEditStatus() {
             console.log('=== FACE EDIT STATUS ===');
-            console.log('Face mode active:', faceEditState.isActive);
-            console.log('Target mesh:', faceEditState.targetMesh?.name || 'none');
-            console.log('Selected group ID:', faceEditState.selectedGroupId || 'none');
-            console.log('Groups count:', faceEditState.groups?.length || 0);
-            console.log('Selected object:', selectedObject?.name || 'none');
+            console.log('Face mode active:', state.faceEditState.isActive);
+            console.log('Target mesh:', state.faceEditState.targetMesh?.name || 'none');
+            console.log('Selected group ID:', state.faceEditState.selectedGroupId || 'none');
+            console.log('Groups count:', state.faceEditState.groups?.length || 0);
+            console.log('Selected object:', state.selectedObject?.name || 'none');
 
-            if (faceEditState.groups?.length > 0) {
-                console.log('Group IDs:', faceEditState.groups.map(g => g.id));
-                faceEditState.groups.forEach((group, i) => {
+            if (state.faceEditState.groups?.length > 0) {
+                console.log('Group IDs:', state.faceEditState.groups.map(g => g.id));
+                state.faceEditState.groups.forEach((group, i) => {
                     console.log(`Group ${i}:`, {
                         id: group.id,
                         triCount: group.triIndices?.length || 0,
                         hasOverlay: !!group.overlay,
                         hasOutline: !!group.outline,
                         overlayVisible: group.overlay?.visible,
-                        overlayInScene: group.overlay?.parent === scene
+                        overlayInScene: group.overlay?.parent === state.scene
                     });
                 });
             }
 
             return {
-                isActive: faceEditState.isActive,
-                selectedGroupId: faceEditState.selectedGroupId,
-                groupsCount: faceEditState.groups?.length || 0,
-                targetMesh: faceEditState.targetMesh?.name || 'none'
+                isActive: state.faceEditState.isActive,
+                selectedGroupId: state.faceEditState.selectedGroupId,
+                groupsCount: state.faceEditState.groups?.length || 0,
+                targetMesh: state.faceEditState.targetMesh?.name || 'none'
             };
         }
 
         // DEBUG: Force select first face group for testing
         function forceSelectFirstFace() {
-            if (!faceEditState.isActive) {
+            if (!state.faceEditState.isActive) {
                 console.log('[forceSelectFirstFace] Face mode not active');
                 return false;
             }
 
-            if (faceEditState.groups.length === 0) {
+            if (state.faceEditState.groups.length === 0) {
                 console.log('[forceSelectFirstFace] No face groups available');
                 return false;
             }
 
-            const firstGroup = faceEditState.groups[0];
+            const firstGroup = state.faceEditState.groups[0];
             console.log('[forceSelectFirstFace] Selecting first group:', firstGroup.id);
 
             // Use new selection system
-            faceEditState.selectedFaceIds.clear();
-            faceEditState.selectedFaceIds.add(firstGroup.id);
-            faceEditState.selectedGroupId = firstGroup.id; // For compatibility
+            state.faceEditState.selectedFaceIds.clear();
+            state.faceEditState.selectedFaceIds.add(firstGroup.id);
+            state.faceEditState.selectedGroupId = firstGroup.id; // For compatibility
 
             // Update visual state
-            faceEditState.groups.forEach(group => {
-                const isSelected = faceEditState.selectedFaceIds.has(group.id);
+            state.faceEditState.groups.forEach(group => {
+                const isSelected = state.faceEditState.selectedFaceIds.has(group.id);
                 if (group.overlay && group.overlay.material) {
                     group.overlay.material.opacity = isSelected ? 0.7 : 0.4;
                     group.overlay.material.color.setHex(isSelected ? 0xff0000 : 0x00ff00);
@@ -2055,7 +2028,7 @@
         function testFaceColoring() {
             console.log('=== TESTING FACE COLORING ===');
 
-            if (!faceEditState.isActive) {
+            if (!state.faceEditState.isActive) {
                 console.log('[testFaceColoring] Face mode not active - starting test');
                 testFaceEditing();
                 setTimeout(() => testFaceColoring(), 1000);
@@ -2079,7 +2052,7 @@
         function testExtrudeSystem() {
             console.log('=== TESTING COMPLETE EXTRUDE SYSTEM ===');
 
-            if (!faceEditState.isActive) {
+            if (!state.faceEditState.isActive) {
                 console.log('[testExtrudeSystem] Starting face mode');
                 testFaceEditing();
                 setTimeout(() => testExtrudeSystem(), 1000);
@@ -2096,8 +2069,8 @@
             }
 
             console.log('[testExtrudeSystem] Face selected, checking selection state');
-            console.log('Selected faces:', Array.from(faceEditState.selectedFaceIds));
-            console.log('Multi-select mode:', faceEditState.multiSelect);
+            console.log('Selected faces:', Array.from(state.faceEditState.selectedFaceIds));
+            console.log('Multi-select mode:', state.faceEditState.multiSelect);
 
             // Step 2: Test extrude
             setTimeout(() => {
@@ -2106,21 +2079,21 @@
 
                 if (extrudeResult) {
                     console.log('[testExtrudeSystem] Extrude gizmo should be visible');
-                    console.log('Extrude UI active:', extrudeUI.active);
-                    console.log('Arrow created:', !!extrudeUI.arrow);
-                    console.log('Face IDs:', extrudeUI.faceIds);
+                    console.log('Extrude UI active:', state.extrudeUI.active);
+                    console.log('Arrow created:', !!state.extrudeUI.arrow);
+                    console.log('Face IDs:', state.extrudeUI.faceIds);
 
                     // Step 3: Test preview
                     setTimeout(() => {
                         console.log('[testExtrudeSystem] Testing preview update');
                         updateExtrudePreview(0.5);
-                        console.log('Preview meshes:', extrudeUI.previewMeshes.length);
+                        console.log('Preview meshes:', state.extrudeUI.previewMeshes.length);
 
                         // Step 4: Test cancel
                         setTimeout(() => {
                             console.log('[testExtrudeSystem] Testing cancel');
                             cancelExtrude();
-                            console.log('Extrude UI active after cancel:', extrudeUI.active);
+                            console.log('Extrude UI active after cancel:', state.extrudeUI.active);
                         }, 1000);
                     }, 1000);
                 } else {
@@ -2144,14 +2117,14 @@
 
             // Handle 'all' targets - expand class to UUIDs
             if (data.targets?.length === 1 && data.targets[0].all && data.targets[0].class) {
-                const index = indexScene(scene);
+                const index = indexScene(state.scene);
                 const matchingObjects = findObjectsByClass(index, data.targets[0].class);
                 const uuids = matchingObjects.map(obj => obj.uuid);
 
                 console.log(`[handleNLActionResponse] Expanding 'all ${data.targets[0].class}' to ${uuids.length} objects`);
 
                 if (uuids.length === 0) {
-                    addMessageToLog('System', `No ${data.targets[0].class} objects found in the scene.`);
+                    addMessageToLog('System', `No ${data.targets[0].class} objects found in the state.scene.`);
                     speakResponse(`No ${data.targets[0].class} objects found.`);
                     return;
                 }
@@ -2167,7 +2140,7 @@
 
             // Handle clarification request
             if (data.action === 'clarify') {
-                pendingDisambiguation = {
+                state.pendingDisambiguation = {
                     candidates: data.targets,
                     originalOperation: data.operation || null,
                     originalAction: data.context?.originalAction || 'delete'
@@ -2225,23 +2198,23 @@
 
         // Handle disambiguation choice
         function handleDisambiguationChoice(choiceNumber) {
-            if (!pendingDisambiguation) {
+            if (!state.pendingDisambiguation) {
                 addMessageToLog('System', 'No pending disambiguation.');
                 return;
             }
 
             const choice = parseInt(choiceNumber) - 1;
-            if (choice < 0 || choice >= pendingDisambiguation.candidates.length) {
+            if (choice < 0 || choice >= state.pendingDisambiguation.candidates.length) {
                 addMessageToLog('System', 'Invalid choice number.');
                 return;
             }
 
-            const selectedTarget = pendingDisambiguation.candidates[choice];
-            const operation = pendingDisambiguation.originalOperation;
-            const action = pendingDisambiguation.originalAction;
+            const selectedTarget = state.pendingDisambiguation.candidates[choice];
+            const operation = state.pendingDisambiguation.originalOperation;
+            const action = state.pendingDisambiguation.originalAction;
 
             // Clear pending state
-            pendingDisambiguation = null;
+            state.pendingDisambiguation = null;
 
             // Execute the action with the selected target
             const responseData = {
@@ -2256,7 +2229,7 @@
 
         // Build context for the AI model
         function buildModelContext() {
-            const index = indexScene(scene);
+            const index = indexScene(state.scene);
             return {
                 objects: index.map(obj => ({
                     uuid: obj.uuid,
@@ -2271,30 +2244,7 @@
 
         // FACE EDITING SYSTEM
 
-        // Face group data structure - ENHANCED
-        let faceEditState = {
-            targetMesh: null,
-            groups: [],
-            selectedGroupId: null,
-            isActive: false,
-            multiSelect: false,
-            selectedFaceIds: new Set()
-        };
 
-        // Interactive extrude UI state
-        const extrudeUI = {
-            active: false,
-            faceIds: [],
-            targetMesh: null,
-            arrow: null,
-            previewMeshes: [],
-            depth: 0,
-            drag: {
-                on: false,
-                startPt: null,
-                plane: null
-            }
-        };
 
         // Build face groups using region growing algorithm
         function buildFaceGroups(mesh, epsAngle = 0.02, epsPlane = 1e-3) {
@@ -2516,10 +2466,10 @@
             // Exit any existing face edit mode
             exitFaceEditMode();
 
-            // Detach transform controls to prevent interference
-            if (transformControls) {
-                transformControls.detach();
-                console.log('[enterFaceEditMode] Transform controls detached');
+            // Detach transform state.controls to prevent interference
+            if (state.transformControls) {
+                state.transformControls.detach();
+                console.log('[enterFaceEditMode] Transform state.controls detached');
             }
 
             // Build face groups
@@ -2540,16 +2490,16 @@
                 group.outline = outline;
 
                 if (overlay && outline) {
-                    scene.add(overlay);
-                    scene.add(outline);
+                    state.scene.add(overlay);
+                    state.scene.add(outline);
 
                     // Show all overlays initially for better visibility
                     overlay.visible = true;
                     outline.visible = true;
 
-                    console.log(`[enterFaceEditMode] Added overlay ${i} to scene:`, {
-                        overlayInScene: overlay.parent === scene,
-                        outlineInScene: outline.parent === scene,
+                    console.log(`[enterFaceEditMode] Added overlay ${i} to state.scene:`, {
+                        overlayInScene: overlay.parent === state.scene,
+                        outlineInScene: outline.parent === state.scene,
                         overlayVisible: overlay.visible,
                         outlineVisible: outline.visible
                     });
@@ -2581,7 +2531,7 @@
             });
 
             // Update face edit state
-            faceEditState = {
+            state.faceEditState = {
                 targetMesh: mesh,
                 groups: groups,
                 selectedGroupId: null,
@@ -2598,12 +2548,12 @@
 
         // Exit face editing mode
         function exitFaceEditMode() {
-            if (!faceEditState.isActive) return;
+            if (!state.faceEditState.isActive) return;
 
             console.log('[exitFaceEditMode] Exiting face edit mode');
 
-            // Store target mesh for transform controls reattachment
-            const targetMesh = faceEditState.targetMesh;
+            // Store target mesh for transform state.controls reattachment
+            const targetMesh = state.faceEditState.targetMesh;
 
             // Restore original material properties
             if (targetMesh) {
@@ -2620,21 +2570,21 @@
             }
 
             // Remove all overlays and outlines
-            faceEditState.groups.forEach(group => {
+            state.faceEditState.groups.forEach(group => {
                 if (group.overlay) {
-                    scene.remove(group.overlay);
+                    state.scene.remove(group.overlay);
                     group.overlay.geometry.dispose();
                     group.overlay.material.dispose();
                 }
                 if (group.outline) {
-                    scene.remove(group.outline);
+                    state.scene.remove(group.outline);
                     group.outline.geometry.dispose();
                     group.outline.material.dispose();
                 }
             });
 
             // Reset state
-            faceEditState = {
+            state.faceEditState = {
                 targetMesh: null,
                 groups: [],
                 selectedGroupId: null,
@@ -2643,10 +2593,10 @@
                 selectedFaceIds: new Set()
             };
 
-            // Reattach transform controls if we had a target mesh
-            if (transformControls && targetMesh && selectedObject === targetMesh) {
-                transformControls.attach(targetMesh);
-                console.log('[exitFaceEditMode] Transform controls reattached');
+            // Reattach transform state.controls if we had a target mesh
+            if (state.transformControls && targetMesh && state.selectedObject === targetMesh) {
+                state.transformControls.attach(targetMesh);
+                console.log('[exitFaceEditMode] Transform state.controls reattached');
             }
 
             addMessageToLog('System', 'Face edit mode deactivated.');
@@ -2666,10 +2616,10 @@
             console.log('[deleteFaceGroup] Deleting face group:', group.id);
 
             // Save state for undo
-            if (loadedModels.length > 0) {
+            if (state.loadedModels.length > 0) {
                 const currentState = getCurrentState();
-                undoStack.push(currentState);
-                redoStack = []; // Clear redo stack
+                state.undoStack.push(currentState);
+                state.redoStack = []; // Clear redo stack
             }
 
             try {
@@ -2781,28 +2731,28 @@
         // QUICK DEBUG FUNCTIONS
         window.debugFaceSelection = function() {
             console.log('=== FACE SELECTION DEBUG ===');
-            console.log('Face mode active:', faceEditState.isActive);
-            console.log('Multi-select mode:', faceEditState.multiSelect);
-            console.log('Selected face IDs:', Array.from(faceEditState.selectedFaceIds));
-            console.log('Total groups:', faceEditState.groups.length);
-            console.log('Groups:', faceEditState.groups.map(g => g.id));
-            return faceEditState;
+            console.log('Face mode active:', state.faceEditState.isActive);
+            console.log('Multi-select mode:', state.faceEditState.multiSelect);
+            console.log('Selected face IDs:', Array.from(state.faceEditState.selectedFaceIds));
+            console.log('Total groups:', state.faceEditState.groups.length);
+            console.log('Groups:', state.faceEditState.groups.map(g => g.id));
+            return state.faceEditState;
         };
 
         window.debugExtrudeState = function() {
             console.log('=== EXTRUDE STATE DEBUG ===');
-            console.log('Extrude UI active:', extrudeUI.active);
-            console.log('Arrow exists:', !!extrudeUI.arrow);
-            console.log('Face IDs:', extrudeUI.faceIds);
-            console.log('Current depth:', extrudeUI.depth);
-            console.log('Drag state:', extrudeUI.drag);
+            console.log('Extrude UI active:', state.extrudeUI.active);
+            console.log('Arrow exists:', !!state.extrudeUI.arrow);
+            console.log('Face IDs:', state.extrudeUI.faceIds);
+            console.log('Current depth:', state.extrudeUI.depth);
+            console.log('Drag state:', state.extrudeUI.drag);
 
             // Check UI panel
             const panel = document.getElementById('extrudePanel');
             console.log('Panel exists:', !!panel);
             console.log('Panel visible:', panel ? panel.style.display : 'N/A');
 
-            return extrudeUI;
+            return state.extrudeUI;
         };
 
         // Quick test function for Fusion 360 style extrude
@@ -2810,7 +2760,7 @@
             console.log('🧪 Testing Fusion 360 Extrude System...');
 
             // Step 1: Create a cube if none exists
-            if (loadedModels.length === 0) {
+            if (state.loadedModels.length === 0) {
                 console.log('1. Creating test cube...');
                 createPrimitive('cube');
                 setTimeout(() => testFusion360Extrude(), 500);
@@ -2819,17 +2769,17 @@
 
             // Step 2: Enter face edit mode
             console.log('2. Entering face edit mode...');
-            if (!faceEditState.isActive) {
+            if (!state.faceEditState.isActive) {
                 toggleFaceEditMode();
             }
 
             // Step 3: Select first face
             setTimeout(() => {
                 console.log('3. Selecting first face...');
-                if (faceEditState.groups.length > 0) {
-                    const firstFace = faceEditState.groups[0];
-                    faceEditState.selectedFaceIds.clear();
-                    faceEditState.selectedFaceIds.add(firstFace.id);
+                if (state.faceEditState.groups.length > 0) {
+                    const firstFace = state.faceEditState.groups[0];
+                    state.faceEditState.selectedFaceIds.clear();
+                    state.faceEditState.selectedFaceIds.add(firstFace.id);
                     updateFaceHighlights();
 
                     // Step 4: Start extrude
@@ -2840,26 +2790,26 @@
                         setTimeout(() => {
                             console.log('=== RESULTS ===');
                             console.log('✅ Extrude started:', result);
-                            console.log('✅ Arrow visible:', !!extrudeUI.arrow);
-                            console.log('✅ UI active:', extrudeUI.active);
+                            console.log('✅ Arrow visible:', !!state.extrudeUI.arrow);
+                            console.log('✅ UI active:', state.extrudeUI.active);
 
                             const panel = document.getElementById('extrudePanel');
                             console.log('✅ Panel exists:', !!panel);
                             console.log('✅ Panel visible:', panel ? panel.style.display !== 'none' : false);
 
-                            if (result && extrudeUI.arrow && panel && panel.style.display !== 'none') {
+                            if (result && state.extrudeUI.arrow && panel && panel.style.display !== 'none') {
                                 console.log('🎉 SUCCESS! Blue 2D arrow extrude is working!');
                                 console.log('💡 Try clicking and dragging the blue arrow');
                                 console.log('💡 Or type a value in the input field');
 
                                 // Test arrow interaction
-                                if (extrudeUI.arrow) {
+                                if (state.extrudeUI.arrow) {
                                     console.log('🔍 Arrow details:');
-                                    console.log('   - Type:', extrudeUI.arrow.type);
-                                    console.log('   - Children:', extrudeUI.arrow.children.length);
-                                    console.log('   - Position:', extrudeUI.arrow.position.toArray());
-                                    console.log('   - Visible:', extrudeUI.arrow.visible);
-                                    console.log('   - In scene:', extrudeUI.arrow.parent === scene);
+                                    console.log('   - Type:', state.extrudeUI.arrow.type);
+                                    console.log('   - Children:', state.extrudeUI.arrow.children.length);
+                                    console.log('   - Position:', state.extrudeUI.arrow.position.toArray());
+                                    console.log('   - Visible:', state.extrudeUI.arrow.visible);
+                                    console.log('   - In state.scene:', state.extrudeUI.arrow.parent === state.scene);
                                 }
                             } else {
                                 console.log('❌ Something is not working...');
@@ -2873,52 +2823,52 @@
 
         // Test arrow clicking specifically
         window.testArrowClick = function() {
-            if (!extrudeUI.active || !extrudeUI.arrow) {
+            if (!state.extrudeUI.active || !state.extrudeUI.arrow) {
                 console.log('❌ Extrude not active or no arrow. Run testFusion360Extrude() first.');
                 return;
             }
 
             console.log('🎯 Testing arrow click detection...');
-            console.log('Arrow exists:', !!extrudeUI.arrow);
-            console.log('Arrow children:', extrudeUI.arrow.children.length);
-            console.log('Arrow userData:', extrudeUI.arrow.userData);
+            console.log('Arrow exists:', !!state.extrudeUI.arrow);
+            console.log('Arrow children:', state.extrudeUI.arrow.children.length);
+            console.log('Arrow userData:', state.extrudeUI.arrow.userData);
 
             // Test raycasting on arrow
-            mouse.x = 0; // Center of screen
-            mouse.y = 0;
-            raycaster.setFromCamera(mouse, camera);
+            state.mouse.x = 0; // Center of screen
+            state.mouse.y = 0;
+            state.raycaster.setFromCamera(state.mouse, state.camera);
 
-            const intersects = raycaster.intersectObject(extrudeUI.arrow, true);
+            const intersects = state.raycaster.intersectObject(state.extrudeUI.arrow, true);
             console.log('Center screen intersects with arrow:', intersects.length);
 
             if (intersects.length > 0) {
                 console.log('✅ Arrow is clickable at center!');
                 console.log('   Intersected:', intersects[0].object.type);
             } else {
-                console.log('❌ Arrow not detected at center. Try moving camera closer to arrow.');
+                console.log('❌ Arrow not detected at center. Try moving state.camera closer to arrow.');
             }
         };
 
         window.forceSelectTwoFaces = function() {
-            if (!faceEditState.isActive) {
+            if (!state.faceEditState.isActive) {
                 console.log('Face mode not active');
                 return false;
             }
 
-            if (faceEditState.groups.length < 2) {
+            if (state.faceEditState.groups.length < 2) {
                 console.log('Need at least 2 faces');
                 return false;
             }
 
             // Force select first two faces
-            faceEditState.selectedFaceIds.clear();
-            faceEditState.selectedFaceIds.add(faceEditState.groups[0].id);
-            faceEditState.selectedFaceIds.add(faceEditState.groups[1].id);
-            faceEditState.selectedGroupId = faceEditState.groups[0].id;
+            state.faceEditState.selectedFaceIds.clear();
+            state.faceEditState.selectedFaceIds.add(state.faceEditState.groups[0].id);
+            state.faceEditState.selectedFaceIds.add(state.faceEditState.groups[1].id);
+            state.faceEditState.selectedGroupId = state.faceEditState.groups[0].id;
 
             // Update visuals
-            faceEditState.groups.forEach(group => {
-                const isSelected = faceEditState.selectedFaceIds.has(group.id);
+            state.faceEditState.groups.forEach(group => {
+                const isSelected = state.faceEditState.selectedFaceIds.has(group.id);
                 if (group.overlay && group.overlay.material) {
                     group.overlay.material.opacity = isSelected ? 0.7 : 0.4;
                     group.overlay.material.color.setHex(isSelected ? 0xff0000 : 0x00ff00);
@@ -2928,7 +2878,7 @@
                 }
             });
 
-            console.log('Selected 2 faces:', Array.from(faceEditState.selectedFaceIds));
+            console.log('Selected 2 faces:', Array.from(state.faceEditState.selectedFaceIds));
             return true;
         };
 
@@ -2937,8 +2887,8 @@
             console.log('=== STEP BY STEP DIAGNOSTIC ===');
 
             // Step 1: Check face mode
-            console.log('Step 1: Face mode active?', faceEditState.isActive);
-            if (!faceEditState.isActive) {
+            console.log('Step 1: Face mode active?', state.faceEditState.isActive);
+            if (!state.faceEditState.isActive) {
                 console.log('Starting face mode...');
                 testFaceEditing();
                 setTimeout(() => stepByStepTest(), 1000);
@@ -2946,36 +2896,36 @@
             }
 
             // Step 2: Check groups
-            console.log('Step 2: Face groups available?', faceEditState.groups.length);
-            if (faceEditState.groups.length === 0) {
+            console.log('Step 2: Face groups available?', state.faceEditState.groups.length);
+            if (state.faceEditState.groups.length === 0) {
                 console.log('No face groups found!');
                 return;
             }
 
             // Step 3: Test single selection
             console.log('Step 3: Testing single face selection...');
-            faceEditState.selectedFaceIds.clear();
-            faceEditState.selectedFaceIds.add(faceEditState.groups[0].id);
-            faceEditState.selectedGroupId = faceEditState.groups[0].id;
+            state.faceEditState.selectedFaceIds.clear();
+            state.faceEditState.selectedFaceIds.add(state.faceEditState.groups[0].id);
+            state.faceEditState.selectedGroupId = state.faceEditState.groups[0].id;
 
             // Update visual
-            faceEditState.groups.forEach(group => {
-                const isSelected = faceEditState.selectedFaceIds.has(group.id);
+            state.faceEditState.groups.forEach(group => {
+                const isSelected = state.faceEditState.selectedFaceIds.has(group.id);
                 if (group.overlay && group.overlay.material) {
                     group.overlay.material.opacity = isSelected ? 0.7 : 0.4;
                     group.overlay.material.color.setHex(isSelected ? 0xff0000 : 0x00ff00);
                 }
             });
 
-            console.log('Step 3 result: Selected faces:', Array.from(faceEditState.selectedFaceIds));
+            console.log('Step 3 result: Selected faces:', Array.from(state.faceEditState.selectedFaceIds));
 
             // Step 4: Test extrude
             console.log('Step 4: Testing extrude...');
             const extrudeResult = handleExtrudeFace();
             console.log('Step 4 result: Extrude started?', extrudeResult);
-            console.log('Arrow created?', !!extrudeUI.arrow);
+            console.log('Arrow created?', !!state.extrudeUI.arrow);
 
-            if (extrudeResult && extrudeUI.arrow) {
+            if (extrudeResult && state.extrudeUI.arrow) {
                 console.log('✅ SUCCESS: Extrude system working!');
                 console.log('Try dragging the green arrow, then press Enter to confirm or Esc to cancel');
             } else {
@@ -2989,7 +2939,7 @@
             console.log('=== COMPLETE SYSTEM TEST ===');
 
             // Step 1: Setup
-            if (!faceEditState.isActive) {
+            if (!state.faceEditState.isActive) {
                 console.log('1. Starting face mode...');
                 testFaceEditing();
                 setTimeout(() => completeSystemTest(), 1000);
@@ -3000,17 +2950,17 @@
             console.log('2. Testing single face selection...');
 
             // Step 2: Test single selection
-            if (faceEditState.groups.length > 0) {
-                const firstFaceId = faceEditState.groups[0].id;
+            if (state.faceEditState.groups.length > 0) {
+                const firstFaceId = state.faceEditState.groups[0].id;
 
                 // Clear and select first face
-                faceEditState.selectedFaceIds.clear();
-                faceEditState.selectedFaceIds.add(firstFaceId);
-                faceEditState.selectedGroupId = firstFaceId;
+                state.faceEditState.selectedFaceIds.clear();
+                state.faceEditState.selectedFaceIds.add(firstFaceId);
+                state.faceEditState.selectedGroupId = firstFaceId;
 
                 // Update visual
-                faceEditState.groups.forEach(group => {
-                    const isSelected = faceEditState.selectedFaceIds.has(group.id);
+                state.faceEditState.groups.forEach(group => {
+                    const isSelected = state.faceEditState.selectedFaceIds.has(group.id);
                     if (group.overlay && group.overlay.material) {
                         group.overlay.material.opacity = isSelected ? 0.7 : 0.4;
                         group.overlay.material.color.setHex(isSelected ? 0xff0000 : 0x00ff00);
@@ -3026,29 +2976,29 @@
                 console.log('3. Testing extrude...');
                 const extrudeResult = handleExtrudeFace();
 
-                if (extrudeResult && extrudeUI.active && extrudeUI.arrow) {
+                if (extrudeResult && state.extrudeUI.active && state.extrudeUI.arrow) {
                     console.log('3. ✅ Extrude system working!');
-                    console.log('   - Arrow created:', !!extrudeUI.arrow);
-                    console.log('   - UI active:', extrudeUI.active);
-                    console.log('   - Face IDs:', extrudeUI.faceIds);
+                    console.log('   - Arrow created:', !!state.extrudeUI.arrow);
+                    console.log('   - UI active:', state.extrudeUI.active);
+                    console.log('   - Face IDs:', state.extrudeUI.faceIds);
 
                     // Step 4: Test multi-select
                     setTimeout(() => {
                         console.log('4. Testing multi-select...');
                         cancelExtrude(); // Cancel current extrude
 
-                        if (faceEditState.groups.length >= 2) {
+                        if (state.faceEditState.groups.length >= 2) {
                             // Enable multi-select
-                            faceEditState.multiSelect = true;
+                            state.faceEditState.multiSelect = true;
 
                             // Select multiple faces
-                            faceEditState.selectedFaceIds.clear();
-                            faceEditState.selectedFaceIds.add(faceEditState.groups[0].id);
-                            faceEditState.selectedFaceIds.add(faceEditState.groups[1].id);
+                            state.faceEditState.selectedFaceIds.clear();
+                            state.faceEditState.selectedFaceIds.add(state.faceEditState.groups[0].id);
+                            state.faceEditState.selectedFaceIds.add(state.faceEditState.groups[1].id);
 
                             // Update visual
-                            faceEditState.groups.forEach(group => {
-                                const isSelected = faceEditState.selectedFaceIds.has(group.id);
+                            state.faceEditState.groups.forEach(group => {
+                                const isSelected = state.faceEditState.selectedFaceIds.has(group.id);
                                 if (group.overlay && group.overlay.material) {
                                     group.overlay.material.opacity = isSelected ? 0.7 : 0.4;
                                     group.overlay.material.color.setHex(isSelected ? 0xff0000 : 0x00ff00);
@@ -3058,7 +3008,7 @@
                                 }
                             });
 
-                            console.log('4. ✅ Multi-select working:', Array.from(faceEditState.selectedFaceIds));
+                            console.log('4. ✅ Multi-select working:', Array.from(state.faceEditState.selectedFaceIds));
 
                             // Test multi-face extrude
                             const multiExtrudeResult = handleExtrudeFace();
@@ -3083,8 +3033,8 @@
                 } else {
                     console.log('3. ❌ Extrude system failed');
                     console.log('   - Result:', extrudeResult);
-                    console.log('   - UI active:', extrudeUI.active);
-                    console.log('   - Arrow exists:', !!extrudeUI.arrow);
+                    console.log('   - UI active:', state.extrudeUI.active);
+                    console.log('   - Arrow exists:', !!state.extrudeUI.arrow);
                 }
             } else {
                 console.log('2. ❌ No face groups available');
@@ -3097,24 +3047,24 @@
         // Face editing status and debugging
         window.getFaceEditStatus = function() {
             console.log("=== FACE EDIT STATUS ===");
-            console.log("Active:", faceEditState.isActive);
-            console.log("Target mesh:", faceEditState.targetMesh?.name || "none");
-            console.log("Groups count:", faceEditState.groups.length);
-            console.log("Selected group:", faceEditState.selectedGroupId || "none");
+            console.log("Active:", state.faceEditState.isActive);
+            console.log("Target mesh:", state.faceEditState.targetMesh?.name || "none");
+            console.log("Groups count:", state.faceEditState.groups.length);
+            console.log("Selected group:", state.faceEditState.selectedGroupId || "none");
 
-            if (faceEditState.isActive) {
+            if (state.faceEditState.isActive) {
                 console.log("Groups details:");
-                faceEditState.groups.forEach((group, i) => {
+                state.faceEditState.groups.forEach((group, i) => {
                     console.log(`  ${i + 1}. ${group.id} - Overlay: ${!!group.overlay}, Outline: ${!!group.outline}`);
                 });
 
-                if (faceEditState.selectedGroupId) {
-                    const selected = faceEditState.groups.find(g => g.id === faceEditState.selectedGroupId);
+                if (state.faceEditState.selectedGroupId) {
+                    const selected = state.faceEditState.groups.find(g => g.id === state.faceEditState.selectedGroupId);
                     console.log("Selected group details:", selected);
                 }
             }
 
-            return faceEditState;
+            return state.faceEditState;
         };
 
         // TEST FACE EDITING SYSTEM
@@ -3128,8 +3078,8 @@
             setTimeout(() => {
                 // Step 2: Select the cube
                 console.log("2. Selecting the cube...");
-                if (loadedModels.length > 0) {
-                    const cube = loadedModels[loadedModels.length - 1]; // Get the last created object
+                if (state.loadedModels.length > 0) {
+                    const cube = state.loadedModels[state.loadedModels.length - 1]; // Get the last created object
                     selectObject(cube);
 
                     setTimeout(() => {
@@ -3138,20 +3088,20 @@
                         const success = enterFaceEditMode(cube);
 
                         if (success) {
-                            console.log(`✅ Face edit mode active with ${faceEditState.groups.length} face groups`);
+                            console.log(`✅ Face edit mode active with ${state.faceEditState.groups.length} face groups`);
 
                             setTimeout(() => {
                                 // Step 4: Test face selection
                                 console.log("4. Testing face selection...");
-                                if (faceEditState.groups.length > 0) {
-                                    const firstGroup = faceEditState.groups[0];
+                                if (state.faceEditState.groups.length > 0) {
+                                    const firstGroup = state.faceEditState.groups[0];
                                     selectFaceGroup(firstGroup.id);
                                     console.log(`✅ Selected face group: ${firstGroup.id}`);
 
                                     setTimeout(() => {
                                         // Step 5: Test face deletion
                                         console.log("5. Testing face deletion...");
-                                        deleteFaceGroup(faceEditState.targetMesh, firstGroup);
+                                        deleteFaceGroup(state.faceEditState.targetMesh, firstGroup);
                                         console.log("✅ Face deleted");
 
                                         setTimeout(() => {
@@ -3196,9 +3146,9 @@
             console.log("1. Creating diverse test objects...");
 
             // Clear existing objects
-            if (loadedModels.length > 0) {
-                loadedModels.forEach(obj => {
-                    scene.remove(obj);
+            if (state.loadedModels.length > 0) {
+                state.loadedModels.forEach(obj => {
+                    state.scene.remove(obj);
                     if (obj.geometry) obj.geometry.dispose();
                     if (obj.material) {
                         if (Array.isArray(obj.material)) {
@@ -3208,7 +3158,7 @@
                         }
                     }
                 });
-                loadedModels.length = 0;
+                state.loadedModels.length = 0;
             }
 
             // Create test objects with different properties
@@ -3240,17 +3190,17 @@
                 mesh.name = objDef.name;
                 mesh.userData.tags = objDef.tags;
 
-                scene.add(mesh);
-                loadedModels.push(mesh);
+                state.scene.add(mesh);
+                state.loadedModels.push(mesh);
             });
 
             console.log("✅ Created 5 test objects: 2 cars, 1 ball, 2 cones");
 
-            // Step 2: Test scene indexing
+            // Step 2: Test state.scene indexing
             setTimeout(() => {
-                console.log("2. Testing scene indexing...");
-                const index = indexScene(scene);
-                console.log("Scene index:", index);
+                console.log("2. Testing state.scene indexing...");
+                const index = indexScene(state.scene);
+                console.log("state.scene index:", index);
 
                 // Step 3: Test object class finding
                 console.log("3. Testing object class finding...");
@@ -3318,9 +3268,9 @@
                             redo();
 
                             console.log("✅ NATURAL LANGUAGE TEST COMPLETE");
-                            console.log(`   Final object count: ${loadedModels.length}`);
-                            console.log(`   Undo stack size: ${undoStack.length}`);
-                            console.log(`   Redo stack size: ${redoStack.length}`);
+                            console.log(`   Final object count: ${state.loadedModels.length}`);
+                            console.log(`   Undo stack size: ${state.undoStack.length}`);
+                            console.log(`   Redo stack size: ${state.redoStack.length}`);
 
                             // Display instructions
                             console.log("\n🎯 TRY THESE COMMANDS:");
@@ -3345,9 +3295,9 @@
             console.log("1. Creating test objects...");
 
             // Clear existing objects first
-            if (loadedModels.length > 0) {
-                loadedModels.forEach(obj => {
-                    scene.remove(obj);
+            if (state.loadedModels.length > 0) {
+                state.loadedModels.forEach(obj => {
+                    state.scene.remove(obj);
                     if (obj.geometry) obj.geometry.dispose();
                     if (obj.material) {
                         if (Array.isArray(obj.material)) {
@@ -3357,7 +3307,7 @@
                         }
                     }
                 });
-                loadedModels.length = 0;
+                state.loadedModels.length = 0;
             }
 
             // Create fresh test objects
@@ -3366,16 +3316,16 @@
             const cube1 = new THREE.Mesh(geometry1, material1);
             cube1.position.set(-2, 0, 0);
             cube1.name = "Test Cube";
-            scene.add(cube1);
-            loadedModels.push(cube1);
+            state.scene.add(cube1);
+            state.loadedModels.push(cube1);
 
             const geometry2 = new THREE.SphereGeometry(0.5, 32, 32);
             const material2 = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
             const sphere1 = new THREE.Mesh(geometry2, material2);
             sphere1.position.set(2, 0, 0);
             sphere1.name = "Test Sphere";
-            scene.add(sphere1);
-            loadedModels.push(sphere1);
+            state.scene.add(sphere1);
+            state.loadedModels.push(sphere1);
 
             console.log("✅ Created 2 test objects");
 
@@ -3388,7 +3338,7 @@
                     duplicateSelection();
 
                     setTimeout(() => {
-                        console.log(`   Objects after duplicate: ${loadedModels.length} (expected: 4)`);
+                        console.log(`   Objects after duplicate: ${state.loadedModels.length} (expected: 4)`);
 
                         // Step 3: Select All → Transform sequence
                         console.log("3. Testing Select All → Transform sequence...");
@@ -3412,7 +3362,7 @@
                                     setTimeout(() => {
                                         // Step 4: Test undo sequence
                                         console.log("4. Testing undo sequence...");
-                                        console.log(`   Undo stack size: ${undoStack.length}`);
+                                        console.log(`   Undo stack size: ${state.undoStack.length}`);
 
                                         // Should undo: rotate, scale, move, duplicate
                                         undo(); // Undo rotate
@@ -3423,7 +3373,7 @@
                                                 setTimeout(() => {
                                                     undo(); // Undo duplicate
                                                     setTimeout(() => {
-                                                        console.log(`   Objects after undo sequence: ${loadedModels.length} (expected: 2)`);
+                                                        console.log(`   Objects after undo sequence: ${state.loadedModels.length} (expected: 2)`);
 
                                                         // Step 5: Test redo sequence
                                                         console.log("5. Testing redo sequence...");
@@ -3435,11 +3385,11 @@
                                                                 setTimeout(() => {
                                                                     redo(); // Redo rotate
                                                                     setTimeout(() => {
-                                                                        console.log(`   Final objects count: ${loadedModels.length} (expected: 4)`);
-                                                                        console.log(`   Final undo stack: ${undoStack.length}`);
-                                                                        console.log(`   Final redo stack: ${redoStack.length}`);
+                                                                        console.log(`   Final objects count: ${state.loadedModels.length} (expected: 4)`);
+                                                                        console.log(`   Final undo stack: ${state.undoStack.length}`);
+                                                                        console.log(`   Final redo stack: ${state.redoStack.length}`);
 
-                                                                        if (loadedModels.length === 4 && undoStack.length === 4 && redoStack.length === 0) {
+                                                                        if (state.loadedModels.length === 4 && state.undoStack.length === 4 && state.redoStack.length === 0) {
                                                                             console.log("✅ COMPLETE WORKFLOW TEST PASSED");
                                                                         } else {
                                                                             console.log("❌ COMPLETE WORKFLOW TEST FAILED");
@@ -3463,40 +3413,40 @@
 
         // SIMPLE DIRECT EDITING FUNCTIONS - UPDATED TO USE UNIFIED SYSTEM
         window.moveAllObjects = function(x, y, z) {
-            console.log(`Moving all ${loadedModels.length} objects by (${x}, ${y}, ${z})`);
+            console.log(`Moving all ${state.loadedModels.length} objects by (${x}, ${y}, ${z})`);
 
             // Select all objects first
-            setSelectedObjects(loadedModels);
+            setSelectedObjects(state.loadedModels);
 
             // Use the unified transform function
             translateSelection(x || 0, y || 0, z || 0);
         };
 
         window.scaleAllObjects = function(scale) {
-            console.log(`Scaling all ${loadedModels.length} objects by ${scale}`);
+            console.log(`Scaling all ${state.loadedModels.length} objects by ${scale}`);
 
             // Select all objects first
-            setSelectedObjects(loadedModels);
+            setSelectedObjects(state.loadedModels);
 
             // Use the unified transform function
             scaleSelection(scale || 1.5, scale || 1.5, scale || 1.5);
         };
 
         window.rotateAllObjects = function(x, y, z) {
-            console.log(`Rotating all ${loadedModels.length} objects`);
+            console.log(`Rotating all ${state.loadedModels.length} objects`);
 
             // Select all objects first
-            setSelectedObjects(loadedModels);
+            setSelectedObjects(state.loadedModels);
 
             // Use the unified transform function
             rotateSelection(x || 0, y || Math.PI / 4, z || 0);
         };
 
         window.deleteAllObjects = function() {
-            console.log(`Deleting all ${loadedModels.length} objects`);
-            const count = loadedModels.length;
-            loadedModels.forEach(obj => {
-                scene.remove(obj);
+            console.log(`Deleting all ${state.loadedModels.length} objects`);
+            const count = state.loadedModels.length;
+            state.loadedModels.forEach(obj => {
+                state.scene.remove(obj);
                 if (obj.geometry) obj.geometry.dispose();
                 if (obj.material) {
                     if (Array.isArray(obj.material)) {
@@ -3506,7 +3456,7 @@
                     }
                 }
             });
-            loadedModels.length = 0;
+            state.loadedModels.length = 0;
             clearSelection();
             clearAllHighlights();
             alert(`Deleted ${count} objects`);
@@ -3520,7 +3470,7 @@
             console.log("Bypassing selection system, duplicating all real objects...");
 
             // Get all real objects (not helpers)
-            const realObjects = loadedModels.filter(obj => {
+            const realObjects = state.loadedModels.filter(obj => {
                 return obj.name !== 'GroupMovementHelper' &&
                        !obj.userData?.isGroupHelper &&
                        !obj.userData?.isHelper &&
@@ -3557,8 +3507,8 @@
                         };
                     }
 
-                    scene.add(duplicate);
-                    loadedModels.push(duplicate);
+                    state.scene.add(duplicate);
+                    state.loadedModels.push(duplicate);
                     duplicatedCount++;
 
                     console.log(`✅ Duplicated: ${original.name} → ${duplicate.name}`);
@@ -3584,38 +3534,38 @@
             console.log("=== ERROR CHECKING ===");
 
             try {
-                console.log("1. Checking loadedModels:", loadedModels);
-                console.log("   - Type:", typeof loadedModels);
-                console.log("   - Length:", loadedModels ? loadedModels.length : 'undefined');
-                console.log("   - Contents:", loadedModels ? loadedModels.map(obj => obj.name || obj.type) : 'none');
+                console.log("1. Checking state.loadedModels:", state.loadedModels);
+                console.log("   - Type:", typeof state.loadedModels);
+                console.log("   - Length:", state.loadedModels ? state.loadedModels.length : 'undefined');
+                console.log("   - Contents:", state.loadedModels ? state.loadedModels.map(obj => obj.name || obj.type) : 'none');
 
-                console.log("2. Checking scene:", scene);
-                console.log("   - Type:", typeof scene);
-                console.log("   - Children count:", scene ? scene.children.length : 'undefined');
+                console.log("2. Checking state.scene:", state.scene);
+                console.log("   - Type:", typeof state.scene);
+                console.log("   - Children count:", state.scene ? state.scene.children.length : 'undefined');
 
                 console.log("3. Checking duplicateSelectedObject function:");
                 console.log("   - Type:", typeof window.duplicateSelectedObject);
                 console.log("   - Exists:", window.duplicateSelectedObject ? 'yes' : 'no');
 
                 console.log("4. Testing simple duplicate:");
-                if (loadedModels && loadedModels.length > 0) {
+                if (state.loadedModels && state.loadedModels.length > 0) {
                     console.log("   - Found objects to test with");
 
                     // Try the simplest possible duplicate
-                    const original = loadedModels[0];
+                    const original = state.loadedModels[0];
                     console.log("   - Testing with:", original.name);
 
                     try {
                         const copy = original.clone();
                         copy.position.x += 2;
                         copy.name = original.name + " TEST";
-                        scene.add(copy);
-                        loadedModels.push(copy);
+                        state.scene.add(copy);
+                        state.loadedModels.push(copy);
                         console.log("   ✅ Simple duplicate test PASSED");
 
                         // Clean up test
-                        scene.remove(copy);
-                        loadedModels.pop();
+                        state.scene.remove(copy);
+                        state.loadedModels.pop();
 
                     } catch (cloneError) {
                         console.error("   ❌ Simple duplicate test FAILED:", cloneError);
@@ -3635,24 +3585,24 @@
         window.simplestDuplicate = function() {
             console.log("=== SIMPLEST DUPLICATE ===");
 
-            if (!loadedModels || loadedModels.length === 0) {
+            if (!state.loadedModels || state.loadedModels.length === 0) {
                 alert("No objects to duplicate");
                 return;
             }
 
-            const count = loadedModels.length;
+            const count = state.loadedModels.length;
             console.log(`Duplicating ${count} objects...`);
 
             for (let i = 0; i < count; i++) {
-                const original = loadedModels[i];
+                const original = state.loadedModels[i];
                 console.log(`Copying ${i + 1}: ${original.name}`);
 
                 const copy = original.clone();
                 copy.position.x = original.position.x + 3;
                 copy.name = original.name + " COPY";
 
-                scene.add(copy);
-                loadedModels.push(copy);
+                state.scene.add(copy);
+                state.loadedModels.push(copy);
 
                 console.log(`✅ Created: ${copy.name}`);
             }
@@ -3682,7 +3632,7 @@
             createPrimitive('pyramid');
 
             setTimeout(() => {
-                console.log(`2. Created ${loadedModels.length} objects`);
+                console.log(`2. Created ${state.loadedModels.length} objects`);
 
                 // Step 2: Select all
                 console.log("3. Selecting all objects...");
@@ -3690,7 +3640,7 @@
 
                 setTimeout(() => {
                     console.log("4. All objects selected!");
-                    console.log(`   - currentlySelectedObjectsForEditing.length: ${currentlySelectedObjectsForEditing.length}`);
+                    console.log(`   - state.currentlySelectedObjectsForEditing.length: ${state.currentlySelectedObjectsForEditing.length}`);
                     console.log("");
                     console.log("✅ NOW YOU CAN EDIT ALL SELECTED OBJECTS:");
                     console.log("");
@@ -3729,7 +3679,7 @@
             createPrimitive('pyramid');
 
             setTimeout(() => {
-                console.log(`Created ${loadedModels.length} objects`);
+                console.log(`Created ${state.loadedModels.length} objects`);
 
                 // Select all and duplicate
                 highlightAllModels();
@@ -3737,7 +3687,7 @@
                 setTimeout(() => {
                     const success = duplicateMultipleObjects();
 
-                    if (success && loadedModels.length === 6) {
+                    if (success && state.loadedModels.length === 6) {
                         console.log("✅ MULTIPLE OBJECT DUPLICATION WORKS!");
                     } else {
                         console.error("❌ Multiple object duplication failed");
@@ -3799,21 +3749,21 @@
             // Create first object
             console.log("1. Creating cube...");
             createPrimitive('cube');
-            console.log("   Objects:", loadedModels.length, "Undo stack:", undoStack.length);
+            console.log("   Objects:", state.loadedModels.length, "Undo stack:", state.undoStack.length);
 
             setTimeout(() => {
                 // Create second object
                 console.log("2. Creating sphere...");
                 createPrimitive('sphere');
-                console.log("   Objects:", loadedModels.length, "Undo stack:", undoStack.length);
+                console.log("   Objects:", state.loadedModels.length, "Undo stack:", state.undoStack.length);
 
                 setTimeout(() => {
                     // Test undo - should go to 1 object, NOT 0
                     console.log("3. Testing undo...");
                     undo();
-                    console.log("   After undo - Objects:", loadedModels.length, "Undo stack:", undoStack.length);
+                    console.log("   After undo - Objects:", state.loadedModels.length, "Undo stack:", state.undoStack.length);
 
-                    if (loadedModels.length === 0) {
+                    if (state.loadedModels.length === 0) {
                         console.error("❌ FAILED: Undo went to empty state!");
                     } else {
                         console.log("✅ SUCCESS: Undo kept objects, no reset!");
@@ -3823,7 +3773,7 @@
                         // Test redo
                         console.log("4. Testing redo...");
                         redo();
-                        console.log("   After redo - Objects:", loadedModels.length, "Redo stack:", redoStack.length);
+                        console.log("   After redo - Objects:", state.loadedModels.length, "Redo stack:", state.redoStack.length);
                         console.log("=== Test Complete ===");
                     }, 500);
                 }, 500);
@@ -3840,43 +3790,43 @@
             createPrimitive('cube');
 
             setTimeout(() => {
-                console.log(`   ✓ Cube created. Objects: ${loadedModels.length}, Undo stack: ${undoStack.length}`);
+                console.log(`   ✓ Cube created. Objects: ${state.loadedModels.length}, Undo stack: ${state.undoStack.length}`);
 
                 // Step 2: Add sphere
                 console.log("2. Creating sphere...");
                 createPrimitive('sphere');
 
                 setTimeout(() => {
-                    console.log(`   ✓ Sphere created. Objects: ${loadedModels.length}, Undo stack: ${undoStack.length}`);
+                    console.log(`   ✓ Sphere created. Objects: ${state.loadedModels.length}, Undo stack: ${state.undoStack.length}`);
 
                     // Step 3: Duplicate selected object (sphere should be selected)
                     console.log("3. Duplicating selected object...");
-                    if (selectedObject) {
+                    if (state.selectedObject) {
                         duplicateSelectedObject();
                         setTimeout(() => {
-                            console.log(`   ✓ Object duplicated. Objects: ${loadedModels.length}, Undo stack: ${undoStack.length}`);
+                            console.log(`   ✓ Object duplicated. Objects: ${state.loadedModels.length}, Undo stack: ${state.undoStack.length}`);
 
                             // Step 4: Move selected object
                             console.log("4. Moving selected object...");
-                            if (selectedObject) {
-                                selectedObject.position.x += 2;
-                                selectedObject.updateMatrixWorld(true);
-                                console.log(`   ✓ Object moved to x: ${selectedObject.position.x}`);
+                            if (state.selectedObject) {
+                                state.selectedObject.position.x += 2;
+                                state.selectedObject.updateMatrixWorld(true);
+                                console.log(`   ✓ Object moved to x: ${state.selectedObject.position.x}`);
                             }
 
                             setTimeout(() => {
                                 // Step 5: Test undo
                                 console.log("5. Testing UNDO...");
-                                console.log(`   Before undo - Objects: ${loadedModels.length}, Camera pos: ${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)}`);
+                                console.log(`   Before undo - Objects: ${state.loadedModels.length}, state.camera pos: ${state.camera.position.x.toFixed(2)}, ${state.camera.position.y.toFixed(2)}, ${state.camera.position.z.toFixed(2)}`);
 
                                 undo();
 
                                 setTimeout(() => {
-                                    console.log(`   After undo - Objects: ${loadedModels.length}, Camera pos: ${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)}`);
+                                    console.log(`   After undo - Objects: ${state.loadedModels.length}, state.camera pos: ${state.camera.position.x.toFixed(2)}, ${state.camera.position.y.toFixed(2)}, ${state.camera.position.z.toFixed(2)}`);
 
                                     // Check results
-                                    if (loadedModels.length === 0) {
-                                        console.error("   ❌ FAILED: Scene reset to empty!");
+                                    if (state.loadedModels.length === 0) {
+                                        console.error("   ❌ FAILED: state.scene reset to empty!");
                                     } else {
                                         console.log("   ✅ SUCCESS: Objects preserved, no reset!");
                                     }
@@ -3886,15 +3836,15 @@
                                     redo();
 
                                     setTimeout(() => {
-                                        console.log(`   After redo - Objects: ${loadedModels.length}, Camera pos: ${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)}`);
+                                        console.log(`   After redo - Objects: ${state.loadedModels.length}, state.camera pos: ${state.camera.position.x.toFixed(2)}, ${state.camera.position.y.toFixed(2)}, ${state.camera.position.z.toFixed(2)}`);
 
                                         // Final verification
                                         console.log("=== FINAL VERIFICATION ===");
-                                        console.log(`✓ Camera preserved: ${camera ? 'YES' : 'NO'}`);
-                                        console.log(`✓ Scene has lights: ${scene.children.filter(obj => obj.isLight).length > 0 ? 'YES' : 'NO'}`);
-                                        console.log(`✓ Grid visible: ${currentGridHelper && currentGridHelper.visible ? 'YES' : 'NO'}`);
-                                        console.log(`✓ Objects in scene: ${loadedModels.length}`);
-                                        console.log(`✓ Undo stack: ${undoStack.length}, Redo stack: ${redoStack.length}`);
+                                        console.log(`✓ state.camera preserved: ${state.camera ? 'YES' : 'NO'}`);
+                                        console.log(`✓ state.scene has lights: ${state.scene.children.filter(obj => obj.isLight).length > 0 ? 'YES' : 'NO'}`);
+                                        console.log(`✓ Grid visible: ${state.currentGridHelper && state.currentGridHelper.visible ? 'YES' : 'NO'}`);
+                                        console.log(`✓ Objects in state.scene: ${state.loadedModels.length}`);
+                                        console.log(`✓ Undo stack: ${state.undoStack.length}, Redo stack: ${state.redoStack.length}`);
                                         console.log("=== WORKFLOW TEST COMPLETE ===");
                                     }, 500);
                                 }, 500);
@@ -3963,20 +3913,20 @@
             console.log("=== Quick Select All Test ===");
 
             // Create objects if none exist
-            if (loadedModels.length === 0) {
+            if (state.loadedModels.length === 0) {
                 createPrimitive('cube');
                 setTimeout(() => {
                     createPrimitive('sphere');
                     setTimeout(() => {
                         console.log("Created test objects. Now testing select all...");
                         highlightAllModels();
-                        console.log("Select all executed. Selected objects:", currentlySelectedObjectsForEditing.length);
+                        console.log("Select all executed. Selected objects:", state.currentlySelectedObjectsForEditing.length);
                     }, 500);
                 }, 500);
             } else {
                 console.log("Using existing objects. Testing select all...");
                 highlightAllModels();
-                console.log("Select all executed. Selected objects:", currentlySelectedObjectsForEditing.length);
+                console.log("Select all executed. Selected objects:", state.currentlySelectedObjectsForEditing.length);
             }
         };
 
@@ -3986,32 +3936,32 @@
 
             // Check basic variables
             console.log("1. Basic State Check:");
-            console.log("   - scene exists:", !!scene);
-            console.log("   - camera exists:", !!camera);
-            console.log("   - renderer exists:", !!renderer);
-            console.log("   - raycaster exists:", !!raycaster);
-            console.log("   - mouse exists:", !!mouse);
-            console.log("   - transformControls exists:", !!transformControls);
+            console.log("   - state.scene exists:", !!state.scene);
+            console.log("   - state.camera exists:", !!state.camera);
+            console.log("   - state.renderer exists:", !!state.renderer);
+            console.log("   - state.raycaster exists:", !!state.raycaster);
+            console.log("   - state.mouse exists:", !!state.mouse);
+            console.log("   - state.transformControls exists:", !!state.transformControls);
 
             console.log("2. Object State:");
-            console.log("   - loadedModels.length:", loadedModels.length);
-            console.log("   - selectedObject:", selectedObject ? selectedObject.name || selectedObject.uuid : 'null');
-            console.log("   - currentlySelectedObjectsForEditing.length:", currentlySelectedObjectsForEditing.length);
-            console.log("   - originalMaterialProperties.size:", originalMaterialProperties.size);
-            console.log("   - allHighlightsOriginalMaterials.size:", allHighlightsOriginalMaterials.size);
+            console.log("   - state.loadedModels.length:", state.loadedModels.length);
+            console.log("   - state.selectedObject:", state.selectedObject ? state.selectedObject.name || state.selectedObject.uuid : 'null');
+            console.log("   - state.currentlySelectedObjectsForEditing.length:", state.currentlySelectedObjectsForEditing.length);
+            console.log("   - state.originalMaterialProperties.size:", state.originalMaterialProperties.size);
+            console.log("   - state.allHighlightsOriginalMaterials.size:", state.allHighlightsOriginalMaterials.size);
 
-            console.log("3. Scene Analysis:");
-            if (scene) {
+            console.log("3. state.scene Analysis:");
+            if (state.scene) {
                 let meshCount = 0;
                 let visibleMeshCount = 0;
-                scene.traverse((obj) => {
+                state.scene.traverse((obj) => {
                     if (obj.isMesh) {
                         meshCount++;
                         if (obj.visible) visibleMeshCount++;
                     }
                 });
-                console.log("   - Total meshes in scene:", meshCount);
-                console.log("   - Visible meshes in scene:", visibleMeshCount);
+                console.log("   - Total meshes in state.scene:", meshCount);
+                console.log("   - Visible meshes in state.scene:", visibleMeshCount);
             }
 
             console.log("4. Function Tests:");
@@ -4035,9 +3985,9 @@
             console.log("If you see any 'false' or 'null' values above, that indicates the issue.");
 
             return {
-                sceneReady: !!scene && !!camera && !!renderer,
-                selectionReady: !!raycaster && !!mouse,
-                objectsExist: loadedModels.length > 0,
+                sceneReady: !!state.scene && !!state.camera && !!state.renderer,
+                selectionReady: !!state.raycaster && !!state.mouse,
+                objectsExist: state.loadedModels.length > 0,
                 functionsExist: typeof highlightAllModels === 'function'
             };
         };
@@ -4050,7 +4000,7 @@
             console.log("undoButton disabled:", document.getElementById('undoButton')?.disabled);
             console.log("redoButton disabled:", document.getElementById('redoButton')?.disabled);
             console.log("Initial state - History length:", history.length, "Pointer:", historyPointer);
-            console.log("Objects in scene:", loadedModels.length);
+            console.log("Objects in state.scene:", state.loadedModels.length);
 
             // Create a test object
             console.log("Creating cube...");
@@ -4061,7 +4011,7 @@
                 console.log("undoButton disabled:", document.getElementById('undoButton')?.disabled);
                 console.log("redoButton disabled:", document.getElementById('redoButton')?.disabled);
                 console.log("History length:", history.length, "Pointer:", historyPointer);
-                console.log("Objects in scene:", loadedModels.length);
+                console.log("Objects in state.scene:", state.loadedModels.length);
 
                 // Create another object
                 console.log("Creating sphere...");
@@ -4070,7 +4020,7 @@
                 setTimeout(() => {
                     console.log("After creating sphere:");
                     console.log("History length:", history.length, "Pointer:", historyPointer);
-                    console.log("Objects in scene:", loadedModels.length);
+                    console.log("Objects in state.scene:", state.loadedModels.length);
 
                     // Try clicking undo button programmatically
                     const undoBtn = document.getElementById('undoButton');
@@ -4081,7 +4031,7 @@
                         setTimeout(() => {
                             console.log("After undo:");
                             console.log("History length:", history.length, "Pointer:", historyPointer);
-                            console.log("Objects in scene:", loadedModels.length);
+                            console.log("Objects in state.scene:", state.loadedModels.length);
 
                             // Try redo
                             const redoBtn = document.getElementById('redoButton');
@@ -4092,7 +4042,7 @@
                                 setTimeout(() => {
                                     console.log("After redo:");
                                     console.log("History length:", history.length, "Pointer:", historyPointer);
-                                    console.log("Objects in scene:", loadedModels.length);
+                                    console.log("Objects in state.scene:", state.loadedModels.length);
                                     console.log("=== Test Complete ===");
                                 }, 500);
                             }
@@ -4107,9 +4057,9 @@
         // Test selection functionality
         window.testSelection = function() {
             console.log("=== Testing Selection Functionality ===");
-            console.log("Current selectedObject:", selectedObject ? selectedObject.name || selectedObject.uuid : 'null');
-            console.log("Current select-all objects:", currentlySelectedObjectsForEditing.length);
-            console.log("Objects in scene:", loadedModels.length);
+            console.log("Current state.selectedObject:", state.selectedObject ? state.selectedObject.name || state.selectedObject.uuid : 'null');
+            console.log("Current select-all objects:", state.currentlySelectedObjectsForEditing.length);
+            console.log("Objects in state.scene:", state.loadedModels.length);
 
             // Create some test objects
             createPrimitive('cube');
@@ -4118,8 +4068,8 @@
 
                 setTimeout(() => {
                     console.log("After creating objects:");
-                    console.log("Objects in scene:", loadedModels.length);
-                    console.log("Current selectedObject:", selectedObject ? selectedObject.name || selectedObject.uuid : 'null');
+                    console.log("Objects in state.scene:", state.loadedModels.length);
+                    console.log("Current state.selectedObject:", state.selectedObject ? state.selectedObject.name || state.selectedObject.uuid : 'null');
 
                     // Test select all
                     console.log("Testing select all...");
@@ -4127,8 +4077,8 @@
 
                     setTimeout(() => {
                         console.log("After select all:");
-                        console.log("Select-all objects:", currentlySelectedObjectsForEditing.length);
-                        console.log("All highlights map size:", allHighlightsOriginalMaterials.size);
+                        console.log("Select-all objects:", state.currentlySelectedObjectsForEditing.length);
+                        console.log("All highlights map size:", state.allHighlightsOriginalMaterials.size);
 
                         // Test clear selection
                         console.log("Testing clear all highlights...");
@@ -4136,8 +4086,8 @@
 
                         setTimeout(() => {
                             console.log("After clear all:");
-                            console.log("Select-all objects:", currentlySelectedObjectsForEditing.length);
-                            console.log("All highlights map size:", allHighlightsOriginalMaterials.size);
+                            console.log("Select-all objects:", state.currentlySelectedObjectsForEditing.length);
+                            console.log("All highlights map size:", state.allHighlightsOriginalMaterials.size);
                             console.log("=== Selection Test Complete ===");
                         }, 500);
                     }, 500);
@@ -4148,11 +4098,11 @@
         // Simple test for shape creation
         window.testShapeCreation = function() {
             console.log("=== Testing Shape Creation ===");
-            console.log(`Scene initialized: ${!!scene}`);
-            console.log(`Camera initialized: ${!!camera}`);
-            console.log(`Renderer initialized: ${!!renderer}`);
-            console.log(`Current objects in scene: ${scene ? scene.children.length : 'N/A'}`);
-            console.log(`Current loaded models: ${loadedModels.length}`);
+            console.log(`state.scene initialized: ${!!state.scene}`);
+            console.log(`state.camera initialized: ${!!state.camera}`);
+            console.log(`state.renderer initialized: ${!!state.renderer}`);
+            console.log(`Current objects in state.scene: ${state.scene ? state.scene.children.length : 'N/A'}`);
+            console.log(`Current loaded models: ${state.loadedModels.length}`);
 
             console.log("Creating cube...");
             createPrimitive('cube');
@@ -4165,8 +4115,8 @@
                     console.log("Creating ball (alias for sphere)...");
                     createPrimitive('ball');
 
-                    console.log(`Final objects in scene: ${scene.children.length}`);
-                    console.log(`Final loaded models: ${loadedModels.length}`);
+                    console.log(`Final objects in state.scene: ${state.scene.children.length}`);
+                    console.log(`Final loaded models: ${state.loadedModels.length}`);
                     console.log("=== Shape Creation Test Complete ===");
                 }, 500);
             }, 500);
@@ -4215,37 +4165,37 @@
                 setTimeout(() => {
                     // Test 2: Color change
                     console.log("2. Testing color change...");
-                    if (selectedObject) {
+                    if (state.selectedObject) {
                         changeObjectColor('#ff0000');
                     }
 
                     setTimeout(() => {
                         // Test 3: Duplicate
                         console.log("3. Testing duplicate...");
-                        if (selectedObject) {
+                        if (state.selectedObject) {
                             duplicateSelectedObject();
                         }
 
                         setTimeout(() => {
                             // Test 4: Move/Transform
                             console.log("4. Testing movement...");
-                            if (selectedObject) {
-                                selectedObject.position.x += 2;
-                                selectedObject.updateMatrixWorld(true);
+                            if (state.selectedObject) {
+                                state.selectedObject.position.x += 2;
+                                state.selectedObject.updateMatrixWorld(true);
                             }
 
                             setTimeout(() => {
                                 // Test 5: Scale
                                 console.log("5. Testing scale...");
-                                if (selectedObject) {
-                                    selectedObject.scale.multiplyScalar(1.5);
-                                    selectedObject.updateMatrixWorld(true);
+                                if (state.selectedObject) {
+                                    state.selectedObject.scale.multiplyScalar(1.5);
+                                    state.selectedObject.updateMatrixWorld(true);
                                 }
 
                                 setTimeout(() => {
                                     // Test 6: Delete
                                     console.log("6. Testing delete...");
-                                    if (selectedObject) {
+                                    if (state.selectedObject) {
                                         removeObject();
                                     }
 
@@ -4257,7 +4207,7 @@
                                             redo();
                                             console.log("=== All Tests Complete ===");
                                             console.log(`Final state - History: ${history.length}, Pointer: ${historyPointer}`);
-                                            console.log(`Objects in scene: ${loadedModels.length}`);
+                                            console.log(`Objects in state.scene: ${state.loadedModels.length}`);
                                         }, 500);
                                     }, 500);
                                 }, 500);
@@ -4298,7 +4248,7 @@
                 // Test 2: Duplicate
                 console.log("Testing: Duplicate");
                 try {
-                    if (selectedObject) {
+                    if (state.selectedObject) {
                         duplicateSelectedObject();
                         testResults.duplicate = true;
                         console.log("✅ Duplicate: PASSED");
@@ -4313,7 +4263,7 @@
                     // Test 3: Color change
                     console.log("Testing: Color Change");
                     try {
-                        if (selectedObject) {
+                        if (state.selectedObject) {
                             changeObjectColor('#00ff00');
                             testResults.colorChange = true;
                             console.log("✅ Color Change: PASSED");
@@ -4328,9 +4278,9 @@
                         // Test 4: Move
                         console.log("Testing: Move");
                         try {
-                            if (selectedObject) {
-                                selectedObject.position.x += 3;
-                                selectedObject.updateMatrixWorld(true);
+                            if (state.selectedObject) {
+                                state.selectedObject.position.x += 3;
+                                state.selectedObject.updateMatrixWorld(true);
                                 testResults.move = true;
                                 console.log("✅ Move: PASSED");
                             } else {
@@ -4344,9 +4294,9 @@
                             // Test 5: Scale
                             console.log("Testing: Scale");
                             try {
-                                if (selectedObject) {
-                                    selectedObject.scale.multiplyScalar(2);
-                                    selectedObject.updateMatrixWorld(true);
+                                if (state.selectedObject) {
+                                    state.selectedObject.scale.multiplyScalar(2);
+                                    state.selectedObject.updateMatrixWorld(true);
                                     testResults.scale = true;
                                     console.log("✅ Scale: PASSED");
                                 } else {
@@ -4360,9 +4310,9 @@
                                 // Test 6: Rotate
                                 console.log("Testing: Rotate");
                                 try {
-                                    if (selectedObject) {
-                                        selectedObject.rotation.y += Math.PI / 4;
-                                        selectedObject.updateMatrixWorld(true);
+                                    if (state.selectedObject) {
+                                        state.selectedObject.rotation.y += Math.PI / 4;
+                                        state.selectedObject.updateMatrixWorld(true);
                                         testResults.rotate = true;
                                         console.log("✅ Rotate: PASSED");
                                     } else {
@@ -4376,7 +4326,7 @@
                                     // Test 7: Delete
                                     console.log("Testing: Delete");
                                     try {
-                                        if (selectedObject) {
+                                        if (state.selectedObject) {
                                             removeObject();
                                             testResults.delete = true;
                                             console.log("✅ Delete: PASSED");
@@ -4440,7 +4390,7 @@
         uploadNewFileButton.addEventListener('click', () => {
             console.log("[Upload New File] button clicked."); // Debug log
             fileInput.click(); // Programmatically click the hidden file input
-            addMessageToLog('System', 'Clicking "Upload New File" will open file dialog to add another model to the scene.');
+            addMessageToLog('System', 'Clicking "Upload New File" will open file dialog to add another model to the state.scene.');
         });
         saveButton.addEventListener('click', () => {
             console.log("[Save] button clicked."); // Debug log
@@ -4452,7 +4402,7 @@
         if (loadRandomModelButton) {
             loadRandomModelButton.addEventListener('click', () => {
                 console.log("[Load Random Model] button clicked. Calling goToEditor('random').");
-                uploadedFile = null; // Ensure no previous file is considered for explicit upload
+                state.uploadedFile = null; // Ensure no previous file is considered for explicit upload
                 goToEditor('random'); // Go to editor and load a random model
             });
             console.log("[Init] Load Random Model button event listener attached");
@@ -4463,8 +4413,8 @@
         if (createNewEmptyModelButton) {
             createNewEmptyModelButton.addEventListener('click', () => {
                 console.log("[Create Empty Model] button clicked. Calling goToEditor('empty').");
-                uploadedFile = null; // Ensure no previous file is considered
-                goToEditor('empty'); // Go to editor with an empty scene
+                state.uploadedFile = null; // Ensure no previous file is considered
+                goToEditor('empty'); // Go to editor with an empty state.scene
             });
             console.log("[Init] Create Empty Model button event listener attached");
         } else {
@@ -4484,7 +4434,7 @@
         }
 
         // --- Undo/Redo Functions ---
-        // Function to save the current state of the scene (debounced for transform operations)
+        // Function to save the current state of the state.scene (debounced for transform operations)
         function saveSceneStateDebounced(delay = 500) {
             if (saveStateTimeout) {
                 clearTimeout(saveStateTimeout);
@@ -4495,11 +4445,11 @@
             }, delay);
         }
 
-        // Function to save the current state of the scene
+        // Function to save the current state of the state.scene
         function saveSceneState() {
             // For the very first save, save the state BEFORE the action
             // This ensures undo goes back to the previous state, not empty
-            if (history.length === 0 && loadedModels.length > 0) {
+            if (history.length === 0 && state.loadedModels.length > 0) {
                 // If this is the first save and we have objects, save the current state as baseline
                 console.log("[History] Saving first state as baseline");
             }
@@ -4510,7 +4460,7 @@
             }
 
             const currentState = [];
-            loadedModels.forEach(model => {
+            state.loadedModels.forEach(model => {
                 const modelState = {
                     uuid: model.uuid, // Store UUID to identify the object when restoring
                     name: model.name,
@@ -4570,13 +4520,13 @@
 
         // Function to load a specific state from history
         async function loadSceneState(state) {
-            console.log("[History] Loading scene state...", state);
+            console.log("[History] Loading state.scene state...", state);
 
-            // Dispose current scene objects (excluding grid and axes helpers)
-            // Iterate over a copy of the loadedModels array to avoid issues during removal
-            const currentLoadedModels = [...loadedModels];
+            // Dispose current state.scene objects (excluding grid and axes helpers)
+            // Iterate over a copy of the state.loadedModels array to avoid issues during removal
+            const currentLoadedModels = [...state.loadedModels];
             currentLoadedModels.forEach(model => {
-                scene.remove(model);
+                state.scene.remove(model);
                 model.traverse(child => {
                     if (child.isMesh) {
                         if (child.geometry) child.geometry.dispose();
@@ -4590,7 +4540,7 @@
                     }
                 });
             });
-            loadedModels = []; // Clear current loaded models array after removal
+            state.loadedModels = []; // Clear current loaded models array after removal
 
             // Clear selection and highlights before loading new state
             clearSelection();
@@ -4619,7 +4569,7 @@
                     // Reload GLTF model if it was an uploaded file
                     const loader = new THREE.GLTFLoader();
                     try {
-                        const file = droppedFileBlobs.get(modelState.fileData.name); // Assuming fileData.name is the key
+                        const file = state.droppedFileBlobs.get(modelState.fileData.name); // Assuming fileData.name is the key
                         if (file) {
                             const fileUrl = URL.createObjectURL(file);
                             const gltf = await new Promise((resolve, reject) => loader.load(fileUrl, resolve, undefined, reject));
@@ -4641,7 +4591,7 @@
                     continue;
                 }
 
-                // Restore UUID to match the saved state, important for maps like originalMaterialProperties
+                // Restore UUID to match the saved state, important for maps like state.originalMaterialProperties
                 newObject.uuid = modelState.uuid;
 
                 // Apply saved transforms
@@ -4715,22 +4665,22 @@
                     }
                 });
 
-                scene.add(newObject);
-                loadedModels.push(newObject); // Add to loadedModels array
+                state.scene.add(newObject);
+                state.loadedModels.push(newObject); // Add to state.loadedModels array
             }
 
-            // Reset camera to fit the new scene
+            // Reset state.camera to fit the new state.scene
             resetView(); // This will also update the grid
 
-            console.log("[History] Scene state loaded successfully.");
+            console.log("[History] state.scene state loaded successfully.");
         }
 
         // ENHANCED: Undo function with grouped action support
         function undo() {
-            console.log(`[Undo] Attempting undo. Undo stack size: ${undoStack.length}`);
+            console.log(`[Undo] Attempting undo. Undo stack size: ${state.undoStack.length}`);
 
-            if (undoStack.length > 0) {
-                const undoItem = undoStack.pop();
+            if (state.undoStack.length > 0) {
+                const undoItem = state.undoStack.pop();
 
                 // Check if this is a new grouped action or old state-based action
                 if (undoItem.actions && undoItem.actions.length > 0) {
@@ -4750,7 +4700,7 @@
                     }
 
                     // Save to redo stack
-                    redoStack.push(undoItem);
+                    state.redoStack.push(undoItem);
 
                     addMessageToLog('System', `Undone: ${undoItem.name}`);
                     speakResponse(`Undone ${undoItem.name}`);
@@ -4760,7 +4710,7 @@
 
                     // Save current state to redo stack BEFORE undoing
                     const currentState = getCurrentState();
-                    redoStack.push(currentState);
+                    state.redoStack.push(currentState);
 
                     // Restore previous state
                     restoreState(undoItem);
@@ -4769,7 +4719,7 @@
                     speakResponse('Action undone.');
                 }
 
-                console.log(`[Undo] Undone. Undo stack: ${undoStack.length}, Redo stack: ${redoStack.length}`);
+                console.log(`[Undo] Undone. Undo stack: ${state.undoStack.length}, Redo stack: ${state.redoStack.length}`);
             } else {
                 console.log(`[Undo] No actions to undo`);
                 addMessageToLog('System', 'No more actions to undo.');
@@ -4780,10 +4730,10 @@
 
         // ENHANCED: Redo function with grouped action support
         function redo() {
-            console.log(`[Redo] Attempting redo. Redo stack size: ${redoStack.length}`);
+            console.log(`[Redo] Attempting redo. Redo stack size: ${state.redoStack.length}`);
 
-            if (redoStack.length > 0) {
-                const redoItem = redoStack.pop();
+            if (state.redoStack.length > 0) {
+                const redoItem = state.redoStack.pop();
 
                 // Check if this is a new grouped action or old state-based action
                 if (redoItem.actions && redoItem.actions.length > 0) {
@@ -4799,7 +4749,7 @@
                     }
 
                     // Save back to undo stack
-                    undoStack.push(redoItem);
+                    state.undoStack.push(redoItem);
 
                     addMessageToLog('System', `Redone: ${redoItem.name}`);
                     speakResponse(`Redone ${redoItem.name}`);
@@ -4809,7 +4759,7 @@
 
                     // Save current state to undo stack BEFORE redoing
                     const currentState = getCurrentState();
-                    undoStack.push(currentState);
+                    state.undoStack.push(currentState);
 
                     // Restore next state
                     restoreState(redoItem);
@@ -4818,7 +4768,7 @@
                     speakResponse('Action redone.');
                 }
 
-                console.log(`[Redo] Redone. Undo stack: ${undoStack.length}, Redo stack: ${redoStack.length}`);
+                console.log(`[Redo] Redone. Undo stack: ${state.undoStack.length}, Redo stack: ${state.redoStack.length}`);
             } else {
                 console.log(`[Redo] No actions to redo`);
                 addMessageToLog('System', 'No more actions to redo.');
@@ -4830,21 +4780,21 @@
         // Function to update the disabled state of Undo/Redo buttons
         function updateUndoRedoButtons() {
             if (undoButton && redoButton) {
-                undoButton.disabled = undoStack.length === 0;
-                redoButton.disabled = redoStack.length === 0;
+                undoButton.disabled = state.undoStack.length === 0;
+                redoButton.disabled = state.redoStack.length === 0;
 
                 console.log(`[Buttons] Undo disabled: ${undoButton.disabled}, Redo disabled: ${redoButton.disabled}`);
-                console.log(`[Buttons] Undo stack: ${undoStack.length}, Redo stack: ${redoStack.length}`);
+                console.log(`[Buttons] Undo stack: ${state.undoStack.length}, Redo stack: ${state.redoStack.length}`);
 
-                undoButton.title = undoButton.disabled ? 'No actions to undo' : `Undo (${undoStack.length} actions available)`;
-                redoButton.title = redoButton.disabled ? 'No actions to redo' : `Redo (${redoStack.length} actions available)`;
+                undoButton.title = undoButton.disabled ? 'No actions to undo' : `Undo (${state.undoStack.length} actions available)`;
+                redoButton.title = redoButton.disabled ? 'No actions to redo' : `Redo (${state.redoStack.length} actions available)`;
             }
         }
 
-        // Get current scene state
+        // Get current state.scene state
         function getCurrentState() {
             const state = [];
-            loadedModels.forEach(model => {
+            state.loadedModels.forEach(model => {
                 const modelState = {
                     name: model.name || 'Unnamed Model',
                     uuid: model.uuid,
@@ -4875,21 +4825,21 @@
             return state;
         }
 
-        // CORRECTED: Only remove mesh objects, preserve lights/camera/controls
-        function restoreState(state) {
-            console.log("[restoreState] Restoring state with", state.length, "objects");
+        // CORRECTED: Only remove mesh objects, preserve lights/state.camera/state.controls
+        function restoreState(snapshot) {
+            console.log("[restoreState] Restoring state with", snapshot.length, "objects");
 
-            // 1. ONLY remove mesh objects from scene (preserve lights, camera, grid, controls)
-            const meshesToRemove = scene.children.filter(obj =>
+            // 1. ONLY remove mesh objects from state.scene (preserve lights, state.camera, grid, state.controls)
+            const meshesToRemove = state.scene.children.filter(obj =>
                 obj.isMesh &&
                 !obj.userData.isGridLabel &&
-                obj !== currentGridHelper &&
-                obj !== raycastDebugSphere
+                obj !== state.currentGridHelper &&
+                obj !== state.raycastDebugSphere
             );
 
             // Remove and dispose mesh objects properly
             meshesToRemove.forEach(mesh => {
-                scene.remove(mesh);
+                state.scene.remove(mesh);
                 // Dispose geometry and materials to prevent memory leaks
                 if (mesh.geometry) mesh.geometry.dispose();
                 if (mesh.material) {
@@ -4901,13 +4851,13 @@
                 }
             });
 
-            // Clear arrays and selections (but don't touch scene structure)
-            loadedModels = [];
+            // Clear arrays and selections (but don't touch state.scene structure)
+            state.loadedModels = [];
             clearSelection();
             clearAllHighlights();
 
             // 2. RECREATE objects from saved state
-            state.forEach(modelState => {
+            snapshot.forEach(modelState => {
                 if (modelState.isPrimitive) {
                     // Create base material
                     let baseMaterial = new THREE.MeshStandardMaterial({
@@ -4977,15 +4927,15 @@
                         });
                     }
 
-                    // 5. ADD to scene and update arrays
-                    scene.add(newObject);
-                    loadedModels.push(newObject);
+                    // 5. ADD to state.scene and update arrays
+                    state.scene.add(newObject);
+                    state.loadedModels.push(newObject);
 
                     console.log(`[restoreState] Restored ${modelState.primitiveType}: ${newObject.name}`);
                 }
             });
 
-            console.log(`[restoreState] Successfully restored ${loadedModels.length} objects`);
+            console.log(`[restoreState] Successfully restored ${state.loadedModels.length} objects`);
         }
 
         // --- Event Listeners for Undo/Redo Buttons ---
@@ -5010,7 +4960,7 @@
             }
 
             // Transform mode shortcuts (when object is selected)
-            if (selectedObject && transformControls) {
+            if (state.selectedObject && state.transformControls) {
                 switch(event.key.toLowerCase()) {
                     case 'g': // G for Grab/Move (like Blender)
                         event.preventDefault();
@@ -5094,7 +5044,7 @@
             // When dropping, assume it's a new set of files for a new model
             // If already in editor, this means adding a new model. If on upload page, it's the first model.
             // Clear previous single-file context (important for correct URL resolution)
-            droppedFileBlobs.clear();
+            state.droppedFileBlobs.clear();
             let mainModelFile = null;
 
             console.log("[Drop Handler] Drop event detected. Items:", e.dataTransfer.items);
@@ -5104,7 +5054,7 @@
                 if (entry.isFile) {
                     const file = await new Promise(resolve => entry.file(resolve));
                     const fullPath = path ? `${path}/${path}/${file.name}` : file.name; // FIX: Corrected path concatenation
-                    droppedFileBlobs.set(fullPath, file);
+                    state.droppedFileBlobs.set(fullPath, file);
                     console.log(`[Drop Handler] Stored file: ${fullPath}, Type: ${file.type}, Size: ${file.size} bytes`);
                     if (!mainModelFile && (file.name.toLowerCase().endsWith('.gltf') || file.name.toLowerCase().endsWith('.glb'))) {
                         mainModelFile = file;
@@ -5132,7 +5082,7 @@
                 console.log("[Drop Handler] Falling back to flat file drop (webkitGetAsEntry not available or not a folder drop).");
                 for (let i = 0; i < e.dataTransfer.files.length; i++) {
                     const file = e.dataTransfer.files[i];
-                    droppedFileBlobs.set(file.name, file);
+                    state.droppedFileBlobs.set(file.name, file);
                     console.log(`[Drop Handler] Stored file (flat): ${file.name}, Type: ${file.type}, Size: ${file.size} bytes`);
                     if (!mainModelFile && (file.name.toLowerCase().endsWith('.gltf') || file.name.toLowerCase().endsWith('.glb'))) {
                         mainModelFile = file;
@@ -5141,20 +5091,20 @@
             }
 
             if (mainModelFile) {
-                uploadedFile = mainModelFile;
-                console.log("[Drop Handler] Identified main model file:", uploadedFile.name);
-                if (validateFile(uploadedFile)) {
+                state.uploadedFile = mainModelFile;
+                console.log("[Drop Handler] Identified main model file:", state.uploadedFile.name);
+                if (validateFile(state.uploadedFile)) {
                     // If already in editor, load the model directly
                     if (editorPage.classList.contains('page-active')) {
-                        loadModel(uploadedFile);
+                        loadModel(state.uploadedFile);
                     } else {
-                        loadingMsg.textContent = `File selected: ${uploadedFile.name}. Loading editor...`;
+                        loadingMsg.textContent = `File selected: ${state.uploadedFile.name}. Loading editor...`;
                         loadingMsg.style.color = '#007bff';
                         loadingMsg.style.display = 'block';
                         goToEditor('uploaded');
                     }
                 }
-                console.log("[Drop Handler] All dropped files (keys in map):", Array.from(droppedFileBlobs.keys()));
+                console.log("[Drop Handler] All dropped files (keys in map):", Array.from(state.droppedFileBlobs.keys()));
             } else {
                 loadingMsg.textContent = '❌ No .gltf or .glb file found among dropped items!';
                 loadingMsg.style.color = 'red';
@@ -5163,7 +5113,7 @@
                     loadingMsg.textContent = '';
                 }, 3000);
             }
-            console.log("[Drop Handler] uploadedFile after change processing:", uploadedFile ? uploadedFile.name : "null");
+            console.log("[Drop Handler] state.uploadedFile after change processing:", state.uploadedFile ? state.uploadedFile.name : "null");
         });
 
         fileInput.addEventListener('change', () => {
@@ -5177,21 +5127,21 @@
 
             if (fileInput.files.length > 0) {
                 const file = fileInput.files[0];
-                uploadedFile = file;
-                console.log("[File Input] Selected file:", uploadedFile.name, `Type: ${uploadedFile.type}, Size: ${uploadedFile.size} bytes`);
+                state.uploadedFile = file;
+                console.log("[File Input] Selected file:", state.uploadedFile.name, `Type: ${state.uploadedFile.type}, Size: ${state.uploadedFile.size} bytes`);
 
-                if (validateFile(uploadedFile)) {
-                    loadingMsg.textContent = `Processing selected file: ${uploadedFile.name}...`;
+                if (validateFile(state.uploadedFile)) {
+                    loadingMsg.textContent = `Processing selected file: ${state.uploadedFile.name}...`;
                     loadingMsg.style.color = '#007bff';
                     loadingMsg.style.display = 'block'; // Show loading message *only* if a file is valid
 
-                    droppedFileBlobs.clear(); // Clear previous context
-                    droppedFileBlobs.set(file.name, file); // Store the selected file
+                    state.droppedFileBlobs.clear(); // Clear previous context
+                    state.droppedFileBlobs.set(file.name, file); // Store the selected file
 
                     if (editorPage.classList.contains('page-active')) {
-                        loadModel(uploadedFile);
+                        loadModel(state.uploadedFile);
                     } else {
-                        loadingMsg.textContent = `File selected: ${uploadedFile.name}. Loading editor...`;
+                        loadingMsg.textContent = `File selected: ${state.uploadedFile.name}. Loading editor...`;
                         loadingMsg.style.color = '#007bff';
                         loadingMsg.style.display = 'block';
                         goToEditor('uploaded');
@@ -5205,7 +5155,7 @@
                 }
             } else {
                 console.log("[File Input] No file selected via input (e.g., dialog cancelled or no file chosen).");
-                uploadedFile = null;
+                state.uploadedFile = null;
                 // No need to show a message if nothing was selected, just clear any previous ones.
                 // loadingMsg.textContent = 'No file selected.';
                 // loadingMsg.style.color = 'orange';
@@ -5215,7 +5165,7 @@
                 //     loadingMsg.textContent = '';
                 // }, 3000);
             }
-            console.log("[File Input] uploadedFile after change processing:", uploadedFile ? uploadedFile.name : "null");
+            console.log("[File Input] state.uploadedFile after change processing:", state.uploadedFile ? state.uploadedFile.name : "null");
         });
 
         function validateFile(file) {
@@ -5228,17 +5178,17 @@
                 // Set message for the caller to display/hide
                 loadingMsg.textContent = '❌ Unsupported file type! Please upload a .gltf or .glb file.';
                 loadingMsg.style.color = 'red';
-                uploadedFile = null;
+                state.uploadedFile = null;
                 return false;
             }
         }
 
         function disposeSceneResources() {
             console.log("[Dispose] Disposing Three.js resources...");
-            if (scene) {
+            if (state.scene) {
                 // Remove all loaded models and dispose their resources
-                loadedModels.forEach(model => {
-                    scene.remove(model);
+                state.loadedModels.forEach(model => {
+                    state.scene.remove(model);
                     model.traverse(function (object) {
                         if (object.isMesh) {
                             if (object.geometry) object.geometry.dispose();
@@ -5252,45 +5202,45 @@
                         }
                     });
                 });
-                loadedModels = []; // Clear the array of loaded models
+                state.loadedModels = []; // Clear the array of loaded models
 
                 // Remove grid helper and labels specifically if they exist
-                if (currentGridHelper) {
-                    scene.remove(currentGridHelper);
-                    currentGridHelper.geometry.dispose();
-                    currentGridHelper.material.dispose();
-                    currentGridHelper = null;
+                if (state.currentGridHelper) {
+                    state.scene.remove(state.currentGridHelper);
+                    state.currentGridHelper.geometry.dispose();
+                    state.currentGridHelper.material.dispose();
+                    state.currentGridHelper = null;
                 }
-                currentGridLabels.forEach(label => {
-                    scene.remove(label);
+                state.currentGridLabels.forEach(label => {
+                    state.scene.remove(label);
                     if (label.material) label.material.dispose();
                     if (label.geometry) label.geometry.dispose();
                 });
-                currentGridLabels = [];
+                state.currentGridLabels = [];
 
-                // Dispose renderer and controls only if they exist
-                if (renderer) {
-                    renderer.setAnimationLoop(null);
-                    renderer.dispose();
-                    renderer = null;
+                // Dispose state.renderer and state.controls only if they exist
+                if (state.renderer) {
+                    state.renderer.setAnimationLoop(null);
+                    state.renderer.dispose();
+                    state.renderer = null;
                 }
-                if (controls) {
-                    controls.removeEventListener('change', updateDynamicGrid); // Remove listener
-                    controls.dispose();
-                    controls = null;
+                if (state.controls) {
+                    state.controls.removeEventListener('change', updateDynamicGrid); // Remove listener
+                    state.controls.dispose();
+                    state.controls = null;
                 }
                 if (cadCanvas) {
                     cadCanvas.removeEventListener('mousedown', onCanvasClick, false);
                     cadCanvas.removeEventListener('touchstart', onCanvasClick, false);
                 }
-                if (transformControls) {
-                    transformControls.dispose();
-                    transformControls = null;
+                if (state.transformControls) {
+                    state.transformControls.dispose();
+                    state.transformControls = null;
                 }
-                // Dispose view axes helper and its scene/camera/renderer only if they exist
-                if (viewAxesHelper) {
-                    // Iterate through children of viewAxesHelper (the axis meshes)
-                    viewAxesHelper.children.forEach(child => {
+                // Dispose view axes helper and its state.scene/state.camera/state.renderer only if they exist
+                if (state.viewAxesHelper) {
+                    // Iterate through children of state.viewAxesHelper (the axis meshes)
+                    state.viewAxesHelper.children.forEach(child => {
                         if (child.isMesh) {
                             if (child.geometry) child.geometry.dispose();
                             if (child.material) {
@@ -5302,16 +5252,16 @@
                             }
                         }
                     });
-                    viewAxesScene.remove(viewAxesHelper); // Remove the group itself
-                    viewAxesHelper = null;
+                    state.viewAxesScene.remove(state.viewAxesHelper); // Remove the group itself
+                    state.viewAxesHelper = null;
                 }
-                if (viewAxesRenderer) {
-                    viewAxesRenderer.setAnimationLoop(null);
-                    viewAxesRenderer.dispose();
-                    viewAxesRenderer = null;
+                if (state.viewAxesRenderer) {
+                    state.viewAxesRenderer.setAnimationLoop(null);
+                    state.viewAxesRenderer.dispose();
+                    state.viewAxesRenderer = null;
                 }
-                if (viewAxesCamera) {
-                    viewAxesCamera = null;
+                if (state.viewAxesCamera) {
+                    state.viewAxesCamera = null;
                 }
                 // Clear the container for the view axes helper
                 if (viewAxesContainer) {
@@ -5319,28 +5269,28 @@
                 }
 
                 // Dispose debug sphere if it exists
-                if (raycastDebugSphere) {
-                    scene.remove(raycastDebugSphere);
-                    if (raycastDebugSphere.geometry) raycastDebugSphere.geometry.dispose();
-                    if (raycastDebugSphere.material) raycastDebugSphere.material.dispose();
-                    raycastDebugSphere = null;
+                if (state.raycastDebugSphere) {
+                    state.scene.remove(state.raycastDebugSphere);
+                    if (state.raycastDebugSphere.geometry) state.raycastDebugSphere.geometry.dispose();
+                    if (state.raycastDebugSphere.material) state.raycastDebugSphere.material.dispose();
+                    state.raycastDebugSphere = null;
                 }
 
-                // Re-initialize scene after disposal to ensure a clean state
+                // Re-initialize state.scene after disposal to ensure a clean state
                 initScene();
             }
-            originalMaterialProperties.clear(); // Clear this map too
-            allHighlightsOriginalMaterials.clear(); // Clear all highlights map
-            selectedObject = null; // Clear selected object
-            currentlySelectedObjectsForEditing = []; // Clear the functional selection array
-            console.log("[Dispose] Resources disposed and scene re-initialized.");
+            state.originalMaterialProperties.clear(); // Clear this map too
+            state.allHighlightsOriginalMaterials.clear(); // Clear all highlights map
+            state.selectedObject = null; // Clear selected object
+            state.currentlySelectedObjectsForEditing = []; // Clear the functional selection array
+            console.log("[Dispose] Resources disposed and state.scene re-initialized.");
         }
 
 
         function goToEditor(loadType = 'empty') { // Default to 'empty' if no type specified
             console.log(`[goToEditor] Function called with load type: ${loadType}.`); // Added log
 
-            // Dispose and re-init scene to ensure a clean state for new or loaded models
+            // Dispose and re-init state.scene to ensure a clean state for new or loaded models
             disposeSceneResources();
 
             if (loadType === 'random') {
@@ -5349,21 +5299,21 @@
                 addMessageToLog('System', 'Loading a random model. Use "Upload New File" to add more models.');
                 speakResponse('Loading a random model. You can upload files from the editor.');
             } else if (loadType === 'empty') {
-                console.log("[goToEditor] Creating an empty model scene.");
+                console.log("[goToEditor] Creating an empty model state.scene.");
                 addMessageToLog('System', 'Starting a new, empty model. Use "Upload New File" to load models.');
                 speakResponse('Starting a new, empty model. You can upload files from the editor.');
-                // No model loading needed for empty scene, just initScene() handles the grid.
-            } else if (loadType === 'uploaded' && uploadedFile) {
-                loadingMsg.textContent = `Loading model: ${uploadedFile.name}...`;
+                // No model loading needed for empty state.scene, just initScene() handles the grid.
+            } else if (loadType === 'uploaded' && state.uploadedFile) {
+                loadingMsg.textContent = `Loading model: ${state.uploadedFile.name}...`;
                 loadingMsg.style.color = '#007bff';
                 loadingMsg.style.display = 'block';
-                console.log(`[goToEditor] Transitioning to editor. Preparing to load uploaded model: ${uploadedFile.name}`);
-                console.log(`[goToEditor] Current droppedFileBlobs keys:`, Array.from(droppedFileBlobs.keys()));
-                loadModel(uploadedFile);
+                console.log(`[goToEditor] Transitioning to editor. Preparing to load uploaded model: ${state.uploadedFile.name}`);
+                console.log(`[goToEditor] Current state.droppedFileBlobs keys:`, Array.from(state.droppedFileBlobs.keys()));
+                loadModel(state.uploadedFile);
             } else {
-                console.warn("[goToEditor] Invalid loadType or no uploadedFile for 'uploaded' type. Defaulting to empty scene.");
-                addMessageToLog('System', 'Invalid load request. Starting with an empty scene.');
-                speakResponse('Invalid load request. Starting with an empty scene.');
+                console.warn("[goToEditor] Invalid loadType or no state.uploadedFile for 'uploaded' type. Defaulting to empty state.scene.");
+                addMessageToLog('System', 'Invalid load request. Starting with an empty state.scene.');
+                speakResponse('Invalid load request. Starting with an empty state.scene.');
             }
 
             uploadPage.classList.remove('page-active');
@@ -5390,7 +5340,7 @@
             loader.load(modelUrl, (gltf) => {
                 const randomModel = gltf.scene;
                 randomModel.name = `Random Model (${modelUrl.split('/').pop()})`;
-                scene.add(randomModel);
+                state.scene.add(randomModel);
                 // Store initial material(s) for the loaded model or its meshes
                 randomModel.traverse((obj) => {
                     if (obj.isMesh && obj.material) {
@@ -5401,7 +5351,7 @@
                         }
                     }
                 });
-                loadedModels.push(randomModel);
+                state.loadedModels.push(randomModel);
                 resetView();
                 addMessageToLog('System', `Random model "${randomModel.name}" loaded successfully.`);
                 speakResponse(`Random model loaded.`);
@@ -5425,13 +5375,13 @@
             uploadPage.classList.add('page-active');
             stopVoiceAssist();
             window.removeEventListener('resize', onWindowResize, false);
-            disposeSceneResources(); // This will clear all models and re-initialize the scene
-            uploadedFile = null;
-            droppedFileBlobs.clear();
-            originalMaterialProperties.clear(); // Clear this map too
-            allHighlightsOriginalMaterials.clear(); // Clear all highlights map
-            selectedObject = null;
-            currentlySelectedObjectsForEditing = []; // Clear the functional selection array
+            disposeSceneResources(); // This will clear all models and re-initialize the state.scene
+            state.uploadedFile = null;
+            state.droppedFileBlobs.clear();
+            state.originalMaterialProperties.clear(); // Clear this map too
+            state.allHighlightsOriginalMaterials.clear(); // Clear all highlights map
+            state.selectedObject = null;
+            state.currentlySelectedObjectsForEditing = []; // Clear the functional selection array
             fileInput.value = ''; // Clear file input value
             loadingMsg.textContent = 'Drag and Drop your .gltf or .glb file(s) here, or click to browse.';
             loadingMsg.style.display = 'none';
@@ -5447,62 +5397,62 @@
             updateUndoRedoButtons(); // Update buttons on page change
         }
 
-        // --- Three.js Scene Setup and Model Loading ---
+        // --- Three.js state.scene Setup and Model Loading ---
         function initScene() {
-            console.log("[initScene] Initializing Three.js scene...");
+            console.log("[initScene] Initializing Three.js state.scene...");
             if (typeof THREE === 'undefined') {
                 console.error("THREE is not defined at initScene! Three.js script might not have loaded or executed correctly.");
                 addMessageToLog('System', "Error: Three.js library failed to load. Please check console for details.");
                 return;
             }
-            // Only create new scene, renderer, camera, controls if they don't exist
-            if (!scene) {
-                scene = new THREE.Scene();
-                scene.background = new THREE.Color(0xFFFFFF); // Pure white background
+            // Only create new state.scene, state.renderer, state.camera, state.controls if they don't exist
+            if (!state.scene) {
+                state.scene = new THREE.Scene();
+                state.scene.background = new THREE.Color(0xFFFFFF); // Pure white background
             }
-            if (!renderer) {
-                renderer = new THREE.WebGLRenderer({ canvas: cadCanvas, antialias: true });
-                renderer.setPixelRatio(window.devicePixelRatio);
-                renderer.xr.enabled = true;
+            if (!state.renderer) {
+                state.renderer = new THREE.WebGLRenderer({ canvas: cadCanvas, antialias: true });
+                state.renderer.setPixelRatio(window.devicePixelRatio);
+                state.renderer.xr.enabled = true;
             }
-            if (!camera) {
+            if (!state.camera) {
                 const viewerDiv = cadCanvas.parentElement;
-                camera = new THREE.PerspectiveCamera(75, viewerDiv.clientWidth / viewerDiv.clientHeight, 0.1, 1000);
-                // Adjusted initial camera position for a more "twisted" or perspective view
-                camera.position.set(30, 30, 30); // Set camera at an angle
+                state.camera = new THREE.PerspectiveCamera(75, viewerDiv.clientWidth / viewerDiv.clientHeight, 0.1, 1000);
+                // Adjusted initial state.camera position for a more "twisted" or perspective view
+                state.camera.position.set(30, 30, 30); // Set state.camera at an angle
             }
-            if (!controls) {
-                controls = new THREE.OrbitControls(camera, renderer.domElement);
-                controls.enableDamping = true;
-                controls.dampingFactor = 0.25;
-                controls.addEventListener('change', updateDynamicGrid); // Call on camera change
-                controls.target.set(0, 0, 0); // Ensure controls target the origin
+            if (!state.controls) {
+                state.controls = new THREE.OrbitControls(state.camera, state.renderer.domElement);
+                state.controls.enableDamping = true;
+                state.controls.dampingFactor = 0.25;
+                state.controls.addEventListener('change', updateDynamicGrid); // Call on state.camera change
+                state.controls.target.set(0, 0, 0); // Ensure state.controls target the origin
             }
-            if (!transformControls) {
-                transformControls = new THREE.TransformControls(camera, renderer.domElement);
-                scene.add(transformControls);
-                transformControls.addEventListener('dragging-changed', function (event) {
-                    controls.enabled = !event.value;
+            if (!state.transformControls) {
+                state.transformControls = new THREE.state.transformControls(state.camera, state.renderer.domElement);
+                state.scene.add(state.transformControls);
+                state.transformControls.addEventListener('dragging-changed', function (event) {
+                    state.controls.enabled = !event.value;
                     // Save state when transform operation STARTS
-                    if (event.value && transformControls.object) {
-                        console.log("[TransformControls] Transform operation started, saving state");
+                    if (event.value && state.transformControls.object) {
+                        console.log("[state.transformControls] Transform operation started, saving state");
                         saveSceneState(); // Save state before transform begins
                     }
                 });
-                transformControls.addEventListener('objectChange', function () {
+                state.transformControls.addEventListener('objectChange', function () {
                     // Update the object's world matrix during transformation
-                    if (transformControls.object) {
-                        transformControls.object.updateMatrixWorld(true);
+                    if (state.transformControls.object) {
+                        state.transformControls.object.updateMatrixWorld(true);
                     }
                 });
-                transformControls.visible = false; // Initialize as hidden
+                state.transformControls.visible = false; // Initialize as hidden
             }
 
-            // Ensure renderer size is correct on init/re-init
+            // Ensure state.renderer size is correct on init/re-init
             const viewerDiv = cadCanvas.parentElement;
-            renderer.setSize(viewerDiv.clientWidth, viewerDiv.clientHeight);
-            camera.aspect = viewerDiv.clientWidth / viewerDiv.clientHeight;
-            camera.updateProjectionMatrix();
+            state.renderer.setSize(viewerDiv.clientWidth, viewerDiv.clientHeight);
+            state.camera.aspect = viewerDiv.clientWidth / viewerDiv.clientHeight;
+            state.camera.updateProjectionMatrix();
 
 
             // Call updateDynamicGrid initially to set up the first grid
@@ -5510,21 +5460,21 @@
 
             // Increased lighting for better visibility
             // Remove existing lights before adding new ones to prevent duplicates on re-init
-            scene.children.filter(c => c.isLight).forEach(light => scene.remove(light));
+            state.scene.children.filter(c => c.isLight).forEach(light => state.scene.remove(light));
 
             const ambientLight = new THREE.AmbientLight(0x808080); // Brighter ambient light
-            scene.add(ambientLight);
+            state.scene.add(ambientLight);
             // FIX: Corrected typo from DirectionionalLight to DirectionalLight
             const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // Full intensity directional light
             directionalLight.position.set(1, 1, 1).normalize();
-            scene.add(directionalLight);
+            state.scene.add(directionalLight);
             const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.7); // Additional light from another angle
             directionalLight2.position.set(-1, -1, -1).normalize();
-            scene.add(directionalLight2);
+            state.scene.add(directionalLight2);
 
 
-            raycaster = new THREE.Raycaster();
-            mouse = new THREE.Vector2();
+            state.raycaster = new THREE.state.raycaster();
+            state.mouse = new THREE.Vector2();
             // Remove previous listeners before adding new ones to prevent duplicates on re-init
             cadCanvas.removeEventListener('mousedown', onCanvasClick, false);
             cadCanvas.removeEventListener('touchstart', onCanvasClick, false);
@@ -5540,16 +5490,16 @@
             initViewAxesHelper(); // Initialize the static view axes helper
 
             // Initialize raycast debug sphere
-            if (!raycastDebugSphere) {
-                raycastDebugSphere = new THREE.Mesh(
+            if (!state.raycastDebugSphere) {
+                state.raycastDebugSphere = new THREE.Mesh(
                     new THREE.SphereGeometry(0.05, 8, 8),
                     new THREE.MeshBasicMaterial({ color: 0xffff00 }) // Yellow sphere
                 );
-                raycastDebugSphere.visible = false; // Initially hidden
-                scene.add(raycastDebugSphere);
+                state.raycastDebugSphere.visible = false; // Initially hidden
+                state.scene.add(state.raycastDebugSphere);
             }
 
-            console.log("[initScene] Three.js scene initialized.");
+            console.log("[initScene] Three.js state.scene initialized.");
             animate();
 
             // Initialize undo/redo buttons but don't save empty state yet
@@ -5599,28 +5549,28 @@
         }
 
         function updateDynamicGrid() {
-            // Defensive check: only proceed if controls is defined
-            if (!controls) {
-                console.warn("[updateDynamicGrid] Controls not initialized, skipping dynamic grid update.");
+            // Defensive check: only proceed if state.controls is defined
+            if (!state.controls) {
+                console.warn("[updateDynamicGrid] state.controls not initialized, skipping dynamic grid update.");
                 return;
             }
 
             // Clear existing grid and labels
-            if (currentGridHelper) {
-                scene.remove(currentGridHelper);
-                currentGridHelper.geometry.dispose();
-                currentGridHelper.material.dispose();
-                currentGridHelper = null;
+            if (state.currentGridHelper) {
+                state.scene.remove(state.currentGridHelper);
+                state.currentGridHelper.geometry.dispose();
+                state.currentGridHelper.material.dispose();
+                state.currentGridHelper = null;
             }
-            currentGridLabels.forEach(label => {
-                scene.remove(label);
+            state.currentGridLabels.forEach(label => {
+                state.scene.remove(label);
                 if (label.material) label.material.dispose();
                 if (label.geometry) label.geometry.dispose();
             });
-            currentGridLabels = [];
+            state.currentGridLabels = [];
 
-            // Calculate distance to the center of the orbit (controls.target is usually 0,0,0)
-            const distance = camera.position.distanceTo(controls.target);
+            // Calculate distance to the center of the orbit (state.controls.target is usually 0,0,0)
+            const distance = state.camera.position.distanceTo(state.controls.target);
 
             let gridSize, divisions, labelInterval, labelFontSize, labelScaleFactor;
             let gridLineColor = 0xbbbbbb; // Light grey for grid lines
@@ -5628,7 +5578,7 @@
             // Very light grey for "less bright" effect on pure white background
             let labelTextColor = { r: 180, g: 180, b: 180, a: 1.0 };
 
-            // Define grid levels based on camera distance
+            // Define grid levels based on state.camera distance
             // Further reduced labelScaleFactor and labelFontSize for all levels
             if (distance < 5) { // Very close zoom
                 gridSize = 20;
@@ -5674,8 +5624,8 @@
             newGridHelper.material.opacity = 0.2;
             newGridHelper.material.transparent = true;
             newGridHelper.name = 'gridHelper';
-            scene.add(newGridHelper);
-            currentGridHelper = newGridHelper;
+            state.scene.add(newGridHelper);
+            state.currentGridHelper = newGridHelper;
 
             // Create new labels
             const labelOffset = 0.5; // Kept small and fixed for now
@@ -5690,27 +5640,27 @@
                     // Position along Z-edge, adjusted by label size, and slightly offset to prevent overlap with grid lines
                     xLabel.position.set(i, labelOffset, -gridSize / 2 - (labelFontSize * labelScaleFactor * 0.75));
                     xLabel.scale.set(labelFontSize * labelScaleFactor, labelFontSize * labelScaleFactor, 1); // Scale based on font size and factor
-                    scene.add(xLabel);
-                    currentGridLabels.push(xLabel);
+                    state.scene.add(xLabel);
+                    state.currentGridLabels.push(xLabel);
 
                     // Z-axis labels
                     const zLabel = makeTextSprite(i.toString(), { textColor: labelTextColor, fontsize: labelFontSize });
                     // Position along X-edge, adjusted by label size, and slightly offset
                     zLabel.position.set(-gridSize / 2 - (labelFontSize * labelScaleFactor * 0.75), labelOffset, i);
                     zLabel.scale.set(labelFontSize * labelScaleFactor, labelFontSize * labelScaleFactor, 1);
-                    scene.add(zLabel);
-                    currentGridLabels.push(zLabel);
+                    state.scene.add(zLabel);
+                    state.currentGridLabels.push(zLabel);
                 }
             }
         }
 
         function animate() {
-            renderer.setAnimationLoop(() => {
-                controls.update();
-                renderer.render(scene, camera);
-                // Render the static view axes helper scene
-                if (viewAxesRenderer && viewAxesScene && viewAxesCamera) {
-                    viewAxesRenderer.render(viewAxesScene, viewAxesCamera);
+            state.renderer.setAnimationLoop(() => {
+                state.controls.update();
+                state.renderer.render(state.scene, state.camera);
+                // Render the static view axes helper state.scene
+                if (state.viewAxesRenderer && state.viewAxesScene && state.viewAxesCamera) {
+                    state.viewAxesRenderer.render(state.viewAxesScene, state.viewAxesCamera);
                 }
             });
         }
@@ -5725,20 +5675,20 @@
                 const fileName = url.split('/').pop();
                 let resolvedPath = fileName;
                 if (url.startsWith('blob:')) {
-                    const blobFile = Array.from(droppedFileBlobs.values()).find(f => URL.createObjectURL(f) === url);
+                    const blobFile = Array.from(state.droppedFileBlobs.values()).find(f => URL.createObjectURL(f) === url);
                     if (blobFile) {
                         resolvedPath = blobFile.name;
                         console.log(`[URLModifier] Resolved blob URL to file: ${resolvedPath}`);
                     }
                 } else {
-                    const potentialPaths = Array.from(droppedFileBlobs.keys()).filter(key => key.endsWith(fileName));
+                    const potentialPaths = Array.from(state.droppedFileBlobs.keys()).filter(key => key.endsWith(fileName));
                     if (potentialPaths.length > 0) {
                         potentialPaths.sort((a, b) => a.length - b.length)[0]; // Use the shortest path if multiple
                         resolvedPath = potentialPaths.sort((a, b) => a.length - b.length)[0];
                         console.log(`[URLModifier] Resolved relative path to: ${resolvedPath}`);
                     }
                 }
-                const foundFile = droppedFileBlobs.get(resolvedPath);
+                const foundFile = state.droppedFileBlobs.get(resolvedPath);
                 if (foundFile) {
                     const blobURL = URL.createObjectURL(foundFile);
                     console.log(`[URLModifier] Returning Blob URL for ${resolvedPath}: ${blobURL}`);
@@ -5758,7 +5708,7 @@
 
                     const newModel = gltf.scene;
                     newModel.name = file.name; // Assign the file name to the model for identification
-                    scene.add(newModel); // Add the new model to the scene
+                    state.scene.add(newModel); // Add the new model to the state.scene
 
                     // Store initial material(s) for the entire model or its meshes
                     newModel.traverse((obj) => {
@@ -5771,18 +5721,18 @@
                         }
                     });
 
-                    loadedModels.push(newModel); // Store the new model in our array
+                    state.loadedModels.push(newModel); // Store the new model in our array
 
-                    console.log(`[loadModel] Model '${file.name}' added to scene. Total models: ${loadedModels.length}`);
+                    console.log(`[loadModel] Model '${file.name}' added to state.scene. Total models: ${state.loadedModels.length}`);
                     console.log("[loadModel] New model bounding box:", new THREE.Box3().setFromObject(newModel));
 
-                    // Call resetView to adjust camera and controls to fit all loaded models
+                    // Call resetView to adjust state.camera and state.controls to fit all loaded models
                     resetView();
 
                     loadingMsg.style.display = 'none';
-                    addMessageToLog('System', `Model '${file.name}' loaded successfully. You now have ${loadedModels.length} models in the scene.`);
-                    speakResponse(`Model loaded successfully. You now have ${loadedModels.length} models in the scene.`);
-                    console.log("[loadModel] Model successfully added to scene. Current loadedModels:", loadedModels);
+                    addMessageToLog('System', `Model '${file.name}' loaded successfully. You now have ${state.loadedModels.length} models in the state.scene.`);
+                    speakResponse(`Model loaded successfully. You now have ${state.loadedModels.length} models in the state.scene.`);
+                    console.log("[loadModel] Model successfully added to state.scene. Current state.loadedModels:", state.loadedModels);
 
                     saveSceneState(); // Save state after loading a new model
                 }, (xhr) => { // Progress callback
@@ -5814,15 +5764,15 @@
 
         function onCanvasClick(event) {
             console.log(`[onCanvasClick] Event type: ${event.type}, Button: ${event.button}`);
-            // Only process left-click (mouse button 0) or touchstart
+            // Only process left-click (state.mouse button 0) or touchstart
             if (event.type === 'mousedown' && event.button !== 0) {
                 console.log("[onCanvasClick] Ignoring non-left click or non-touchstart event.");
                 return;
             }
 
-            // If TransformControls are currently active and dragging, do not process selection
-            if (transformControls && transformControls.dragging) {
-                console.log("[onCanvasClick] TransformControls are dragging, skipping selection.");
+            // If state.transformControls are currently active and dragging, do not process selection
+            if (state.transformControls && state.transformControls.dragging) {
+                console.log("[onCanvasClick] state.transformControls are dragging, skipping selection.");
                 return;
             }
 
@@ -5834,7 +5784,7 @@
                 mouseDownX = event.clientX;
                 mouseDownY = event.clientY;
             }
-            console.log(`[onCanvasClick] Mouse/Touch Down: Initial(${mouseDownX}, ${mouseDownY})`);
+            console.log(`[onCanvasClick] state.mouse/Touch Down: Initial(${mouseDownX}, ${mouseDownY})`);
 
             // Add a temporary mouseup/touchend listener to check for drag vs click
             const onPointerUp = (upEvent) => {
@@ -5857,7 +5807,7 @@
                 const deltaX = Math.abs(mouseDownX - currentX);
                 const deltaY = Math.abs(mouseDownY - currentY);
 
-                console.log(`[onCanvasClick] Mouse/Touch Up: Final(${currentX}, ${currentY}). DeltaX=${deltaX}, DeltaY=${deltaY}. Tolerance=${CLICK_TOLERANCE}`);
+                console.log(`[onCanvasClick] state.mouse/Touch Up: Final(${currentX}, ${currentY}). DeltaX=${deltaX}, DeltaY=${deltaY}. Tolerance=${CLICK_TOLERANCE}`);
 
                 // Visual feedback for any click registered
                 cadViewer.style.backgroundColor = '#E0F2F7'; // Light blue flash
@@ -5871,22 +5821,22 @@
                 } else {
                     // It was a click, proceed with raycasting
                     console.log("[onCanvasClick] Detected click (movement within tolerance), processing selection.");
-                    // Normalize mouse coordinates for raycasting using the initial mousedown position
-                    const rect = renderer.domElement.getBoundingClientRect();
-                    mouse.x = ((mouseDownX - rect.left) / rect.width) * 2 - 1;
-                    mouse.y = -((mouseDownY - rect.top) / rect.height) * 2 + 1;
-                    console.log(`[onCanvasClick] Normalized mouse coords for raycasting: X=${mouse.x.toFixed(4)}, Y=${mouse.y.toFixed(4)}`);
-                    console.log(`[onCanvasClick] Raycaster set from camera. Mouse: (${mouse.x.toFixed(3)}, ${mouse.y.toFixed(3)})`);
-                    console.log(`[onCanvasClick] Camera position: (${camera.position.x.toFixed(3)}, ${camera.position.y.toFixed(3)}, ${camera.position.z.toFixed(3)})`);
-                    console.log(`[onCanvasClick] Camera fov: ${camera.fov}, aspect: ${camera.aspect}`);
+                    // Normalize state.mouse coordinates for raycasting using the initial mousedown position
+                    const rect = state.renderer.domElement.getBoundingClientRect();
+                    state.mouse.x = ((mouseDownX - rect.left) / rect.width) * 2 - 1;
+                    state.mouse.y = -((mouseDownY - rect.top) / rect.height) * 2 + 1;
+                    console.log(`[onCanvasClick] Normalized state.mouse coords for raycasting: X=${state.mouse.x.toFixed(4)}, Y=${state.mouse.y.toFixed(4)}`);
+                    console.log(`[onCanvasClick] state.raycaster set from state.camera. state.mouse: (${state.mouse.x.toFixed(3)}, ${state.mouse.y.toFixed(3)})`);
+                    console.log(`[onCanvasClick] state.camera position: (${state.camera.position.x.toFixed(3)}, ${state.camera.position.y.toFixed(3)}, ${state.camera.position.z.toFixed(3)})`);
+                    console.log(`[onCanvasClick] state.camera fov: ${state.camera.fov}, aspect: ${state.camera.aspect}`);
 
 
-                    raycaster.setFromCamera(mouse, camera);
+                    state.raycaster.setFromCamera(state.mouse, state.camera);
 
                     const objectsToIntersect = [];
-                    scene.traverse((obj) => { // Traverse the entire scene
+                    state.scene.traverse((obj) => { // Traverse the entire state.scene
                         // Only consider meshes that are visible and not part of the grid or labels
-                        if (obj.isMesh && obj.visible && !obj.userData.isGridLabel && obj !== currentGridHelper && obj !== raycastDebugSphere) { // Exclude debug sphere
+                        if (obj.isMesh && obj.visible && !obj.userData.isGridLabel && obj !== state.currentGridHelper && obj !== state.raycastDebugSphere) { // Exclude debug sphere
                             objectsToIntersect.push(obj);
                         }
                     });
@@ -5898,7 +5848,7 @@
 
                     // PRIORITY 1: Check for face selection if in face edit mode
                     let faceGroupId = null;
-                    if (faceEditState.isActive) {
+                    if (state.faceEditState.isActive) {
                         faceGroupId = detectFaceFromClick();
                         console.log(`[onCanvasClick] Face detection result: ${faceGroupId}`);
                     }
@@ -5908,39 +5858,39 @@
                         console.log("[onCanvasClick] Face overlay clicked:", faceGroupId);
 
                         // ✅ EXACT FACE SELECTION - Toggle + Multi-select
-                        if (faceEditState.isActive) {
+                        if (state.faceEditState.isActive) {
                             console.log('=== FACE SELECTION DEBUG ===');
                             console.log('[onFaceClick] Face clicked:', faceGroupId);
-                            console.log('[onFaceClick] Multi-select mode:', faceEditState.multiSelect);
-                            console.log('[onFaceClick] Currently selected:', Array.from(faceEditState.selectedFaceIds));
+                            console.log('[onFaceClick] Multi-select mode:', state.faceEditState.multiSelect);
+                            console.log('[onFaceClick] Currently selected:', Array.from(state.faceEditState.selectedFaceIds));
 
                             onSelectionChanged(); // Clear pending operations
 
                             // EXACT LOGIC FROM SPEC
-                            if (!faceEditState.multiSelect) {
+                            if (!state.faceEditState.multiSelect) {
                                 // Single-select toggle
-                                if (faceEditState.selectedFaceIds.has(faceGroupId) && faceEditState.selectedFaceIds.size === 1) {
-                                    faceEditState.selectedFaceIds.clear(); // Deselect on second tap
+                                if (state.faceEditState.selectedFaceIds.has(faceGroupId) && state.faceEditState.selectedFaceIds.size === 1) {
+                                    state.faceEditState.selectedFaceIds.clear(); // Deselect on second tap
                                     console.log('[onFaceClick] Deselected face on second tap');
                                 } else {
-                                    faceEditState.selectedFaceIds.clear();
-                                    faceEditState.selectedFaceIds.add(faceGroupId);
+                                    state.faceEditState.selectedFaceIds.clear();
+                                    state.faceEditState.selectedFaceIds.add(faceGroupId);
                                     console.log('[onFaceClick] Single-selected face');
                                 }
                             } else {
                                 // Multi-select toggle
-                                if (faceEditState.selectedFaceIds.has(faceGroupId)) {
-                                    faceEditState.selectedFaceIds.delete(faceGroupId);
+                                if (state.faceEditState.selectedFaceIds.has(faceGroupId)) {
+                                    state.faceEditState.selectedFaceIds.delete(faceGroupId);
                                     console.log('[onFaceClick] Removed from multi-selection');
                                 } else {
-                                    faceEditState.selectedFaceIds.add(faceGroupId);
+                                    state.faceEditState.selectedFaceIds.add(faceGroupId);
                                     console.log('[onFaceClick] Added to multi-selection');
                                 }
                             }
 
                             // Update visual state
-                            faceEditState.groups.forEach(group => {
-                                const isSelected = faceEditState.selectedFaceIds.has(group.id);
+                            state.faceEditState.groups.forEach(group => {
+                                const isSelected = state.faceEditState.selectedFaceIds.has(group.id);
                                 if (group.overlay && group.overlay.material) {
                                     group.overlay.material.opacity = isSelected ? 0.7 : 0.4;
                                     group.overlay.material.color.setHex(isSelected ? 0xff0000 : 0x00ff00);
@@ -5954,9 +5904,9 @@
                             });
 
                             // Update legacy compatibility
-                            faceEditState.selectedGroupId = Array.from(faceEditState.selectedFaceIds)[0] || null;
+                            state.faceEditState.selectedGroupId = Array.from(state.faceEditState.selectedFaceIds)[0] || null;
 
-                            const selectedCount = faceEditState.selectedFaceIds.size;
+                            const selectedCount = state.faceEditState.selectedFaceIds.size;
                             const message = selectedCount ? `${selectedCount} face(s) selected` : 'No face selected';
                             console.log("[onFaceClick]", message);
                             addMessageToLog('System', message + '. Say "extrude" or press E.');
@@ -5964,66 +5914,66 @@
                         }
 
                         // Show debug sphere at face center
-                        const group = faceEditState.groups.find(g => g.id === faceGroupId);
+                        const group = state.faceEditState.groups.find(g => g.id === faceGroupId);
                         if (group) {
-                            raycastDebugSphere.position.copy(group.centroid);
-                            raycastDebugSphere.visible = true;
+                            state.raycastDebugSphere.position.copy(group.centroid);
+                            state.raycastDebugSphere.visible = true;
                             setTimeout(() => {
-                                raycastDebugSphere.visible = false;
+                                state.raycastDebugSphere.visible = false;
                             }, 500);
                         }
                         return; // Don't process normal object selection
                     }
 
                     // PRIORITY 2: Normal object intersection
-                    const intersects = raycaster.intersectObjects(objectsToIntersect, true);
-                    console.log(`[onCanvasClick] Intersections found by raycaster: ${intersects.length}`);
+                    const intersects = state.raycaster.intersectObjects(objectsToIntersect, true);
+                    console.log(`[onCanvasClick] Intersections found by state.raycaster: ${intersects.length}`);
 
                     if (intersects.length > 0) {
                         const intersectedObject = intersects[0].object;
                         console.log("[onCanvasClick] Object intersected:", intersectedObject.name || "Unnamed Object", "UUID:", intersectedObject.uuid, "Type:", intersectedObject.type);
 
                         // Show raycast debug sphere
-                        raycastDebugSphere.position.copy(intersects[0].point);
-                        raycastDebugSphere.visible = true;
+                        state.raycastDebugSphere.position.copy(intersects[0].point);
+                        state.raycastDebugSphere.visible = true;
                         setTimeout(() => {
-                            raycastDebugSphere.visible = false;
+                            state.raycastDebugSphere.visible = false;
                         }, 500);
 
                         // Normal object selection
                         selectObject(intersectedObject);
                     } else {
-                        console.log("[onCanvasClick] No object intersected by raycaster. Clearing selection.");
-                        raycastDebugSphere.visible = false;
+                        console.log("[onCanvasClick] No object intersected by state.raycaster. Clearing selection.");
+                        state.raycastDebugSphere.visible = false;
                         clearSelection();
 
                         // Clear face selection if in face edit mode
-                        if (faceEditState.isActive) {
-                            faceEditState.selectedGroupId = null;
+                        if (state.faceEditState.isActive) {
+                            state.faceEditState.selectedGroupId = null;
                         }
                     }
                 }
 
                 // Clean up the temporary listeners
-                renderer.domElement.removeEventListener('mouseup', onPointerUp);
-                renderer.domElement.removeEventListener('touchend', onPointerUp);
+                state.renderer.domElement.removeEventListener('mouseup', onPointerUp);
+                state.renderer.domElement.removeEventListener('touchend', onPointerUp);
             };
 
             // Attach temporary listeners for mouseup/touchend
-            renderer.domElement.addEventListener('mouseup', onPointerUp, { once: true });
-            renderer.domElement.addEventListener('touchend', onPointerUp, { once: true });
+            state.renderer.domElement.addEventListener('mouseup', onPointerUp, { once: true });
+            state.renderer.domElement.addEventListener('touchend', onPointerUp, { once: true });
         }
 
         function selectObject(object) {
             console.log(`[selectObject] Function called with object: ${object ? object.name || object.uuid : 'null'}`);
-            console.log(`[selectObject] Current selectedObject BEFORE: ${selectedObject ? selectedObject.name || selectedObject.uuid : 'null'}`);
+            console.log(`[selectObject] Current state.selectedObject BEFORE: ${state.selectedObject ? state.selectedObject.name || state.selectedObject.uuid : 'null'}`);
 
             // Clear pending operations when object selection changes
             onSelectionChanged();
 
             // Clear any existing "select all" highlights first if this object was part of it
-            if (allHighlightsOriginalMaterials.size > 0) {
-                // Clear all highlights and the currentlySelectedObjectsForEditing array
+            if (state.allHighlightsOriginalMaterials.size > 0) {
+                // Clear all highlights and the state.currentlySelectedObjectsForEditing array
                 clearAllHighlights();
             }
 
@@ -6031,10 +5981,10 @@
             clearSelection();
 
             if (object) {
-                selectedObject = object;
-                console.log(`[selectObject] Selected object set to: ${selectedObject.name || 'Unnamed Object'} (UUID: ${selectedObject.uuid})`);
+                state.selectedObject = object;
+                console.log(`[selectObject] Selected object set to: ${state.selectedObject.name || 'Unnamed Object'} (UUID: ${state.selectedObject.uuid})`);
 
-                const materials = Array.isArray(selectedObject.material) ? selectedObject.material : [selectedObject.material];
+                const materials = Array.isArray(state.selectedObject.material) ? state.selectedObject.material : [state.selectedObject.material];
                 const objectOriginalMaterials = []; // Array to store original material instances
 
                 materials.forEach((mat, index) => {
@@ -6048,11 +5998,11 @@
                         if (mat.emissive !== undefined) {
                             mat.emissive.copy(highlightMaterial.color);
                             mat.emissiveIntensity = 0.5; // Adjust intensity as needed
-                            console.log(`[selectObject] Applied emissive highlight to material for ${selectedObject.name || 'Unnamed Object'} (material index ${index}).`);
+                            console.log(`[selectObject] Applied emissive highlight to material for ${state.selectedObject.name || 'Unnamed Object'} (material index ${index}).`);
                         } else if (mat.color !== undefined) {
                             // If no emissive, change the main color
                             mat.color.copy(highlightMaterial.color);
-                            console.log(`[selectObject] Applied color highlight to material for ${selectedObject.name || 'Unnamed Object'} (material index ${index}).`);
+                            console.log(`[selectObject] Applied color highlight to material for ${state.selectedObject.name || 'Unnamed Object'} (material index ${index}).`);
                         } else {
                             console.warn(`[selectObject] Material for ${object.name || 'Unnamed Part'} (UUID: ${object.uuid}, material index ${index}) does not have an emissive or color property. Highlighting might not work as expected.`);
                         }
@@ -6061,18 +6011,18 @@
                         console.warn(`[selectObject] Material at index ${index} for object ${object.name || object.uuid} is null or not a valid material. Skipping highlight.`);
                     }
                 });
-                originalMaterialProperties.set(selectedObject.uuid, objectOriginalMaterials); // Store the array of current materials for individual selection reversion
+                state.originalMaterialProperties.set(state.selectedObject.uuid, objectOriginalMaterials); // Store the array of current materials for individual selection reversion
 
-                transformControls.attach(selectedObject);
-                transformControls.visible = true; // Make controls visible
-                transformControls.enabled = true; // Ensure controls are enabled
+                state.transformControls.attach(state.selectedObject);
+                state.transformControls.visible = true; // Make state.controls visible
+                state.transformControls.enabled = true; // Ensure state.controls are enabled
 
                 // Set default mode to translate, but ensure all modes work
-                transformControls.setMode('translate');
+                state.transformControls.setMode('translate');
 
-                console.log(`[selectObject] TransformControls attached: ${transformControls.object ? transformControls.object.name || transformControls.object.uuid : 'none'}`);
-                console.log(`[selectObject] TransformControls visible: ${transformControls.visible}`);
-                console.log(`[selectObject] TransformControls mode: ${transformControls.mode}`);
+                console.log(`[selectObject] state.transformControls attached: ${state.transformControls.object ? state.transformControls.object.name || state.transformControls.object.uuid : 'none'}`);
+                console.log(`[selectObject] state.transformControls visible: ${state.transformControls.visible}`);
+                console.log(`[selectObject] state.transformControls mode: ${state.transformControls.mode}`);
 
                 addMessageToLog('System', `Selected: ${object.name || 'Unnamed Part'} (UUID: ${object.uuid}). Press S to scale, R to rotate, G to move.`);
                 speakResponse(`Selected ${object.name || 'a part'}. Press S to scale.`);
@@ -6082,61 +6032,61 @@
                 console.log("[selectObject] No object provided for selection, clearing any existing selection.");
                 clearSelection(); // If no object is passed, clear selection
             }
-            console.log(`[selectObject] Current selectedObject AFTER: ${selectedObject ? selectedObject.name || selectedObject.uuid : 'null'}`);
+            console.log(`[selectObject] Current state.selectedObject AFTER: ${state.selectedObject ? state.selectedObject.name || state.selectedObject.uuid : 'null'}`);
         }
 
         function clearSelection() {
-            console.log(`[clearSelection] Function called. selectedObject BEFORE: ${selectedObject ? selectedObject.name || selectedObject.uuid : 'null'}`);
+            console.log(`[clearSelection] Function called. state.selectedObject BEFORE: ${state.selectedObject ? state.selectedObject.name || state.selectedObject.uuid : 'null'}`);
 
             // Clear pending operations when selection is cleared
             onSelectionChanged();
 
-            if (selectedObject && originalMaterialProperties.has(selectedObject.uuid)) {
-                console.log(`[clearSelection] Reverting highlight for: ${selectedObject.name || 'Unnamed Part'} (UUID: ${selectedObject.uuid})`);
+            if (state.selectedObject && state.originalMaterialProperties.has(state.selectedObject.uuid)) {
+                console.log(`[clearSelection] Reverting highlight for: ${state.selectedObject.name || 'Unnamed Part'} (UUID: ${state.selectedObject.uuid})`);
 
-                const originalMaterials = originalMaterialProperties.get(selectedObject.uuid); // Get the array of original material instances
-                const currentMaterials = Array.isArray(selectedObject.material) ? selectedObject.material : [selectedObject.material];
+                const originalMaterials = state.originalMaterialProperties.get(state.selectedObject.uuid); // Get the array of original material instances
+                const currentMaterials = Array.isArray(state.selectedObject.material) ? state.selectedObject.material : [state.selectedObject.material];
 
                 currentMaterials.forEach((mat, index) => {
                     if (mat && mat.isMaterial && originalMaterials[index]) { // Defensive check
                         mat.dispose(); // Dispose current material before replacing to avoid memory leaks
                         // Assign the original material instance back
                         // Use the initialMaterial if available, otherwise fallback to the one stored for temporary highlight
-                        if (selectedObject.userData.initialMaterial && (Array.isArray(selectedObject.userData.initialMaterial) ? selectedObject.userData.initialMaterial[index] : selectedObject.userData.initialMaterial)) {
-                            if (Array.isArray(selectedObject.material)) {
-                                selectedObject.material[index] = selectedObject.userData.initialMaterial[index].clone(); // Clone to ensure independence
+                        if (state.selectedObject.userData.initialMaterial && (Array.isArray(state.selectedObject.userData.initialMaterial) ? state.selectedObject.userData.initialMaterial[index] : state.selectedObject.userData.initialMaterial)) {
+                            if (Array.isArray(state.selectedObject.material)) {
+                                state.selectedObject.material[index] = state.selectedObject.userData.initialMaterial[index].clone(); // Clone to ensure independence
                             } else {
-                                selectedObject.material = selectedObject.userData.initialMaterial.clone(); // Clone to ensure independence
+                                state.selectedObject.material = state.selectedObject.userData.initialMaterial.clone(); // Clone to ensure independence
                             }
                         } else {
-                            if (Array.isArray(selectedObject.material)) {
-                                selectedObject.material[index] = originalMaterials[index];
+                            if (Array.isArray(state.selectedObject.material)) {
+                                state.selectedObject.material[index] = originalMaterials[index];
                             } else {
-                                selectedObject.material = originalMaterials[index];
+                                state.selectedObject.material = originalMaterials[index];
                             }
                         }
-                        selectedObject.material.needsUpdate = true;
+                        state.selectedObject.material.needsUpdate = true;
                         console.log(`[clearSelection] Restored material for index ${index}.`);
                     } else {
-                        console.warn(`[clearSelection] Material at index ${index} for object ${selectedObject.name || selectedObject.uuid} is null or not a valid material, or no original material instance found. Skipping restore.`);
+                        console.warn(`[clearSelection] Material at index ${index} for object ${state.selectedObject.name || state.selectedObject.uuid} is null or not a valid material, or no original material instance found. Skipping restore.`);
                     }
                 });
 
-                // Detach transform controls before clearing selectedObject
-                if (transformControls) {
-                    transformControls.detach(); // Detach controls when selection is cleared
-                    transformControls.visible = false; // Explicitly hide controls
-                    console.log("[clearSelection] TransformControls detached and hidden.");
+                // Detach transform state.controls before clearing state.selectedObject
+                if (state.transformControls) {
+                    state.transformControls.detach(); // Detach state.controls when selection is cleared
+                    state.transformControls.visible = false; // Explicitly hide state.controls
+                    console.log("[clearSelection] state.transformControls detached and hidden.");
                 }
 
-                originalMaterialProperties.delete(selectedObject.uuid); // Remove from map
-                selectedObject = null; // Clear selected object reference
+                state.originalMaterialProperties.delete(state.selectedObject.uuid); // Remove from map
+                state.selectedObject = null; // Clear selected object reference
                 console.log("[clearSelection] Individual selection cleared and highlight reverted.");
             } else {
                 console.log("[clearSelection] No object selected or no original material properties to restore.");
             }
-            currentlySelectedObjectsForEditing = []; // Clear the functional selection array
-            console.log(`[clearSelection] Function finished. selectedObject AFTER: ${selectedObject ? selectedObject.name || selectedObject.uuid : 'null'}`);
+            state.currentlySelectedObjectsForEditing = []; // Clear the functional selection array
+            console.log(`[clearSelection] Function finished. state.selectedObject AFTER: ${state.selectedObject ? state.selectedObject.name || state.selectedObject.uuid : 'null'}`);
             // Do NOT add message to log or speak here, as it's often called internally before a new selection.
             // addMessageToLog('System', 'Selection cleared.');
             // speakResponse('Selection cleared.');
@@ -6149,13 +6099,13 @@
             clearAllHighlights(); // Clear any previous "select all" highlights
 
             let highlightedCount = 0;
-            currentlySelectedObjectsForEditing = []; // Clear before populating
+            state.currentlySelectedObjectsForEditing = []; // Clear before populating
 
             // Store original positions for group movement
             const originalPositions = new Map();
 
-            // Iterate over loadedModels for highlighting
-            loadedModels.forEach(model => {
+            // Iterate over state.loadedModels for highlighting
+            state.loadedModels.forEach(model => {
                 // Highlight the top-level model
                 const materials = Array.isArray(model.material) ? model.material : [model.material];
                 const objectOriginalMaterials = [];
@@ -6165,7 +6115,7 @@
 
                 // Highlight all meshes in the model
                 model.traverse((obj) => {
-                    if (obj.isMesh && obj.visible && !obj.userData.isGridLabel && obj !== currentGridHelper && obj !== raycastDebugSphere) {
+                    if (obj.isMesh && obj.visible && !obj.userData.isGridLabel && obj !== state.currentGridHelper && obj !== state.raycastDebugSphere) {
                         const objMaterials = Array.isArray(obj.material) ? obj.material : [obj.material];
                         const objOriginalMaterials = [];
 
@@ -6183,47 +6133,47 @@
                             }
                         });
 
-                        allHighlightsOriginalMaterials.set(obj.uuid, objOriginalMaterials);
-                        currentlySelectedObjectsForEditing.push(obj);
+                        state.allHighlightsOriginalMaterials.set(obj.uuid, objOriginalMaterials);
+                        state.currentlySelectedObjectsForEditing.push(obj);
                     }
                 });
 
                 // Add the top-level model to selection for movement
-                currentlySelectedObjectsForEditing.push(model);
+                state.currentlySelectedObjectsForEditing.push(model);
             });
 
             if (highlightedCount > 0) {
-                // Create a virtual group object for transform controls
+                // Create a virtual group object for transform state.controls
                 const groupHelper = new THREE.Object3D();
                 groupHelper.name = 'GroupMovementHelper';
                 groupHelper.userData.isGroupHelper = true;
                 groupHelper.userData.originalPositions = originalPositions;
-                groupHelper.userData.selectedModels = [...loadedModels];
+                groupHelper.userData.selectedModels = [...state.loadedModels];
 
                 // Position the helper at the center of all objects
                 const center = new THREE.Vector3();
-                loadedModels.forEach(model => {
+                state.loadedModels.forEach(model => {
                     center.add(model.position);
                 });
-                center.divideScalar(loadedModels.length);
+                center.divideScalar(state.loadedModels.length);
                 groupHelper.position.copy(center);
 
-                scene.add(groupHelper);
+                state.scene.add(groupHelper);
 
-                // Attach transform controls to the helper
-                if (transformControls) {
-                    transformControls.attach(groupHelper);
-                    transformControls.visible = true;
-                    transformControls.setMode('translate'); // Start with translate mode
-                    console.log("[highlightAllModels] Transform controls attached to group helper");
+                // Attach transform state.controls to the helper
+                if (state.transformControls) {
+                    state.transformControls.attach(groupHelper);
+                    state.transformControls.visible = true;
+                    state.transformControls.setMode('translate'); // Start with translate mode
+                    console.log("[highlightAllModels] Transform state.controls attached to group helper");
                 }
 
                 // Set as selected object for movement
-                selectedObject = groupHelper;
+                state.selectedObject = groupHelper;
 
                 // Store original transforms for all operations
                 groupHelper.userData.originalTransforms = new Map();
-                loadedModels.forEach(model => {
+                state.loadedModels.forEach(model => {
                     groupHelper.userData.originalTransforms.set(model.uuid, {
                         position: model.position.clone(),
                         rotation: model.rotation.clone(),
@@ -6232,10 +6182,10 @@
                 });
 
                 // Add event listeners for ALL transform operations
-                if (transformControls) {
+                if (state.transformControls) {
                     const onGroupTransform = () => {
                         if (groupHelper.userData.selectedModels) {
-                            const mode = transformControls.mode;
+                            const mode = state.transformControls.mode;
 
                             if (mode === 'translate') {
                                 // Group movement
@@ -6270,7 +6220,7 @@
                         }
                     };
 
-                    transformControls.addEventListener('objectChange', onGroupTransform);
+                    state.transformControls.addEventListener('objectChange', onGroupTransform);
                     groupHelper.userData.transformListener = onGroupTransform;
                 }
 
@@ -6278,7 +6228,7 @@
                 speakResponse(`Selected all ${highlightedCount} objects. You can now edit them together.`);
                 console.log(`[highlightAllModels] Successfully selected ${highlightedCount} objects for group editing.`);
             } else {
-                addMessageToLog('System', 'No objects found to select in the scene.');
+                addMessageToLog('System', 'No objects found to select in the state.scene.');
                 speakResponse('No objects found to select.');
                 console.log("[highlightAllModels] No objects found to select.");
             }
@@ -6289,27 +6239,27 @@
             console.log("[clearAllHighlights] Attempting to clear all highlights.");
 
             // Remove group helper if it exists
-            const groupHelper = scene.getObjectByProperty('name', 'GroupMovementHelper');
+            const groupHelper = state.scene.getObjectByProperty('name', 'GroupMovementHelper');
             if (groupHelper) {
                 // Remove event listeners
-                if (groupHelper.userData.transformListener && transformControls) {
-                    transformControls.removeEventListener('objectChange', groupHelper.userData.transformListener);
+                if (groupHelper.userData.transformListener && state.transformControls) {
+                    state.transformControls.removeEventListener('objectChange', groupHelper.userData.transformListener);
                 }
-                if (groupHelper.userData.moveListener && transformControls) {
-                    transformControls.removeEventListener('objectChange', groupHelper.userData.moveListener);
+                if (groupHelper.userData.moveListener && state.transformControls) {
+                    state.transformControls.removeEventListener('objectChange', groupHelper.userData.moveListener);
                 }
-                scene.remove(groupHelper);
+                state.scene.remove(groupHelper);
                 console.log("[clearAllHighlights] Removed group editing helper");
             }
 
-            if (allHighlightsOriginalMaterials.size === 0) {
+            if (state.allHighlightsOriginalMaterials.size === 0) {
                 console.log("[clearAllHighlights] No global highlights to clear.");
                 return;
             }
 
             let clearedCount = 0;
-            for (const [uuid, originalMaterials] of allHighlightsOriginalMaterials.entries()) {
-                const object = scene.getObjectByProperty('uuid', uuid);
+            for (const [uuid, originalMaterials] of state.allHighlightsOriginalMaterials.entries()) {
+                const object = state.scene.getObjectByProperty('uuid', uuid);
                 if (object && object.isMesh) {
                     const currentMaterials = Array.isArray(object.material) ? object.material : [object.material];
                     currentMaterials.forEach((mat, index) => {
@@ -6335,8 +6285,8 @@
                     clearedCount++;
                 }
             }
-            allHighlightsOriginalMaterials.clear(); // Clear the map
-            currentlySelectedObjectsForEditing = []; // Clear the functional selection array
+            state.allHighlightsOriginalMaterials.clear(); // Clear the map
+            state.currentlySelectedObjectsForEditing = []; // Clear the functional selection array
             addMessageToLog('System', `Cleared highlights from ${clearedCount} objects.`);
             speakResponse('All highlights cleared.');
             console.log(`[clearAllHighlights] Successfully cleared highlights from ${clearedCount} objects.`);
@@ -6357,17 +6307,17 @@
 
             try {
                 // Save state for undo
-                if (loadedModels.length > 0) {
+                if (state.loadedModels.length > 0) {
                     const currentState = getCurrentState();
-                    undoStack.push(currentState);
-                    redoStack = []; // Clear redo stack
+                    state.undoStack.push(currentState);
+                    state.redoStack = []; // Clear redo stack
                 }
 
                 // Create a colored overlay for just this face group
                 const coloredOverlay = createColoredFaceOverlay(mesh, group, hexColor);
                 if (coloredOverlay) {
-                    // Add to scene
-                    scene.add(coloredOverlay);
+                    // Add to state.scene
+                    state.scene.add(coloredOverlay);
 
                     // Store reference for cleanup
                     if (!mesh.userData.coloredFaces) {
@@ -6375,7 +6325,7 @@
                     }
                     mesh.userData.coloredFaces.push(coloredOverlay);
 
-                    console.log('[paintFaceMaterial] Added colored overlay to scene');
+                    console.log('[paintFaceMaterial] Added colored overlay to state.scene');
                     addMessageToLog('System', 'Colored 1 face.');
                     speakResponse('Face painted.');
 
@@ -6454,7 +6404,7 @@
         // Paint entire object with color - WITH FACE MODE KILLSWITCH
         function paintObject(object, hexColor) {
             // ✅ KILLSWITCH: 면 모드면 객체 전체 색칠 금지
-            if (faceEditState?.isActive) {
+            if (state.faceEditState?.isActive) {
                 console.warn('[paintObject] BLOCKED: Face edit mode is active');
                 addMessageToLog('System', 'Face edit mode is on. Select a face, or exit face mode to color whole object.');
                 speakResponse('Face edit mode is on. Select a face first.');
@@ -6470,10 +6420,10 @@
 
             try {
                 // Use existing changeObjectColor function
-                const oldSelectedObject = selectedObject;
-                selectedObject = object;  // Temporarily set for changeObjectColor
+                const oldSelectedObject = state.selectedObject;
+                state.selectedObject = object;  // Temporarily set for changeObjectColor
                 changeObjectColor(hexColor);
-                selectedObject = oldSelectedObject;  // Restore
+                state.selectedObject = oldSelectedObject;  // Restore
 
                 console.log('[paintObject] Object painted successfully');
                 return true;
@@ -6492,30 +6442,30 @@
         // SMART COLOR ROUTING - Face vs Object (WITH ENHANCED DEBUG LOGS)
         function handleColorCommand(hexColor) {
             console.log('=== COLOR COMMAND DEBUG ===');
-            console.log('[color] faceMode:', faceEditState.isActive);
-            console.log('[color] selectedId:', faceEditState.selectedGroupId);
-            console.log('[color] selectedObject:', selectedObject?.name || 'none');
-            console.log('[color] groups count:', faceEditState.groups?.length || 0);
-            console.log('[color] targetMesh:', faceEditState.targetMesh?.name || 'none');
+            console.log('[color] faceMode:', state.faceEditState.isActive);
+            console.log('[color] selectedId:', state.faceEditState.selectedGroupId);
+            console.log('[color] state.selectedObject:', state.selectedObject?.name || 'none');
+            console.log('[color] groups count:', state.faceEditState.groups?.length || 0);
+            console.log('[color] targetMesh:', state.faceEditState.targetMesh?.name || 'none');
 
             // Priority 1: Face coloring if in face mode with selected face
-            if (faceEditState.isActive && faceEditState.selectedGroupId) {
+            if (state.faceEditState.isActive && state.faceEditState.selectedGroupId) {
                 console.log('[color] ROUTE: paintFaceMaterial');
-                const group = faceEditState.groups.find(g => g.id === faceEditState.selectedGroupId);
+                const group = state.faceEditState.groups.find(g => g.id === state.faceEditState.selectedGroupId);
                 console.log('[color] Found group:', group ? 'YES' : 'NO');
                 if (group) {
                     console.log('[color] Group triIndices:', group.triIndices?.length || 0);
-                    console.log('[color] Target mesh geometry indexed:', !!faceEditState.targetMesh?.geometry?.index);
-                    return paintFaceMaterial(faceEditState.targetMesh, group, hexColor);
+                    console.log('[color] Target mesh geometry indexed:', !!state.faceEditState.targetMesh?.geometry?.index);
+                    return paintFaceMaterial(state.faceEditState.targetMesh, group, hexColor);
                 } else {
                     console.warn('[color] Selected face group not found!');
-                    console.log('[color] Available group IDs:', faceEditState.groups.map(g => g.id));
+                    console.log('[color] Available group IDs:', state.faceEditState.groups.map(g => g.id));
                     return false;
                 }
             }
 
             // Priority 2: Guide user if in face mode but no face selected
-            if (faceEditState.isActive) {
+            if (state.faceEditState.isActive) {
                 console.log('[color] ROUTE: face mode guidance');
                 addMessageToLog('System', 'Select a face first (or say "exit face mode" to paint whole object).');
                 speakResponse('Select a face first.');
@@ -6542,25 +6492,25 @@
 
         // Refresh face groups after geometry changes
         function refreshFaceGroups() {
-            if (!faceEditState.isActive || !faceEditState.targetMesh) {
+            if (!state.faceEditState.isActive || !state.faceEditState.targetMesh) {
                 console.warn('[refreshFaceGroups] Face edit mode not active');
                 return false;
             }
 
             console.log('[refreshFaceGroups] Refreshing face groups...');
 
-            const targetMesh = faceEditState.targetMesh;
-            const wasSelected = faceEditState.selectedGroupId;
+            const targetMesh = state.faceEditState.targetMesh;
+            const wasSelected = state.faceEditState.selectedGroupId;
 
             // Clean up old overlays
-            faceEditState.groups.forEach(group => {
+            state.faceEditState.groups.forEach(group => {
                 if (group.overlay) {
-                    scene.remove(group.overlay);
+                    state.scene.remove(group.overlay);
                     group.overlay.geometry.dispose();
                     group.overlay.material.dispose();
                 }
                 if (group.outline) {
-                    scene.remove(group.outline);
+                    state.scene.remove(group.outline);
                     group.outline.geometry.dispose();
                     group.outline.material.dispose();
                 }
@@ -6574,16 +6524,16 @@
                 const { overlay, outline } = makeGroupOverlay(targetMesh, group, 0x00ff00, 0.15);
                 group.overlay = overlay;
                 group.outline = outline;
-                scene.add(overlay);
-                scene.add(outline);
+                state.scene.add(overlay);
+                state.scene.add(outline);
 
                 overlay.visible = true;
                 outline.visible = true;
             });
 
             // Update state
-            faceEditState.groups = newGroups;
-            faceEditState.selectedGroupId = null; // Clear selection after refresh
+            state.faceEditState.groups = newGroups;
+            state.faceEditState.selectedGroupId = null; // Clear selection after refresh
 
             console.log(`[refreshFaceGroups] Refreshed to ${newGroups.length} face groups`);
             addMessageToLog('System', `Face groups refreshed. Found ${newGroups.length} faces.`);
@@ -6603,10 +6553,10 @@
             console.log(`[extrudeFaceAdd] Extruding face ${group.id} by ${distance}`);
 
             // Save state for undo
-            if (loadedModels.length > 0) {
+            if (state.loadedModels.length > 0) {
                 const currentState = getCurrentState();
-                undoStack.push(currentState);
-                redoStack = []; // Clear redo stack
+                state.undoStack.push(currentState);
+                state.redoStack = []; // Clear redo stack
             }
 
             try {
@@ -6623,9 +6573,9 @@
                 extrudeMesh.position.addScaledVector(frame.normal, distance / 2);
                 extrudeMesh.lookAt(frame.origin.clone().add(frame.normal));
 
-                // Add to scene
-                scene.add(extrudeMesh);
-                loadedModels.push(extrudeMesh);
+                // Add to state.scene
+                state.scene.add(extrudeMesh);
+                state.loadedModels.push(extrudeMesh);
 
                 addMessageToLog('System', `Face extruded by ${distance}.`);
                 speakResponse('Face extruded.');
@@ -6642,18 +6592,18 @@
         function handleExtrudeFace(distance = 0.2) {
             console.log('=== EXTRUDE DEBUG ===');
             console.log('[handleExtrudeFace] Starting interactive extrude mode');
-            console.log('[handleExtrudeFace] Face mode active:', faceEditState.isActive);
-            console.log('[handleExtrudeFace] Selected face IDs:', Array.from(faceEditState.selectedFaceIds));
-            console.log('[handleExtrudeFace] Total groups:', faceEditState.groups.length);
+            console.log('[handleExtrudeFace] Face mode active:', state.faceEditState.isActive);
+            console.log('[handleExtrudeFace] Selected face IDs:', Array.from(state.faceEditState.selectedFaceIds));
+            console.log('[handleExtrudeFace] Total groups:', state.faceEditState.groups.length);
 
-            if (!faceEditState.isActive) {
+            if (!state.faceEditState.isActive) {
                 console.log('[handleExtrudeFace] BLOCKED: Face mode not active');
                 addMessageToLog('System', 'Please enter face edit mode first by saying "edit this object".');
                 speakResponse('Please enter face edit mode first.');
                 return false;
             }
 
-            const selectedIds = Array.from(faceEditState.selectedFaceIds);
+            const selectedIds = Array.from(state.faceEditState.selectedFaceIds);
             if (selectedIds.length === 0) {
                 console.log('[handleExtrudeFace] BLOCKED: No faces selected');
                 addMessageToLog('System', 'Please select one or more faces first.');
@@ -6661,18 +6611,18 @@
                 return false;
             }
 
-            const selectedGroups = faceEditState.groups.filter(g => selectedIds.includes(g.id));
+            const selectedGroups = state.faceEditState.groups.filter(g => selectedIds.includes(g.id));
             console.log('[handleExtrudeFace] Found', selectedGroups.length, 'matching groups');
 
             if (selectedGroups.length === 0) {
                 console.warn('[handleExtrudeFace] BLOCKED: Selected face groups not found');
-                console.log('[handleExtrudeFace] Available group IDs:', faceEditState.groups.map(g => g.id));
+                console.log('[handleExtrudeFace] Available group IDs:', state.faceEditState.groups.map(g => g.id));
                 addMessageToLog('System', 'Selected faces not found. Please select faces again.');
                 return false;
             }
 
             console.log('[handleExtrudeFace] SUCCESS: Starting extrude gizmo');
-            showExtrudeGizmo(faceEditState.targetMesh, selectedGroups);
+            showExtrudeGizmo(state.faceEditState.targetMesh, selectedGroups);
             return true;
         }
 
@@ -6759,10 +6709,10 @@
             console.log('[showExtrudeGizmo] Starting Fusion-style 2D extrude UI for', selectedGroups.length, 'faces');
 
             // 1) Setup extrude UI state
-            extrudeUI.active = true;
-            extrudeUI.targetMesh = mesh;
-            extrudeUI.faceIds = selectedGroups.map(g => g.id);
-            extrudeUI.depth = 0;
+            state.extrudeUI.active = true;
+            state.extrudeUI.targetMesh = mesh;
+            state.extrudeUI.faceIds = selectedGroups.map(g => g.id);
+            state.extrudeUI.depth = 0;
 
             // Show the Fusion 360-style panel
             try {
@@ -6831,14 +6781,14 @@
             console.log('  Face normal:', F.n.toArray().map(n => n.toFixed(2)));
             console.log('  Arrow position:', arrowPosition.toArray().map(n => n.toFixed(2)));
 
-            scene.add(arrow);
-            extrudeUI.arrow = arrow;
+            state.scene.add(arrow);
+            state.extrudeUI.arrow = arrow;
 
             console.log('[showExtrudeGizmo] ✅ Fusion 360 extrude UI ready!');
 
             // 3) Drag plane orthogonal to normal (goes through centroid)
-            extrudeUI.drag.plane = new THREE.Plane().setFromNormalAndCoplanarPoint(F.n, F.o);
-            extrudeUI.drag.startPt = F.o.clone();
+            state.extrudeUI.drag.plane = new THREE.Plane().setFromNormalAndCoplanarPoint(F.n, F.o);
+            state.extrudeUI.drag.startPt = F.o.clone();
 
             console.log('[showExtrudeGizmo] 2D Fusion-style arrow created at:', F.o);
             addMessageToLog('System', 'Drag arrow to set depth (perpendicular). Click background/Enter to confirm, Esc to cancel.');
@@ -6848,12 +6798,12 @@
         // Update live extrude preview - EXACT BOUNDARY VERSION
         function updateExtrudePreview(depth) {
             clearExtrudePreview();
-            const mesh = extrudeUI.targetMesh;
+            const mesh = state.extrudeUI.targetMesh;
 
             console.log('[updateExtrudePreview] Creating preview for depth:', depth);
 
-            for (const id of extrudeUI.faceIds) {
-                const group = faceEditState.groups.find(g => g.id === id);
+            for (const id of state.extrudeUI.faceIds) {
+                const group = state.faceEditState.groups.find(g => g.id === id);
                 if (!group) continue;
 
                 const boundaryResult = buildFaceBoundaryPolygon(mesh, group);
@@ -6885,8 +6835,8 @@
                 });
 
                 const previewMesh = new THREE.Mesh(geometry, previewMaterial);
-                scene.add(previewMesh);
-                extrudeUI.previewMeshes.push(previewMesh);
+                state.scene.add(previewMesh);
+                state.extrudeUI.previewMeshes.push(previewMesh);
             }
 
             requestRender();
@@ -6895,10 +6845,10 @@
         // Update extrude distance from input field
         function updateExtrudeDistance() {
             const input = document.getElementById('extrudeDistanceInput');
-            if (!input || !extrudeUI.active) return;
+            if (!input || !state.extrudeUI.active) return;
 
             const newDepth = parseFloat(input.value) || 0;
-            extrudeUI.depth = newDepth;
+            state.extrudeUI.depth = newDepth;
 
             // Update live preview with the new depth
             updateExtrudePreview(newDepth);
@@ -6917,34 +6867,34 @@
 
         // Clear extrude preview meshes
         function clearExtrudePreview() {
-            for (const mesh of extrudeUI.previewMeshes) {
-                scene.remove(mesh);
+            for (const mesh of state.extrudeUI.previewMeshes) {
+                state.scene.remove(mesh);
                 if (mesh.geometry) mesh.geometry.dispose();
                 if (mesh.material) mesh.material.dispose();
             }
-            extrudeUI.previewMeshes.length = 0;
+            state.extrudeUI.previewMeshes.length = 0;
         }
 
         // Confirm extrude operation - EXACT SPEC VERSION
         function confirmExtrude() {
-            if (!extrudeUI.active) return;
+            if (!state.extrudeUI.active) return;
 
-            console.log('[confirmExtrude] Confirming extrude with depth:', extrudeUI.depth);
+            console.log('[confirmExtrude] Confirming extrude with depth:', state.extrudeUI.depth);
 
-            const mesh = extrudeUI.targetMesh;
-            const depth = extrudeUI.depth;
+            const mesh = state.extrudeUI.targetMesh;
+            const depth = state.extrudeUI.depth;
 
             // Save state for undo (grouped action)
-            if (loadedModels.length > 0) {
+            if (state.loadedModels.length > 0) {
                 const currentState = getCurrentState();
-                undoStack.push(currentState);
-                redoStack = []; // Clear redo stack
+                state.undoStack.push(currentState);
+                state.redoStack = []; // Clear redo stack
             }
 
             // Option A: ADD bosses as separate meshes
             const created = [];
-            for (const id of extrudeUI.faceIds) {
-                const group = faceEditState.groups.find(g => g.id === id);
+            for (const id of state.extrudeUI.faceIds) {
+                const group = state.faceEditState.groups.find(g => g.id === id);
                 if (!group) continue;
 
                 const boundaryResult = buildFaceBoundaryPolygon(mesh, group);
@@ -6971,8 +6921,8 @@
                 boss.userData.isExtruded = true;
                 boss.userData.originalMesh = mesh;
 
-                scene.add(boss);
-                loadedModels.push(boss);
+                state.scene.add(boss);
+                state.loadedModels.push(boss);
                 created.push(boss);
             }
 
@@ -6997,16 +6947,16 @@
         function exitExtrudeMode() {
             clearExtrudePreview();
 
-            if (extrudeUI.arrow) {
-                scene.remove(extrudeUI.arrow);
-                extrudeUI.arrow = null;
+            if (state.extrudeUI.arrow) {
+                state.scene.remove(state.extrudeUI.arrow);
+                state.extrudeUI.arrow = null;
             }
 
-            extrudeUI.active = false;
-            extrudeUI.faceIds = [];
-            extrudeUI.targetMesh = null;
-            extrudeUI.depth = 0;
-            extrudeUI.drag = { on: false, startPt: null, plane: null };
+            state.extrudeUI.active = false;
+            state.extrudeUI.faceIds = [];
+            state.extrudeUI.targetMesh = null;
+            state.extrudeUI.depth = 0;
+            state.extrudeUI.drag = { on: false, startPt: null, plane: null };
 
             // Hide the Fusion 360-style panel
             const panel = document.getElementById('extrudePanel');
@@ -7021,24 +6971,24 @@
         // EXTRUDE GIZMO INTERACTION HANDLERS
 
         function onExtrudePointerDown(event) {
-            if (!extrudeUI.active) {
+            if (!state.extrudeUI.active) {
                 console.log('[onExtrudePointerDown] Extrude UI not active');
                 return;
             }
 
             console.log('[onExtrudePointerDown] Extrude UI active, processing click');
 
-            // Update mouse coordinates
-            const rect = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
+            // Update state.mouse coordinates
+            const rect = state.renderer.domElement.getBoundingClientRect();
+            state.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            state.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            state.raycaster.setFromCamera(state.mouse, state.camera);
 
-            console.log('[onExtrudePointerDown] Mouse coords:', mouse.x.toFixed(3), mouse.y.toFixed(3));
-            console.log('[onExtrudePointerDown] Arrow exists:', !!extrudeUI.arrow);
+            console.log('[onExtrudePointerDown] state.mouse coords:', state.mouse.x.toFixed(3), state.mouse.y.toFixed(3));
+            console.log('[onExtrudePointerDown] Arrow exists:', !!state.extrudeUI.arrow);
 
             // Check if 2D arrow was clicked (recursive for Group)
-            const arrowIntersects = raycaster.intersectObject(extrudeUI.arrow, true);
+            const arrowIntersects = state.raycaster.intersectObject(state.extrudeUI.arrow, true);
             console.log('[onExtrudePointerDown] Arrow intersects:', arrowIntersects.length);
 
             // Also check if any intersected object has the arrow marker
@@ -7054,19 +7004,19 @@
                 console.log('   Intersected object userData:', arrowIntersects[0].object.userData);
 
                 // Get face normal for proper drag plane
-                const firstGroup = faceEditState.groups.find(g => g.id === extrudeUI.faceIds[0]);
+                const firstGroup = state.faceEditState.groups.find(g => g.id === state.extrudeUI.faceIds[0]);
                 if (firstGroup) {
-                    const boundaryResult = buildFaceBoundaryPolygon(extrudeUI.targetMesh, firstGroup);
+                    const boundaryResult = buildFaceBoundaryPolygon(state.extrudeUI.targetMesh, firstGroup);
                     if (boundaryResult) {
                         const { F } = boundaryResult;
 
                         // Set up drag state with face-aligned plane
-                        extrudeUI.drag.on = true;
-                        extrudeUI.drag.startPt = F.o.clone();
-                        extrudeUI.drag.plane = new THREE.Plane(F.n, -F.o.dot(F.n));
+                        state.extrudeUI.drag.on = true;
+                        state.extrudeUI.drag.startPt = F.o.clone();
+                        state.extrudeUI.drag.plane = new THREE.Plane(F.n, -F.o.dot(F.n));
 
                         console.log('   Drag setup complete - face normal:', F.n.toArray());
-                        console.log('   Start point:', extrudeUI.drag.startPt.toArray());
+                        console.log('   Start point:', state.extrudeUI.drag.startPt.toArray());
                     }
                 }
 
@@ -7078,8 +7028,8 @@
             console.log('[onExtrudePointerDown] Arrow not clicked, checking background');
 
             // Confirm by clicking background: detect click that did NOT hit gizmo or overlays
-            const hitOverlay = faceEditState.isActive && raycaster.intersectObjects(
-                faceEditState.groups.map(g => g.overlay).filter(o => o),
+            const hitOverlay = state.faceEditState.isActive && state.raycaster.intersectObjects(
+                state.faceEditState.groups.map(g => g.overlay).filter(o => o),
                 false
             );
 
@@ -7093,25 +7043,25 @@
         }
 
         function onExtrudePointerMove(event) {
-            if (!extrudeUI.active) return;
-            if (!extrudeUI.drag.on) return;
+            if (!state.extrudeUI.active) return;
+            if (!state.extrudeUI.drag.on) return;
 
             console.log('🔄 [onExtrudePointerMove] Dragging arrow...');
 
-            // Update mouse coordinates
-            const rect = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
+            // Update state.mouse coordinates
+            const rect = state.renderer.domElement.getBoundingClientRect();
+            state.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            state.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            state.raycaster.setFromCamera(state.mouse, state.camera);
 
             // Get face info for movement calculation
-            const firstGroup = faceEditState.groups.find(g => g.id === extrudeUI.faceIds[0]);
+            const firstGroup = state.faceEditState.groups.find(g => g.id === state.extrudeUI.faceIds[0]);
             if (!firstGroup) {
                 console.log('[onExtrudePointerMove] No first group found');
                 return;
             }
 
-            const boundaryResult = buildFaceBoundaryPolygon(extrudeUI.targetMesh, firstGroup);
+            const boundaryResult = buildFaceBoundaryPolygon(state.extrudeUI.targetMesh, firstGroup);
             if (!boundaryResult) {
                 console.log('[onExtrudePointerMove] No boundary result');
                 return;
@@ -7119,14 +7069,14 @@
 
             const { F } = boundaryResult;
 
-            // Create a plane perpendicular to the camera for better mouse tracking
+            // Create a plane perpendicular to the state.camera for better state.mouse tracking
             const cameraDirection = new THREE.Vector3();
-            camera.getWorldDirection(cameraDirection);
+            state.camera.getWorldDirection(cameraDirection);
             const dragPlane = new THREE.Plane(cameraDirection, -F.o.dot(cameraDirection));
 
-            // Get current mouse position on the drag plane
+            // Get current state.mouse position on the drag plane
             const currentPoint = new THREE.Vector3();
-            if (!raycaster.ray.intersectPlane(dragPlane, currentPoint)) {
+            if (!state.raycaster.ray.intersectPlane(dragPlane, currentPoint)) {
                 console.log('[onExtrudePointerMove] No plane intersection');
                 return;
             }
@@ -7135,7 +7085,7 @@
             const delta = new THREE.Vector3().subVectors(currentPoint, F.o);
             const depth = THREE.MathUtils.clamp(delta.dot(F.n), -2.0, 2.0); // Signed depth along normal
 
-            extrudeUI.depth = depth;
+            state.extrudeUI.depth = depth;
 
             // Update input field to match drag
             const input = document.getElementById('extrudeDistanceInput');
@@ -7145,7 +7095,7 @@
 
             // Update 2D arrow position along normal (keep same orientation)
             const newPosition = F.o.clone().add(F.n.clone().multiplyScalar(depth + 0.1)); // +0.1 for visibility offset
-            extrudeUI.arrow.position.copy(newPosition);
+            state.extrudeUI.arrow.position.copy(newPosition);
 
             // Live preview for each selected face
             updateExtrudePreview(depth);
@@ -7154,31 +7104,31 @@
         }
 
         function onExtrudePointerUp(event) {
-            if (!extrudeUI.active) return;
+            if (!state.extrudeUI.active) return;
 
-            if (extrudeUI.drag.on) {
+            if (state.extrudeUI.drag.on) {
                 console.log('[onExtrudePointerUp] Drag ended');
-                extrudeUI.drag.on = false;
+                state.extrudeUI.drag.on = false;
             }
         }
 
         // SMART DELETE HANDLER - Face vs Object
         function handleDeleteCommand() {
             console.log('[handleDeleteCommand] Delete command received');
-            console.log(`[handleDeleteCommand] Face mode active: ${faceEditState.isActive}`);
-            console.log(`[handleDeleteCommand] Selected face: ${faceEditState.selectedGroupId}`);
+            console.log(`[handleDeleteCommand] Face mode active: ${state.faceEditState.isActive}`);
+            console.log(`[handleDeleteCommand] Selected face: ${state.faceEditState.selectedGroupId}`);
 
             // Priority 1: Face deletion if in face mode with selected face
-            if (faceEditState.isActive && faceEditState.selectedGroupId) {
-                const group = faceEditState.groups.find(g => g.id === faceEditState.selectedGroupId);
+            if (state.faceEditState.isActive && state.faceEditState.selectedGroupId) {
+                const group = state.faceEditState.groups.find(g => g.id === state.faceEditState.selectedGroupId);
                 if (group) {
                     console.log('[handleDeleteCommand] Deleting selected face');
-                    return deleteFaceGroup(faceEditState.targetMesh, group);
+                    return deleteFaceGroup(state.faceEditState.targetMesh, group);
                 }
             }
 
             // Priority 2: Ask user if in face mode but no face selected
-            if (faceEditState.isActive && !faceEditState.selectedGroupId) {
+            if (state.faceEditState.isActive && !state.faceEditState.selectedGroupId) {
                 console.log('[handleDeleteCommand] Face mode active but no face selected');
                 addMessageToLog('System', 'No face selected. Click on a face first, or say "exit face mode" to delete the whole object.');
                 speakResponse('No face selected. Click on a face first.');
@@ -7193,49 +7143,49 @@
 
         function removeObject() {
             // Only save state if we have objects (never save empty state)
-            if (loadedModels.length > 0) {
+            if (state.loadedModels.length > 0) {
                 const currentState = getCurrentState();
-                undoStack.push(currentState);
-                redoStack = []; // Clear redo stack
-                console.log("[removeObject] Saved state with", loadedModels.length, "objects");
+                state.undoStack.push(currentState);
+                state.redoStack = []; // Clear redo stack
+                console.log("[removeObject] Saved state with", state.loadedModels.length, "objects");
             }
-            if (selectedObject) {
-                const objectToRemoveName = selectedObject.name || "Unnamed Part";
-                const objectToRemoveUUID = selectedObject.uuid;
+            if (state.selectedObject) {
+                const objectToRemoveName = state.selectedObject.name || "Unnamed Part";
+                const objectToRemoveUUID = state.selectedObject.uuid;
 
-                transformControls.detach();
+                state.transformControls.detach();
 
-                let parent = selectedObject.parent;
+                let parent = state.selectedObject.parent;
                 if (parent) {
-                    parent.remove(selectedObject);
-                    if (selectedObject.geometry) selectedObject.geometry.dispose();
-                    if (selectedObject.material) {
-                        if (Array.isArray(selectedObject.material)) {
-                            selectedObject.material.forEach(material => material.dispose());
+                    parent.remove(state.selectedObject);
+                    if (state.selectedObject.geometry) state.selectedObject.geometry.dispose();
+                    if (state.selectedObject.material) {
+                        if (Array.isArray(state.selectedObject.material)) {
+                            state.selectedObject.material.forEach(material => material.dispose());
                         } else {
-                            selectedObject.material.dispose();
+                            state.selectedObject.material.dispose();
                         }
                     }
 
-                    const index = loadedModels.indexOf(selectedObject);
+                    const index = state.loadedModels.indexOf(state.selectedObject);
                     if (index > -1) {
-                        loadedModels.splice(index, 1);
-                        console.log(`[Remove Object] Removed top-level model: ${objectToRemoveName}. Remaining models: ${loadedModels.length}`);
+                        state.loadedModels.splice(index, 1);
+                        console.log(`[Remove Object] Removed top-level model: ${objectToRemoveName}. Remaining models: ${state.loadedModels.length}`);
                     } else {
                         console.log(`[Remove Object] Removed object: ${objectToRemoveName} (UUID: ${objectToRemoveUUID})`);
                     }
 
-                    if (originalMaterialProperties.has(selectedObject.uuid)) {
-                        originalMaterialProperties.delete(selectedObject.uuid);
+                    if (state.originalMaterialProperties.has(state.selectedObject.uuid)) {
+                        state.originalMaterialProperties.delete(state.selectedObject.uuid);
                     }
-                    if (allHighlightsOriginalMaterials.has(selectedObject.uuid)) {
-                        allHighlightsOriginalMaterials.delete(selectedObject.uuid);
+                    if (state.allHighlightsOriginalMaterials.has(state.selectedObject.uuid)) {
+                        state.allHighlightsOriginalMaterials.delete(state.selectedObject.uuid);
                     }
 
                     addMessageToLog('AI', `Removed ${objectToRemoveName}.`);
                     speakResponse(`Removed ${objectToRemoveName}.`);
-                    selectedObject = null;
-                    currentlySelectedObjectsForEditing = [];
+                    state.selectedObject = null;
+                    state.currentlySelectedObjectsForEditing = [];
                     resetView();
                 } else {
                     console.warn(`[Remove Object] Selected object ${objectToRemoveName} has no parent to remove from.`);
@@ -7257,10 +7207,10 @@
 
 
         function resetView() {
-            // Don't save state for view changes - this is just camera movement
-            if (controls && camera && loadedModels.length > 0) {
+            // Don't save state for view changes - this is just state.camera movement
+            if (state.controls && state.camera && state.loadedModels.length > 0) {
                 const overallBbox = new THREE.Box3();
-                loadedModels.forEach(model => {
+                state.loadedModels.forEach(model => {
                     overallBbox.union(new THREE.Box3().setFromObject(model));
                 });
 
@@ -7281,22 +7231,22 @@
                 console.log("[resetView] Size:", size);
                 console.log("[resetView] Max Dimension:", maxDim);
 
-                const fov = camera.fov * (Math.PI / 180);
+                const fov = state.camera.fov * (Math.PI / 180);
                 const cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
 
                 const newCameraPosition = center.clone().add(new THREE.Vector3(maxDim * 0.8, maxDim * 0.8, maxDim * 0.8));
-                camera.position.copy(newCameraPosition);
-                camera.lookAt(center);
-                controls.target.copy(center);
-                controls.update();
+                state.camera.position.copy(newCameraPosition);
+                state.camera.lookAt(center);
+                state.controls.target.copy(center);
+                state.controls.update();
 
                 addMessageToLog('AI', 'View reset to fit all models.');
                 speakResponse('View reset to fit all models.');
-            } else if (controls && camera) {
-                camera.position.set(30, 30, 30);
-                camera.lookAt(0, 0, 0);
-                controls.target.set(0, 0, 0);
-                controls.update();
+            } else if (state.controls && state.camera) {
+                state.camera.position.set(30, 30, 30);
+                state.camera.lookAt(0, 0, 0);
+                state.controls.target.set(0, 0, 0);
+                state.controls.update();
                 addMessageToLog('System', 'No models loaded. Resetting to default view.');
                 speakResponse('No models loaded. Resetting to default view.');
             } else {
@@ -7307,17 +7257,17 @@
         }
 
         function showDesignInfo() {
-            if (loadedModels.length > 0) {
-                let info = `Total Models Loaded: ${loadedModels.length}\n`;
-                loadedModels.forEach((model, index) => {
+            if (state.loadedModels.length > 0) {
+                let info = `Total Models Loaded: ${state.loadedModels.length}\n`;
+                state.loadedModels.forEach((model, index) => {
                     info += `\nModel ${index + 1} (${model.name || 'Unnamed Model'}):\n`;
                     info += `  Number of Meshes: ${model.children.filter(c => c.isMesh).length}\n`;
                     info += `  Total Objects: ${model.children.length}\n`;
                 });
 
-                const sceneBbox = new THREE.Box3().setFromObject(scene);
+                const sceneBbox = new THREE.Box3().setFromObject(state.scene);
                 const sceneSize = sceneBbox.getSize(new THREE.Vector3());
-                info += `\nOverall Scene Bounding Box Size: X=${sceneSize.x.toFixed(2)}, Y=${sceneSize.y.toFixed(2)}, Z=${sceneSize.z.toFixed(2)}\n`;
+                info += `\nOverall state.scene Bounding Box Size: X=${sceneSize.x.toFixed(2)}, Y=${sceneSize.y.toFixed(2)}, Z=${sceneSize.z.toFixed(2)}\n`;
 
                 addMessageToLog('AI', info);
                 speakResponse('Design information displayed for all loaded models.');
@@ -7328,21 +7278,21 @@
         }
 
         function setTransformMode(mode) {
-            if (transformControls) {
+            if (state.transformControls) {
                 // Don't save state for mode changes - save when actual transform happens
-                transformControls.setMode(mode);
+                state.transformControls.setMode(mode);
                 addMessageToLog('AI', `Transform mode set to ${mode}.`);
                 speakResponse(`Transform mode set to ${mode}.`);
             } else {
-                addMessageToLog('System', 'Transform controls not available.');
-                speakResponse('Transform controls are not available.');
+                addMessageToLog('System', 'Transform state.controls not available.');
+                speakResponse('Transform state.controls are not available.');
             }
         }
 
         function listParts() {
-            if (loadedModels.length > 0) {
+            if (state.loadedModels.length > 0) {
                 let parts = "Parts in loaded models:\n";
-                loadedModels.forEach((model, modelIndex) => {
+                state.loadedModels.forEach((model, modelIndex) => {
                     parts += `\n--- Model ${modelIndex + 1} (${model.name || 'Unnamed Model'}) ---\n`;
                     let modelHasParts = false;
                     model.traverse(obj => {
@@ -7364,9 +7314,9 @@
         }
 
         function selectPartByName(partName) {
-            if (loadedModels.length > 0) {
+            if (state.loadedModels.length > 0) {
                 let foundObject = null;
-                for (const model of loadedModels) {
+                for (const model of state.loadedModels) {
                     model.traverse((obj) => {
                         if (obj.isMesh && obj.name === partName) {
                             foundObject = obj;
@@ -7387,20 +7337,20 @@
             }
         }
 
-        // --- Camera View Functions (now including negative axes) ---
+        // --- state.camera View Functions (now including negative axes) ---
         function setCameraView(position, target) {
-            if (camera && controls) {
-                camera.position.copy(position);
-                controls.target.copy(target);
-                controls.update(); // Update controls after changing camera position/target
-                addMessageToLog('System', `Camera view set to [${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)}] looking at [${target.x.toFixed(2)}, ${target.y.toFixed(2)}, ${target.z.toFixed(2)}].`);
+            if (state.camera && state.controls) {
+                state.camera.position.copy(position);
+                state.controls.target.copy(target);
+                state.controls.update(); // Update state.controls after changing state.camera position/target
+                addMessageToLog('System', `state.camera view set to [${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)}] looking at [${target.x.toFixed(2)}, ${target.y.toFixed(2)}, ${target.z.toFixed(2)}].`);
             } else {
                 addMessageToLog('System', 'Three.js components not initialized for view change.');
             }
         }
 
         function getSceneCenterAndDistance() {
-            const bbox = new THREE.Box3().setFromObject(scene);
+            const bbox = new THREE.Box3().setFromObject(state.scene);
             const center = bbox.getCenter(new THREE.Vector3());
             const size = bbox.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
@@ -7452,27 +7402,25 @@
         }
 
         // --- Static View Axes Helper ---
-        let viewAxesRaycaster;
-        let viewAxesMouse;
-        // viewAxesSceneRendered is a global flag, already declared at the top
+        // state.viewAxesSceneRendered is a global flag, already declared at the top
 
         function initViewAxesHelper() {
-            if (viewAxesSceneRendered) return; // Prevent re-initialization
+            if (state.viewAxesSceneRendered) return; // Prevent re-initialization
 
-            viewAxesScene = new THREE.Scene();
-            viewAxesCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 10); // Small FOV, aspect 1:1 for container
-            viewAxesCamera.position.set(1.5, 1.5, 1.5); // Fixed position for isometric view of axes
-            viewAxesCamera.lookAt(0, 0, 0);
+            state.viewAxesScene = new THREE.Scene();
+            state.viewAxesCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 10); // Small FOV, aspect 1:1 for container
+            state.viewAxesCamera.position.set(1.5, 1.5, 1.5); // Fixed position for isometric view of axes
+            state.viewAxesCamera.lookAt(0, 0, 0);
 
-            viewAxesRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // Alpha true for transparent background
-            viewAxesRenderer.setPixelRatio(window.devicePixelRatio);
-            viewAxesRenderer.setSize(viewAxesContainer.clientWidth, viewAxesContainer.clientHeight);
-            viewAxesRenderer.domElement.style.width = '100%';
-            viewAxesRenderer.domElement.style.height = '100%';
-            viewAxesContainer.appendChild(viewAxesRenderer.domElement);
+            state.viewAxesRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // Alpha true for transparent background
+            state.viewAxesRenderer.setPixelRatio(window.devicePixelRatio);
+            state.viewAxesRenderer.setSize(viewAxesContainer.clientWidth, viewAxesContainer.clientHeight);
+            state.viewAxesRenderer.domElement.style.width = '100%';
+            state.viewAxesRenderer.domElement.style.height = '100%';
+            viewAxesContainer.appendChild(state.viewAxesRenderer.domElement);
 
             // Create a custom AxesHelper with clickable parts
-            viewAxesHelper = new THREE.Group();
+            state.viewAxesHelper = new THREE.Group();
             const axisLength = 1.0;
             const axisRadius = 0.08; // Made axes thicker for easier clicking
 
@@ -7483,14 +7431,14 @@
             xAxisCylinder.position.x = axisLength / 2;
             xAxisCylinder.userData.axis = 'x';
             xAxisCylinder.userData.direction = 'positive';
-            viewAxesHelper.add(xAxisCylinder);
+            state.viewAxesHelper.add(xAxisCylinder);
 
             const negXAxisCylinder = new THREE.Mesh(new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength, 8), xAxisMaterial);
             negXAxisCylinder.rotation.z = Math.PI / 2;
             negXAxisCylinder.position.x = -axisLength / 2;
             negXAxisCylinder.userData.axis = 'x';
             negXAxisCylinder.userData.direction = 'negative';
-            viewAxesHelper.add(negXAxisCylinder);
+            state.viewAxesHelper.add(negXAxisCylinder);
 
             // Y-axis (Green)
             const yAxisMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
@@ -7498,14 +7446,14 @@
             yAxisCylinder.position.y = axisLength / 2;
             yAxisCylinder.userData.axis = 'y';
             yAxisCylinder.userData.direction = 'positive';
-            viewAxesHelper.add(yAxisCylinder);
+            state.viewAxesHelper.add(yAxisCylinder);
 
             const negYAxisCylinder = new THREE.Mesh(new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength, 8), yAxisMaterial);
             negYAxisCylinder.rotation.z = Math.PI; // Rotate to point downwards
             negYAxisCylinder.position.y = -axisLength / 2;
             negYAxisCylinder.userData.axis = 'y';
             negYAxisCylinder.userData.direction = 'negative';
-            viewAxesHelper.add(negYAxisCylinder);
+            state.viewAxesHelper.add(negYAxisCylinder);
 
             // Z-axis (Blue)
             const zAxisMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
@@ -7514,16 +7462,16 @@
             zAxisCylinder.position.z = axisLength / 2;
             zAxisCylinder.userData.axis = 'z';
             zAxisCylinder.userData.direction = 'positive';
-            viewAxesHelper.add(zAxisCylinder);
+            state.viewAxesHelper.add(zAxisCylinder);
 
             const negZAxisCylinder = new THREE.Mesh(new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength, 8), zAxisMaterial);
             negZAxisCylinder.rotation.x = -Math.PI / 2;
             negZAxisCylinder.position.z = -axisLength / 2;
             negZAxisCylinder.userData.axis = 'z';
             negZAxisCylinder.userData.direction = 'negative';
-            viewAxesHelper.add(negZAxisCylinder);
+            state.viewAxesHelper.add(negZAxisCylinder);
 
-            viewAxesScene.add(viewAxesHelper);
+            state.viewAxesScene.add(state.viewAxesHelper);
 
             // Add labels (X, Y, Z)
             const labelScale = 0.2; // Adjust label size
@@ -7532,38 +7480,38 @@
             const xLabel = makeTextSprite('X', { textColor: { r: 255, g: 0, b: 0, a: 1.0 }, fontsize: 60 });
             xLabel.position.set(axisLength + labelOffset, 0, 0);
             xLabel.scale.set(labelScale, labelScale, 1);
-            viewAxesScene.add(xLabel);
+            state.viewAxesScene.add(xLabel);
 
             const yLabel = makeTextSprite('Y', { textColor: { r: 0, g: 255, b: 0, a: 1.0 }, fontsize: 60 });
             yLabel.position.set(0, axisLength + labelOffset, 0);
             yLabel.scale.set(labelScale, labelScale, 1);
-            viewAxesScene.add(yLabel);
+            state.viewAxesScene.add(yLabel);
 
             const zLabel = makeTextSprite('Z', { textColor: { r: 0, g: 0, b: 255, a: 1.0 }, fontsize: 60 });
             zLabel.position.set(0, 0, axisLength + labelOffset);
             zLabel.scale.set(labelScale, labelScale, 1);
-            viewAxesScene.add(zLabel);
+            state.viewAxesScene.add(zLabel);
 
 
-            viewAxesRaycaster = new THREE.Raycaster();
-            viewAxesMouse = new THREE.Vector2();
+            state.viewAxesRaycaster = new THREE.state.raycaster();
+            state.viewAxesMouse = new THREE.Vector2();
 
             viewAxesContainer.addEventListener('click', onViewAxesClick, false);
 
-            viewAxesSceneRendered = true;
+            state.viewAxesSceneRendered = true;
         }
 
         // DIRECT FACE DETECTION - Raycast original mesh and find face group
         function detectFaceFromClick() {
-            console.log('[detectFaceFromClick] Called - faceMode:', faceEditState.isActive);
+            console.log('[detectFaceFromClick] Called - faceMode:', state.faceEditState.isActive);
 
-            if (!faceEditState.isActive || !faceEditState.targetMesh) {
+            if (!state.faceEditState.isActive || !state.faceEditState.targetMesh) {
                 console.log('[detectFaceFromClick] No face mode or target mesh');
                 return null;
             }
 
             // Raycast against the original target mesh
-            const intersects = raycaster.intersectObject(faceEditState.targetMesh, false);
+            const intersects = state.raycaster.intersectObject(state.faceEditState.targetMesh, false);
             console.log('[detectFaceFromClick] Intersects with target mesh:', intersects.length);
 
             if (intersects.length === 0) {
@@ -7576,8 +7524,8 @@
             console.log('[detectFaceFromClick] Hit face index:', faceIndex);
 
             // Find which face group contains this triangle
-            for (let i = 0; i < faceEditState.groups.length; i++) {
-                const group = faceEditState.groups[i];
+            for (let i = 0; i < state.faceEditState.groups.length; i++) {
+                const group = state.faceEditState.groups[i];
                 if (group.triIndices.includes(faceIndex)) {
                     console.log('[detectFaceFromClick] Found face in group:', group.id);
                     return group.id;
@@ -7593,27 +7541,27 @@
             return detectFaceFromClick();
         }
 
-        // Mouse move handler for face hovering
+        // state.mouse move handler for face hovering
         let lastHoveredGroupId = null;
 
         function onCanvasMouseMove(event) {
-            if (!faceEditState.isActive) return;
+            if (!state.faceEditState.isActive) return;
 
-            // Get mouse position
-            const rect = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            // Get state.mouse position
+            const rect = state.renderer.domElement.getBoundingClientRect();
+            state.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            state.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
             // Raycast for face overlays
-            raycaster.setFromCamera(mouse, camera);
+            state.raycaster.setFromCamera(state.mouse, state.camera);
             const hoveredGroupId = raycastFaceOverlays();
 
             // ✅ HOVER = HIGHLIGHT ONLY! NO EDITING!
             if (hoveredGroupId !== lastHoveredGroupId) {
                 // Update hover visual state
-                faceEditState.groups.forEach(group => {
+                state.faceEditState.groups.forEach(group => {
                     const isHovered = group.id === hoveredGroupId;
-                    const isSelected = faceEditState.selectedFaceIds.has(group.id);
+                    const isSelected = state.faceEditState.selectedFaceIds.has(group.id);
 
                     if (group.overlay && group.overlay.material) {
                         if (isSelected) {
@@ -7641,16 +7589,16 @@
         function onViewAxesClick(event) {
             event.preventDefault(); // Prevent default browser behavior
 
-            // Calculate mouse position in normalized device coordinates (NDC)
+            // Calculate state.mouse position in normalized device coordinates (NDC)
             // (-1 to +1) for both X and Y
-            const rect = viewAxesRenderer.domElement.getBoundingClientRect();
-            viewAxesMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            viewAxesMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            const rect = state.viewAxesRenderer.domElement.getBoundingClientRect();
+            state.viewAxesMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            state.viewAxesMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-            viewAxesRaycaster.setFromCamera(viewAxesMouse, viewAxesCamera);
+            state.viewAxesRaycaster.setFromCamera(state.viewAxesMouse, state.viewAxesCamera);
 
             // Check for intersections with the individual axis meshes
-            const intersects = viewAxesRaycaster.intersectObjects(viewAxesHelper.children, true);
+            const intersects = state.viewAxesRaycaster.intersectObjects(state.viewAxesHelper.children, true);
 
             if (intersects.length > 0) {
                 const intersectedObject = intersects[0].object;
@@ -7705,12 +7653,12 @@
             console.log("[sendAICommand] Sending command to Render backend:", command);
 
             let selectedObjectInfo = "none";
-            // Check if there are objects in currentlySelectedObjectsForEditing (meaning "select all" is active)
-            if (currentlySelectedObjectsForEditing.length > 0) {
-                const uuids = currentlySelectedObjectsForEditing.map(obj => obj.uuid);
+            // Check if there are objects in state.currentlySelectedObjectsForEditing (meaning "select all" is active)
+            if (state.currentlySelectedObjectsForEditing.length > 0) {
+                const uuids = state.currentlySelectedObjectsForEditing.map(obj => obj.uuid);
                 selectedObjectInfo = `Multiple CAD objects are currently selected for editing with UUIDs: ${uuids.join(', ')}.`;
-            } else if (selectedObject) {
-                selectedObjectInfo = `A CAD object is currently selected with UUID: ${selectedObject.uuid} and name: "${selectedObject.name || 'Unnamed Part'}".`;
+            } else if (state.selectedObject) {
+                selectedObjectInfo = `A CAD object is currently selected with UUID: ${state.selectedObject.uuid} and name: "${state.selectedObject.name || 'Unnamed Part'}".`;
             } else {
                 selectedObjectInfo = "No CAD object is currently selected.";
             }
@@ -7744,7 +7692,7 @@
                         {"action": "removeObject"}
                         \`\`\`
 
-                    4.  **To reset the camera view to fit all models:**
+                    4.  **To reset the state.camera view to fit all models:**
                         User input example: "reset view", "fit all", "zoom out to see everything"
                         Return:
                         \`\`\`json
@@ -7752,7 +7700,7 @@
                         \`\`\`
 
                     5.  **To show design information (e.g., number of models, bounding box):**
-                        User input example: "show design info", "what's in the scene?", "tell me about the design"
+                        User input example: "show design info", "what's in the state.scene?", "tell me about the design"
                         Return:
                         \`\`\`json
                         {"action": "showDesignInfo"}
@@ -7780,7 +7728,7 @@
                         {"action": "selectPart", "value": "[part_name]"}
                         \`\`\`
 
-                    9.  **To highlight all objects in the scene:**
+                    9.  **To highlight all objects in the state.scene:**
                         User input example: "select all", "highlight everything"
                         Return:
                         \`\`\`json
@@ -7837,7 +7785,7 @@
                         - "move the car up 2 meters", "rotate the ball 90 degrees", "scale all cubes by 1.5"
                         - "make the car red", "color all spheres blue"
 
-                        For these commands, analyze the scene objects and return:
+                        For these commands, analyze the state.scene objects and return:
                         \`\`\`json
                         {
                           "action": "delete" | "transform" | "clarify",
@@ -7885,7 +7833,7 @@
 
                     User command: "${command}".
                     Current context: ${selectedObjectInfo}
-                    Scene objects: ${JSON.stringify(buildModelContext().objects)}
+                    state.scene objects: ${JSON.stringify(buildModelContext().objects)}
                     Please return *only* the JSON object for the most appropriate action based on the user's command and the current context.
                     `
             };
@@ -7963,23 +7911,23 @@
         // Function to change the color of the selected object
         function changeObjectColor(colorValue) {
             // Only save state if we have objects (never save empty state)
-            if (loadedModels.length > 0) {
+            if (state.loadedModels.length > 0) {
                 const currentState = getCurrentState();
-                undoStack.push(currentState);
-                redoStack = []; // Clear redo stack
-                console.log("[changeObjectColor] Saved state with", loadedModels.length, "objects");
+                state.undoStack.push(currentState);
+                state.redoStack = []; // Clear redo stack
+                console.log("[changeObjectColor] Saved state with", state.loadedModels.length, "objects");
             }
             const newColor = new THREE.Color(colorValue);
             let objectsToModify = [];
 
-            // If currentlySelectedObjectsForEditing is populated, use it for batch operations
-            if (currentlySelectedObjectsForEditing.length > 0) {
-                console.log(`[changeObjectColor] Applying color to ${currentlySelectedObjectsForEditing.length} objects from batch selection.`);
-                objectsToModify = [...currentlySelectedObjectsForEditing]; // Use spread to copy array
-            } else if (selectedObject) {
+            // If state.currentlySelectedObjectsForEditing is populated, use it for batch operations
+            if (state.currentlySelectedObjectsForEditing.length > 0) {
+                console.log(`[changeObjectColor] Applying color to ${state.currentlySelectedObjectsForEditing.length} objects from batch selection.`);
+                objectsToModify = [...state.currentlySelectedObjectsForEditing]; // Use spread to copy array
+            } else if (state.selectedObject) {
                 // Fallback to single selected object if no batch selection
                 console.log("[changeObjectColor] Applying color to single selected object.");
-                objectsToModify.push(selectedObject);
+                objectsToModify.push(state.selectedObject);
             } else {
                 // If neither is selected, inform the user
                 addMessageToLog('System', 'No object selected. Please select an object or use "select all" first.');
@@ -8017,7 +7965,7 @@
                         }
                     }
                 });
-                // After changing color, update originalMaterialProperties for the current selection cycle
+                // After changing color, update state.originalMaterialProperties for the current selection cycle
                 // This ensures that if this object is later individually selected, its highlight reverts correctly.
                 const updatedOriginalMaterials = [];
                 const topLevelMaterials = Array.isArray(obj.material) ? obj.material : [obj.material];
@@ -8026,7 +7974,7 @@
                         updatedOriginalMaterials.push(mat.clone());
                     }
                 });
-                originalMaterialProperties.set(obj.uuid, updatedOriginalMaterials);
+                state.originalMaterialProperties.set(obj.uuid, updatedOriginalMaterials);
                 obj.updateMatrixWorld(true); // Ensure world matrix is updated after material change
             });
 
@@ -8044,14 +7992,14 @@
             console.log('Testing: 2D perpendicular arrow + object highlighting + drag functionality');
 
             // Step 1: Create cube
-            if (loadedModels.length === 0) {
+            if (state.loadedModels.length === 0) {
                 console.log('1. Creating test cube...');
                 createPrimitive('cube');
                 setTimeout(() => testExtrudeImprovements(), 500);
                 return;
             }
 
-            const cube = loadedModels[0];
+            const cube = state.loadedModels[0];
             console.log('2. Selecting cube:', cube.name);
             selectObject(cube);
 
@@ -8066,13 +8014,13 @@
 
             console.log('✅ Face edit mode active');
             console.log('   - Object should be highlighted (emissive glow)');
-            console.log('   - Face groups found:', faceEditState.groups.length);
+            console.log('   - Face groups found:', state.faceEditState.groups.length);
 
             // Step 4: Auto-select first face
             setTimeout(() => {
                 console.log('4. Auto-selecting first face...');
-                const firstFace = faceEditState.groups[0];
-                faceEditState.selectedFaceIds.add(firstFace.id);
+                const firstFace = state.faceEditState.groups[0];
+                state.faceEditState.selectedFaceIds.add(firstFace.id);
                 firstFace.outline.visible = true;
 
                 // Step 5: Test extrude
@@ -8080,9 +8028,9 @@
                     console.log('5. Testing extrude...');
                     const extrudeResult = handleExtrudeFace();
 
-                    if (extrudeResult && extrudeUI.arrow) {
+                    if (extrudeResult && state.extrudeUI.arrow) {
                         console.log('✅ SUCCESS: All improvements working!');
-                        console.log('   - 2D arrow created:', !!extrudeUI.arrow);
+                        console.log('   - 2D arrow created:', !!state.extrudeUI.arrow);
                         console.log('   - Arrow should be perpendicular to face');
                         console.log('   - Object should stay highlighted');
                         console.log('');
@@ -8102,7 +8050,7 @@
             console.log('=== TESTING EXTRUDE WORKFLOW ===');
 
             // Step 1: Create a cube if none exists
-            if (loadedModels.length === 0) {
+            if (state.loadedModels.length === 0) {
                 console.log('1. Creating test cube...');
                 createPrimitive('cube');
                 setTimeout(() => testExtrudeWorkflow(), 500);
@@ -8110,17 +8058,17 @@
             }
 
             // Step 2: Select the cube
-            const cube = loadedModels[0];
+            const cube = state.loadedModels[0];
             console.log('2. Selecting cube:', cube.name);
             selectObject(cube);
 
             // Step 3: Enter face edit mode
             console.log('3. Entering face edit mode...');
             const faceResult = enterFaceEditMode();
-            console.log('   Face mode active:', faceEditState.isActive);
-            console.log('   Face groups found:', faceEditState.groups.length);
+            console.log('   Face mode active:', state.faceEditState.isActive);
+            console.log('   Face groups found:', state.faceEditState.groups.length);
 
-            if (!faceEditState.isActive) {
+            if (!state.faceEditState.isActive) {
                 console.error('❌ Failed to enter face edit mode');
                 return;
             }
@@ -8128,16 +8076,16 @@
             // Step 4: Auto-select first face
             setTimeout(() => {
                 console.log('4. Auto-selecting first face...');
-                if (faceEditState.groups.length > 0) {
-                    const firstFace = faceEditState.groups[0];
-                    faceEditState.selectedFaceIds.add(firstFace.id);
-                    faceEditState.selectedGroupId = firstFace.id;
+                if (state.faceEditState.groups.length > 0) {
+                    const firstFace = state.faceEditState.groups[0];
+                    state.faceEditState.selectedFaceIds.add(firstFace.id);
+                    state.faceEditState.selectedGroupId = firstFace.id;
 
                     // Update visual feedback
                     firstFace.outline.visible = true;
 
                     console.log('   Selected face ID:', firstFace.id);
-                    console.log('   Selected faces count:', faceEditState.selectedFaceIds.size);
+                    console.log('   Selected faces count:', state.faceEditState.selectedFaceIds.size);
 
                     // Step 5: Test extrude
                     setTimeout(() => {
@@ -8146,8 +8094,8 @@
 
                         if (extrudeResult) {
                             console.log('✅ SUCCESS: Extrude started!');
-                            console.log('   Arrow created:', !!extrudeUI.arrow);
-                            console.log('   UI active:', extrudeUI.active);
+                            console.log('   Arrow created:', !!state.extrudeUI.arrow);
+                            console.log('   UI active:', state.extrudeUI.active);
                             console.log('');
                             console.log('🎯 NOW TRY:');
                             console.log('   - Drag the green arrow to set depth');
@@ -8155,9 +8103,9 @@
                             console.log('   - Press Esc to cancel');
                         } else {
                             console.error('❌ FAILED: Extrude did not start');
-                            console.log('   Face mode active:', faceEditState.isActive);
-                            console.log('   Selected faces:', faceEditState.selectedFaceIds.size);
-                            console.log('   Available groups:', faceEditState.groups.length);
+                            console.log('   Face mode active:', state.faceEditState.isActive);
+                            console.log('   Selected faces:', state.faceEditState.selectedFaceIds.size);
+                            console.log('   Available groups:', state.faceEditState.groups.length);
                         }
                     }, 500);
                 } else {
@@ -8166,12 +8114,12 @@
             }, 500);
         };
 
-        // Clear all models from scene
+        // Clear all models from state.scene
         window.clearAllModels = function() {
-            console.log(`[clearAllModels] Clearing ${loadedModels.length} models`);
-            loadedModels.forEach(model => {
-                if (scene && model) {
-                    scene.remove(model);
+            console.log(`[clearAllModels] Clearing ${state.loadedModels.length} models`);
+            state.loadedModels.forEach(model => {
+                if (state.scene && model) {
+                    state.scene.remove(model);
                     // Dispose geometry and materials
                     if (model.geometry) model.geometry.dispose();
                     if (model.material) {
@@ -8183,7 +8131,7 @@
                     }
                 }
             });
-            loadedModels.length = 0;
+            state.loadedModels.length = 0;
             clearSelection();
             clearAllHighlights();
             console.log('[clearAllModels] All models cleared');
@@ -8192,17 +8140,17 @@
         // DEBUG: Check extrude system status
         window.checkExtrudeStatus = function() {
             console.log('=== EXTRUDE SYSTEM STATUS ===');
-            console.log('Face edit mode active:', faceEditState.isActive);
-            console.log('Selected object:', selectedObject ? selectedObject.name : 'none');
-            console.log('Face groups available:', faceEditState.groups.length);
-            console.log('Selected face IDs:', Array.from(faceEditState.selectedFaceIds));
-            console.log('Extrude UI active:', extrudeUI.active);
-            console.log('Extrude arrow exists:', !!extrudeUI.arrow);
+            console.log('Face edit mode active:', state.faceEditState.isActive);
+            console.log('Selected object:', state.selectedObject ? state.selectedObject.name : 'none');
+            console.log('Face groups available:', state.faceEditState.groups.length);
+            console.log('Selected face IDs:', Array.from(state.faceEditState.selectedFaceIds));
+            console.log('Extrude UI active:', state.extrudeUI.active);
+            console.log('Extrude arrow exists:', !!state.extrudeUI.arrow);
             console.log('');
             console.log('🔧 QUICK FIXES:');
             console.log('- testExtrudeWorkflow() - Full test');
             console.log('- createPrimitive("cube") - Create test object');
-            console.log('- selectObject(loadedModels[0]) - Select first object');
+            console.log('- selectObject(state.loadedModels[0]) - Select first object');
             console.log('- enterFaceEditMode() - Enter face mode');
             console.log('- handleExtrudeFace() - Start extrude');
         };
@@ -8218,19 +8166,19 @@
                 return;
             }
 
-            // Check if scene is initialized
-            if (!scene) {
-                console.error("[createPrimitive] Scene not initialized!");
-                alert("Scene not initialized. Please refresh the page.");
+            // Check if state.scene is initialized
+            if (!state.scene) {
+                console.error("[createPrimitive] state.scene not initialized!");
+                alert("state.scene not initialized. Please refresh the page.");
                 return;
             }
 
             // Save state for undo (only if we have existing objects)
-            if (loadedModels.length > 0) {
+            if (state.loadedModels.length > 0) {
                 const currentState = getCurrentState();
-                undoStack.push(currentState);
-                redoStack = []; // Clear redo stack
-                console.log("[createPrimitive] Saved state with", loadedModels.length, "objects");
+                state.undoStack.push(currentState);
+                state.redoStack = []; // Clear redo stack
+                console.log("[createPrimitive] Saved state with", state.loadedModels.length, "objects");
             }
 
             // Create material
@@ -8320,7 +8268,7 @@
 
             console.log(`[createPrimitive] Mesh created successfully: ${mesh.name}`);
 
-            // Set position (in front of camera)
+            // Set position (in front of state.camera)
             mesh.position.set(0, 1, 0); // Simple position above ground
 
             // Store metadata
@@ -8334,11 +8282,11 @@
                 mesh.userData.initialMaterial = mesh.material.clone();
             }
 
-            // Add to scene and track it
-            scene.add(mesh);
-            loadedModels.push(mesh);
+            // Add to state.scene and track it
+            state.scene.add(mesh);
+            state.loadedModels.push(mesh);
 
-            console.log(`[createPrimitive] Added ${type} to scene. Total objects: ${loadedModels.length}`);
+            console.log(`[createPrimitive] Added ${type} to state.scene. Total objects: ${state.loadedModels.length}`);
 
             // Select the new object
             selectObject(mesh);
@@ -8480,8 +8428,8 @@
                             const faceAction = parsedResponse.value;
 
                             if (faceAction === 'enter') {
-                                if (selectedObject && selectedObject.isMesh) {
-                                    const success = enterFaceEditMode(selectedObject);
+                                if (state.selectedObject && state.selectedObject.isMesh) {
+                                    const success = enterFaceEditMode(state.selectedObject);
                                     if (!success) {
                                         addMessageToLog('AI', 'Could not enter face edit mode. Make sure you have selected a valid mesh object.');
                                         speakResponse('Could not enter face edit mode.');
@@ -8559,39 +8507,39 @@
 
         // Voice input integration
         if ('webkitSpeechRecognition' in window) {
-            recognition = new webkitSpeechRecognition();
-            recognition.continuous = false;
-            recognition.interimResults = false;
-            recognition.lang = 'en-US';
+            state.recognition = new webkitSpeechRecognition();
+            state.recognition.continuous = false;
+            state.recognition.interimResults = false;
+            state.recognition.lang = 'en-US';
 
-            recognition.onstart = () => {
-                isVoiceAssistActive = true;
+            state.recognition.onstart = () => {
+                state.isVoiceAssistActive = true;
                 integratedVoiceBtn.classList.add('active-voice-btn');
                 addMessageToLog('System', 'Listening for voice commands...');
             };
 
-            recognition.onresult = (event) => {
+            state.recognition.onresult = (event) => {
                 const command = event.results[0][0].transcript;
                 addMessageToLog('System', `You said: "${command}"`);
                 sendAICommand(command);
             };
 
-            recognition.onerror = (event) => {
-                console.error('Speech recognition error:', event.error);
+            state.recognition.onerror = (event) => {
+                console.error('Speech state.recognition error:', event.error);
                 addMessageToLog('System', `Voice command error: ${event.error}`);
                 speakResponse("I didn't catch that. Could you please repeat?");
                 integratedVoiceBtn.classList.remove('active-voice-btn');
-                isVoiceAssistActive = false;
+                state.isVoiceAssistActive = false;
             };
 
-            recognition.onend = () => {
+            state.recognition.onend = () => {
                 integratedVoiceBtn.classList.remove('active-voice-btn');
-                isVoiceAssistActive = false;
+                state.isVoiceAssistActive = false;
                 addMessageToLog('System', 'Voice command ended.');
             };
 
             integratedVoiceBtn.addEventListener('click', () => {
-                if (isVoiceAssistActive) {
+                if (state.isVoiceAssistActive) {
                     stopVoiceAssist();
                 } else {
                     startVoiceAssist();
@@ -8599,32 +8547,32 @@
             });
         } else {
             integratedVoiceBtn.style.display = 'none'; // Hide button if API not supported
-            addMessageToLog('System', 'Voice recognition not supported in this browser.');
+            addMessageToLog('System', 'Voice state.recognition not supported in this browser.');
         }
 
         function startVoiceAssist() {
-            if (recognition && !isVoiceAssistActive) {
-                recognition.start();
+            if (state.recognition && !state.isVoiceAssistActive) {
+                state.recognition.start();
             }
         }
 
         function stopVoiceAssist() {
-            if (recognition && isVoiceAssistActive) {
-                recognition.stop();
+            if (state.recognition && state.isVoiceAssistActive) {
+                state.recognition.stop();
             }
         }
 
         // Text-to-speech integration
         if ('speechSynthesis' in window) {
-            synth = window.speechSynthesis;
+            state.synth = window.speechSynthesis;
         } else {
             console.warn('Text-to-speech not supported in this browser.');
         }
 
         function speakResponse(text) {
-            if (synth) {
+            if (state.synth) {
                 const utterance = new SpeechSynthesisUtterance(text);
-                synth.speak(utterance);
+                state.synth.speak(utterance);
             }
         }
         // Send text command via input field
@@ -8634,7 +8582,7 @@
                 addMessageToLog('User', command); // Add user message to log immediately
 
                 // Check if this is a disambiguation response (number)
-                if (pendingDisambiguation && /^\d+$/.test(command)) {
+                if (state.pendingDisambiguation && /^\d+$/.test(command)) {
                     handleDisambiguationChoice(command);
                 } else {
                     sendAICommand(command);
@@ -8654,20 +8602,20 @@
 
         // Handle window resizing for Three.js canvas
         function onWindowResize() {
-            if (camera && renderer && cadCanvas) {
+            if (state.camera && state.renderer && cadCanvas) {
                 const viewerDiv = cadCanvas.parentElement;
-                camera.aspect = viewerDiv.clientWidth / viewerDiv.clientHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(viewerDiv.clientWidth, viewerDiv.clientHeight);
+                state.camera.aspect = viewerDiv.clientWidth / viewerDiv.clientHeight;
+                state.camera.updateProjectionMatrix();
+                state.renderer.setSize(viewerDiv.clientWidth, viewerDiv.clientHeight);
                 updateDynamicGrid(); // Update grid on resize as well
                 // No need to call resetView() here, as it can be jarring on every resize.
                 // The user can use the "Fit All" button or AI command.
             }
-            // Update viewAxesHelper renderer size on window resize
-            if (viewAxesRenderer && viewAxesContainer) {
-                viewAxesRenderer.setSize(viewAxesContainer.clientWidth, viewAxesContainer.clientHeight);
-                viewAxesCamera.aspect = viewAxesContainer.clientWidth / viewAxesContainer.clientHeight;
-                viewAxesCamera.updateProjectionMatrix();
+            // Update state.viewAxesHelper state.renderer size on window resize
+            if (state.viewAxesRenderer && viewAxesContainer) {
+                state.viewAxesRenderer.setSize(viewAxesContainer.clientWidth, viewAxesContainer.clientHeight);
+                state.viewAxesCamera.aspect = viewAxesContainer.clientWidth / viewAxesContainer.clientHeight;
+                state.viewAxesCamera.updateProjectionMatrix();
             }
         }
 
@@ -8708,7 +8656,7 @@
             );
         }
 
-        // ENHANCED KEYBOARD SHORTCUTS - Face editing + Extrude controls
+        // ENHANCED KEYBOARD SHORTCUTS - Face editing + Extrude state.controls
         window.addEventListener('keydown', (event) => {
             // ✅ GUARD: Don't interfere with typing
             if (isTypingInUI()) return;
@@ -8717,15 +8665,15 @@
 
             // Multi-select control (check both lowercase and original)
             if (key === 'control' || event.key === 'Control') {
-                if (faceEditState.isActive) {
-                    faceEditState.multiSelect = true;
+                if (state.faceEditState.isActive) {
+                    state.faceEditState.multiSelect = true;
                     console.log('[Keyboard] Multi-select enabled');
                 }
                 return;
             }
 
-            // Extrude mode controls - EXACT SPEC
-            if (extrudeUI.active) {
+            // Extrude mode state.controls - EXACT SPEC
+            if (state.extrudeUI.active) {
                 if (event.key === 'Enter') {
                     event.preventDefault();
                     confirmExtrude();
@@ -8739,7 +8687,7 @@
             }
 
             // Face editing shortcuts
-            if (!faceEditState.isActive) return;
+            if (!state.faceEditState.isActive) return;
 
             // Prevent default browser behavior for our shortcuts
             if (['x', 'c', 'e', 'q'].includes(key)) {
@@ -8771,8 +8719,8 @@
 
             // Disable multi-select when Control is released
             if (key === 'control' || event.key === 'Control') {
-                if (faceEditState.isActive) {
-                    faceEditState.multiSelect = false;
+                if (state.faceEditState.isActive) {
+                    state.faceEditState.multiSelect = false;
                     console.log('[Keyboard] Multi-select disabled');
                 }
             }
@@ -8780,7 +8728,7 @@
 
 
 
-        // Initialize scene when the window loads
+        // Initialize state.scene when the window loads
         window.onload = () => {
             console.log("[Init] Window loaded, starting initialization...");
 
@@ -8802,12 +8750,12 @@
             initScene();
 
             // DEBUG: Clear any existing models on startup
-            if (loadedModels.length > 0) {
-                console.log('[Init] Clearing', loadedModels.length, 'existing models');
-                loadedModels.forEach(model => {
-                    if (scene && model) scene.remove(model);
+            if (state.loadedModels.length > 0) {
+                console.log('[Init] Clearing', state.loadedModels.length, 'existing models');
+                state.loadedModels.forEach(model => {
+                    if (state.scene && model) state.scene.remove(model);
                 });
-                loadedModels.length = 0;
+                state.loadedModels.length = 0;
             }
 
             // Set initial CSS for the CAD viewer background
