@@ -1,0 +1,697 @@
+        /* Global Styles */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: 'Inter', sans-serif;
+            /* Authentic Fusion-like pure white background for the whole app */
+            background-color: #FFFFFF; /* Pure white base color for Fusion 360 */
+            background-image: repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(0,0,0,0.1) 20px), /* Visible darker grid lines */
+            repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(0,0,0,0.1) 20px);
+            background-size: 20px 20px; /* Size of each grid cell */
+            overflow: hidden; /* Keep overflow hidden for main body */
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        header {
+            background-color: #1a202c; /* Darker, more professional header */
+            padding: 15px 25px;
+            color: #e2e8f0; /* Lighter text for contrast */
+            text-align: center;
+            font-size: 2.2rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-shrink: 0;
+            height: 70px;
+            box-sizing: border-box;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            position: relative; /* For API key status positioning */
+        }
+
+            header svg {
+                height: 35px;
+                width: 35px;
+                fill: #DAA520; /* Accent color for the logo - Dark Yellow */
+                transition: transform 0.3s ease;
+            }
+
+            header:hover svg {
+                transform: rotate(5deg) scale(1.05);
+            }
+
+        /* Page Container & Transitions */
+        .page-container {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            width: 100%;
+            position: relative;
+        }
+
+        .page {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.6s ease-in-out, transform 0.6s ease-in-out;
+            transform: translateX(0);
+        }
+
+        .page-active {
+            opacity: 1;
+            pointer-events: auto !important; /* Ensure it's clickable */
+            z-index: 1;
+        }
+
+        .page-inactive {
+            opacity: 0;
+            pointer-events: none;
+            z-index: 0;
+            transform: translateX(-100%);
+        }
+
+        /* Upload Page */
+        #uploadPage {
+            background-color: transparent; /* Changed to transparent to show body background */
+            color: #333;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .upload-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 25px;
+            background: #ffffff;
+            padding: 50px 60px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+            .upload-content h2 {
+                color: #1a202c;
+                margin-bottom: 15px;
+                font-size: 2.2em;
+                font-weight: 700;
+                display: flex; /* Enable flex for logo and text alignment */
+                align-items: center;
+                justify-content: center;
+                gap: 10px; /* Space between logo and text */
+            }
+
+                .upload-content h2 svg {
+                    height: 35px;
+                    width: 35px;
+                    fill: #DAA520; /* Accent color for the logo - Dark Yellow */
+                }
+
+
+        #dropZone {
+            width: 100%;
+            height: 180px;
+            border: 3px dashed #a0aec0;
+            border-radius: 10px;
+            /* FIX: pointer-events and display are now controlled solely by JS for clarity */
+            display: none; /* Initially hidden */
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: #4a5568;
+            cursor: pointer;
+            transition: border-color 0.4s ease, background-color 0.4s ease, color 0.4s ease;
+            font-size: 1.2em;
+            background-color: #f7fafc;
+            font-weight: 600;
+            position: relative; /* Keep relative for internal positioning if needed later */
+            overflow: hidden;
+            /* Removed initial pointer-events: none; from CSS, controlled by JS */
+        }
+
+            #dropZone:hover {
+                border-color: #DAA520; /* Accent color on hover - Dark Yellow */
+                background-color: #FFF8DC; /* Light yellow background on hover */
+                color: #B8860B; /* Darker yellow text */
+            }
+
+        /* fileInput is now handled by inline style and pointer-events on dropZone */
+
+        .button-group {
+            display: flex;
+            flex-direction: column; /* Stack buttons vertically */
+            gap: 15px; /* Space between buttons */
+            margin-top: 25px;
+            width: 100%; /* Ensure buttons take full width of upload-content */
+        }
+
+        .button {
+            padding: 14px 30px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: 600;
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 100%; /* Make buttons full width */
+            box-sizing: border-box; /* Include padding in width */
+            pointer-events: auto; /* Ensure buttons are always clickable */
+        }
+
+            .button.primary {
+                background-color: #DAA520; /* Primary button - Dark Yellow */
+                color: white;
+            }
+
+                .button.primary:hover {
+                    background-color: #B8860B; /* Darker yellow on hover */
+                    transform: translateY(-3px);
+                    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+                }
+
+            .button.secondary {
+                background-color: #6c757d;
+                color: white;
+            }
+
+                .button.secondary:hover {
+                    background-color: #5a6268;
+                    transform: translateY(-3px);
+                    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+                }
+
+        #loadingMsg {
+            display: none;
+            margin-top: 25px;
+            color: #DAA520; /* Dark Yellow */
+            font-size: 1.15em;
+            font-weight: 600;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            pointer-events: none; /* FIX: Ensure loading message is non-interactive */
+        }
+
+        /* Editor Page */
+        #editorPage {
+            background-color: #FFFFFF; /* Pure white background - authentic Fusion */
+            display: flex;
+            flex-direction: row;
+            justify-content: flex-start;
+            align-items: stretch;
+            padding: 0;
+            box-sizing: border-box;
+            flex-grow: 1; /* Ensure editor page takes full height after header */
+        }
+
+        /* Right Panel for Chat and Code Editor */
+        .right-panel {
+            width: 350px; /* Fixed width for the sidebar */
+            min-width: 300px; /* Ensure it doesn't get too small */
+            background-color: #1a202c;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #2d3748;
+            box-shadow: -4px 0 10px rgba(0, 0, 0, 0.3);
+            flex-shrink: 0;
+            color: #e2e8f0;
+            height: 100%; /* Ensure right-panel takes full available height */
+            box-sizing: border-box; /* Include padding in height calculation */
+        }
+
+            .right-panel h2 {
+                color: #ffffff;
+                margin-bottom: 25px;
+                font-size: 1.9em;
+                border-bottom: 2px solid #DAA520; /* Accent color border - Dark Yellow */
+                padding-bottom: 12px;
+                font-weight: 700;
+            }
+
+        /* Tab buttons for chat/code editor */
+        .tab-buttons {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: #2d3748;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+            padding: 5px;
+            box-sizing: border-box;
+            gap: 5px;
+        }
+
+        .tab-button {
+            flex-grow: 1;
+            padding: 10px 15px;
+            border: none;
+            background-color: transparent;
+            color: #a0aec0;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            text-align: center;
+            border-radius: 8px;
+        }
+
+            .tab-button:hover {
+                background-color: #3a414e;
+                color: #e2e8f0;
+            }
+
+            .tab-button.active {
+                background-color: #DAA520;
+                color: white;
+                box-shadow: 0 2px 5px rgba(218, 165, 32, 0.3);
+            }
+
+        /* Small circular button for "Back to Upload" */
+        #backToUploadCircleButton {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #DAA520;
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8em;
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+            flex-shrink: 0;
+        }
+
+            #backToUploadCircleButton:hover {
+                background-color: #B8860B;
+                transform: translateY(-2px);
+                box-shadow: 0 5px 10px rgba(0, 0, 0, 0.25);
+            }
+
+            #backToUploadCircleButton svg {
+                fill: #FFFFFF;
+                height: 20px;
+                width: 20px;
+            }
+
+
+        /* Tab content areas */
+        .tab-content {
+            flex-grow: 1;
+            display: none;
+            flex-direction: column;
+            padding-top: 5px;
+            height: 100%;
+            box-sizing: border-box;
+        }
+
+            .tab-content.active {
+                display: flex;
+            }
+
+        #chatContent {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        #codeEditorContent {
+            height: 100%;
+        }
+
+        #cadViewer {
+            flex-grow: 1;
+            background-color: #FFFFFF;
+            position: relative;
+        }
+
+
+
+        #cadCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #aiLog {
+            flex-grow: 1;
+            flex-shrink: 1;
+            background-color: #2d3748;
+            border-radius: 10px;
+            padding: 15px;
+            color: #e2e8f0;
+            overflow-y: auto;
+            line-height: 1.5;
+            margin-bottom: 10px;
+            min-height: 50px;
+            flex-basis: 0;
+        }
+
+        .user-message, .ai-response, .system-message {
+            padding: 8px 12px;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            word-wrap: break-word;
+            max-width: 85%;
+        }
+
+        .user-message {
+            background-color: #DAA520;
+            color: white;
+            text-align: right;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+
+        .ai-response {
+            background-color: #4a5568;
+            color: #e2e8f0;
+            text-align: left;
+            align-self: flex-start;
+            margin-right: auto;
+        }
+
+        .system-message {
+            background-color: #2d3748;
+            color: #cbd5e0;
+            text-align: center;
+            font-style: italic;
+            border-bottom: 1px dashed #4a5568;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+
+        /* Updated AI Input Group for integrated voice button */
+        .ai-input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+            padding-top: 10px;
+            box-sizing: border-box;
+            position: sticky;
+            bottom: 0;
+            background-color: #1a202c;
+            z-index: 10;
+            padding-bottom: 10px;
+        }
+
+        #textCommandInput {
+            flex-grow: 1;
+            padding: 12px;
+            border: 1px solid #4a5568;
+            border-radius: 25px;
+            background-color: #2d3748;
+            color: #e2e8f0;
+            font-size: 1em;
+            outline: none;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+            #textCommandInput::placeholder {
+                color: #a0aec0;
+            }
+
+            #textCommandInput:focus {
+                border-color: #DAA520;
+                box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(218, 165, 32, 0.3);
+            }
+
+        #sendTextCommandBtn {
+            padding: 12px 20px;
+            background-color: #DAA520;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+        }
+
+            #sendTextCommandBtn:hover {
+                background-color: #B8860B;
+                transform: translateY(-2px);
+                box-shadow: 0 5px 10px rgba(0, 0, 0, 0.25);
+            }
+
+        /* New style for the integrated microphone button (now a separate button) */
+        #integratedVoiceBtn {
+            background-color: #3a414e;
+            border: none;
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 50%;
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 48px;
+            width: 48px;
+            box-sizing: border-box;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+            flex-shrink: 0;
+        }
+
+            #integratedVoiceBtn svg {
+                fill: #FFFFFF;
+                height: 24px;
+                width: 24px;
+                transition: fill 0.3s ease;
+            }
+
+            #integratedVoiceBtn:hover {
+                background-color: #4a5568;
+                transform: translateY(-2px);
+                box-shadow: 0 5px 10px rgba(0, 0, 0, 0.3);
+            }
+
+            #integratedVoiceBtn.active-voice-btn {
+                background-color: #e53e3e;
+                box-shadow: 0 0 0 4px rgba(229, 62, 62, 0.4);
+            }
+
+                #integratedVoiceBtn.active-voice-btn svg {
+                    fill: white;
+                }
+
+        /* Code Editor Specific Styles */
+        #cssCodeEditor {
+            width: 100%;
+            flex-grow: 1;
+            background-color: #2d3748;
+            border: 1px solid #4a5568;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Monaspace Neon', 'Fira Code', 'Consolas', monospace;
+            font-size: 0.9em;
+            color: #e2e8f0;
+            resize: vertical;
+            min-height: 150px;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+            outline: none;
+        }
+
+            #cssCodeEditor:focus {
+                border-color: #DAA520;
+                box-shadow: 0 0 0 2px rgba(218, 165, 32, 0.3);
+            }
+
+        #applyCssButton {
+            width: 100%;
+            padding: 12px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+        }
+
+            #applyCssButton:hover {
+                background-color: #218838;
+                transform: translateY(-2px);
+                box-shadow: 0 5px 10px rgba(0, 0, 0, 0.25);
+            }
+
+        /* New View Controls Section - REMOVED */
+        /* .view-controls {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #2d3748;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .view-control-button {
+            background-color: #4a5568;
+            color: #e2e8f0;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 600;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .view-control-button:hover {
+            background-color: #DAA520;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        } */
+
+        /* Style for the static view axes helper */
+        #viewAxesContainer {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 100px;
+            height: 100px;
+            z-index: 5;
+            pointer-events: auto;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.2s ease;
+        }
+
+        /* Undo/Redo Buttons Styles */
+        .undo-redo-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 10px 0;
+            border-bottom: 1px solid #2d3748;
+        }
+
+        .undo-redo-buttons button {
+            background-color: #4a5568;
+            color: #e2e8f0;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 12px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease, opacity 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 44px;
+            height: 44px;
+        }
+
+        .undo-redo-buttons button:hover:not(:disabled) {
+            background-color: #DAA520;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .undo-redo-buttons button:disabled {
+            background-color: #2d3748;
+            color: #4a5568;
+            cursor: not-allowed;
+            opacity: 0.5;
+            transform: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .undo-redo-buttons button svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        /* Object Properties Section Styles */
+        .object-properties-controls {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #2d3748;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            color: #e2e8f0;
+        }
+
+            .object-properties-controls h3 {
+                color: #ffffff;
+                margin-bottom: 10px;
+                border-bottom: 1px solid #4a5568;
+                padding-bottom: 5px;
+            }
+
+            .object-properties-controls .property-group {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .object-properties-controls label {
+                flex-shrink: 0;
+                font-weight: 600;
+            }
+
+        #objectColorPicker {
+            flex-grow: 1;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            width: 80px;
+            height: 35px;
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+            #objectColorPicker::-webkit-color-swatch-wrapper {
+                padding: 0;
+            }
+
+            #objectColorPicker::-webkit-color-swatch {
+                border: 1px solid #4a5568;
+                border-radius: 5px;
+            }
+
+            #objectColorPicker::-moz-color-swatch-wrapper {
+                padding: 0;
+            }
+
+            #objectColorPicker::-moz-color-swatch {
+                border: 1px solid #4a5568;
+                border-radius: 5px;
+            }
+
+        #applyObjectColorBtn {
+            /* Reuse view-control-button styles */
+            padding: 8px 15px;
+            font-size: 0.9em;
+        }
