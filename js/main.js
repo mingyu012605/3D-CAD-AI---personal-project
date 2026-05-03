@@ -8,6 +8,11 @@ import {
     onCanvasClick, onCanvasMouseMove,
     initSelectionCallbacks
 } from './selection.js';
+import {
+    setTranslateMode, setRotateMode, setScaleMode, setTransformMode,
+    translateSelection, rotateSelection, scaleSelection,
+    initTransformCallbacks, initTransformControls
+} from './transform.js';
 
         // THREE.js is now available globally
         console.log("THREE.js loaded:", typeof THREE !== 'undefined');
@@ -157,6 +162,12 @@ import {
         window.createPrimitive = createPrimitive; // Expose for testing
         window.selectObject = selectObject; // Expose for testing
         window.clearSelection = clearSelection; // Expose for testing
+        window.setScaleMode = setScaleMode;
+        window.setRotateMode = setRotateMode;
+        window.setTranslateMode = setTranslateMode;
+        window.translateSelection = translateSelection;
+        window.rotateSelection = rotateSelection;
+        window.scaleSelection = scaleSelection;
 
         initSelectionCallbacks({
             speakResponse,
@@ -171,78 +182,13 @@ import {
             raycastFaceOverlays
         });
 
-
-
-        window.setScaleMode = function() {
-            // If multiple objects are selected, use direct scaling
-            if (state.currentlySelectedObjectsForEditing.length > 1) {
-                console.log("Multiple objects selected - using direct scaling");
-                addMessageToLog('System', `Scale mode: Use scaleAllObjects(1.5) to scale ${state.currentlySelectedObjectsForEditing.length} objects together`);
-                console.log("Available commands:");
-                console.log("- scaleAllObjects(1.5) - Make all objects 1.5x bigger");
-                console.log("- scaleAllObjects(2) - Make all objects 2x bigger");
-                console.log("- scaleAllObjects(0.5) - Make all objects half size");
-                return;
-            }
-
-            if (state.transformControls) {
-                state.transformControls.setMode('scale');
-                console.log("✅ Transform mode set to SCALE");
-                addMessageToLog('System', 'Transform mode: Scale (resize objects)');
-
-                // Reset group helper scale if it exists
-                const groupHelper = state.scene.getObjectByProperty('name', 'GroupMovementHelper');
-                if (groupHelper) {
-                    groupHelper.scale.set(1, 1, 1);
-                    console.log("Reset group helper scale for new scaling operation");
-                }
-            }
-        };
-
-        window.setRotateMode = function() {
-            // If multiple objects are selected, use direct rotation
-            if (state.currentlySelectedObjectsForEditing.length > 1) {
-                console.log("Multiple objects selected - using direct rotation");
-                addMessageToLog('System', `Rotate mode: Use rotateAllObjects() to rotate ${state.currentlySelectedObjectsForEditing.length} objects together`);
-                console.log("Available commands:");
-                console.log("- rotateAllObjects(0, Math.PI/4, 0) - Rotate all 45° around Y");
-                console.log("- rotateAllObjects(0, Math.PI/2, 0) - Rotate all 90° around Y");
-                console.log("- rotateAllObjects(Math.PI/4, 0, 0) - Rotate all 45° around X");
-                return;
-            }
-
-            if (state.transformControls) {
-                state.transformControls.setMode('rotate');
-                console.log("✅ Transform mode set to ROTATE");
-                addMessageToLog('System', 'Transform mode: Rotate (turn objects)');
-
-                // Reset group helper rotation if it exists
-                const groupHelper = state.scene.getObjectByProperty('name', 'GroupMovementHelper');
-                if (groupHelper) {
-                    groupHelper.rotation.set(0, 0, 0);
-                    console.log("Reset group helper rotation for new rotation operation");
-                }
-            }
-        };
-
-        window.setTranslateMode = function() {
-            // If multiple objects are selected, use direct movement
-            if (state.currentlySelectedObjectsForEditing.length > 1) {
-                console.log("Multiple objects selected - using direct movement");
-                addMessageToLog('System', `Move mode: Use moveAllObjects() to move ${state.currentlySelectedObjectsForEditing.length} objects together`);
-                console.log("Available commands:");
-                console.log("- moveAllObjects(2, 0, 0) - Move all right by 2");
-                console.log("- moveAllObjects(0, 1, 0) - Move all up by 1");
-                console.log("- moveAllObjects(0, 0, -2) - Move all back by 2");
-                return;
-            }
-
-            if (state.transformControls) {
-                state.transformControls.setMode('translate');
-                console.log("✅ Transform mode set to TRANSLATE");
-                addMessageToLog('System', 'Transform mode: Translate (move objects)');
-            }
-        };
+        initTransformCallbacks({
+            speakResponse,
+            beginUndoGroup,
+            endUndoGroup,
+            addUndoAction,
+            saveSceneState
+        });
 
         // Duplicate multiple objects at once (for select all)
         window.duplicateAll = function() {
@@ -1085,107 +1031,6 @@ import {
                 console.log(`  ${i + 1}. ${obj.name || obj.type} (UUID: ${obj.uuid})`);
             });
         };
-
-        // UNIFIED TRANSFORM FUNCTIONS WITH GROUPED UNDO
-        function transformSelection(transformType, params) {
-            console.log(`=== TRANSFORM SELECTION: ${transformType.toUpperCase()} ===`);
-
-            const selection = getSelectedObjects();
-            console.log(`Selection count: ${selection.length}`);
-
-            if (selection.length === 0) {
-                addMessageToLog('System', `No objects selected to ${transformType}.`);
-                speakResponse(`No objects selected to ${transformType}.`);
-                return;
-            }
-
-            // Begin grouped undo action
-            beginUndoGroup(`${transformType.charAt(0).toUpperCase() + transformType.slice(1)} ${selection.length} object${selection.length > 1 ? 's' : ''}`);
-
-            const transformedObjects = [];
-
-            try {
-                for (const obj of selection) {
-                    console.log(`${transformType}: ${obj.name || obj.type} (UUID: ${obj.uuid})`);
-
-                    // Store original transform values for undo
-                    const originalTransform = {
-                        position: obj.position.clone(),
-                        rotation: obj.rotation.clone(),
-                        scale: obj.scale.clone()
-                    };
-
-                    // Apply the transformation
-                    switch (transformType) {
-                        case 'translate':
-                        case 'move':
-                            const { x = 0, y = 0, z = 0 } = params;
-                            obj.position.x += x;
-                            obj.position.y += y;
-                            obj.position.z += z;
-                            break;
-
-                        case 'rotate':
-                            const { rx = 0, ry = 0, rz = 0 } = params;
-                            obj.rotation.x += rx;
-                            obj.rotation.y += ry;
-                            obj.rotation.z += rz;
-                            break;
-
-                        case 'scale':
-                            const { sx = 1, sy = null, sz = null } = params;
-                            const scaleX = sx;
-                            const scaleY = sy !== null ? sy : sx;
-                            const scaleZ = sz !== null ? sz : sx;
-                            obj.scale.x *= scaleX;
-                            obj.scale.y *= scaleY;
-                            obj.scale.z *= scaleZ;
-                            break;
-                    }
-
-                    // Update world matrix
-                    obj.updateMatrixWorld(true);
-
-                    transformedObjects.push(obj);
-
-                    // Add undo action for this specific transform
-                    addUndoAction({
-                        type: `${transformType}_object`,
-                        object: obj,
-                        originalTransform: originalTransform,
-                        revert: () => {
-                            obj.position.copy(originalTransform.position);
-                            obj.rotation.copy(originalTransform.rotation);
-                            obj.scale.copy(originalTransform.scale);
-                            obj.updateMatrixWorld(true);
-                        }
-                    });
-
-                    console.log(`✅ ${transformType} applied to: ${obj.name || obj.type}`);
-                }
-
-                // End the undo group
-                endUndoGroup();
-
-                const message = `${transformType.charAt(0).toUpperCase() + transformType.slice(1)}ed ${transformedObjects.length} object${transformedObjects.length > 1 ? 's' : ''}.`;
-                addMessageToLog('System', message);
-                speakResponse(message);
-
-                console.log(`✅ ${transformType} complete: ${transformedObjects.length} objects transformed`);
-
-            } catch (error) {
-                console.error(`❌ ${transformType} failed:`, error);
-                addMessageToLog('System', `${transformType} failed: ${error.message}`);
-
-                // End the undo group (will be empty due to error)
-                endUndoGroup();
-            }
-        }
-
-        // Expose unified transform functions
-        window.translateSelection = (x, y, z) => transformSelection('translate', { x, y, z });
-        window.rotateSelection = (rx, ry, rz) => transformSelection('rotate', { rx, ry, rz });
-        window.scaleSelection = (sx, sy, sz) => transformSelection('scale', { sx, sy, sz });
 
         // COMPREHENSIVE TRANSFORM TEST
         window.testTransformUndoRedo = function() {
@@ -5187,25 +5032,7 @@ import {
                 state.controls.addEventListener('change', updateDynamicGrid); // Call on state.camera change
                 state.controls.target.set(0, 0, 0); // Ensure state.controls target the origin
             }
-            if (!state.transformControls) {
-                state.transformControls = new THREE.TransformControls(state.camera, state.renderer.domElement);
-                state.scene.add(state.transformControls);
-                state.transformControls.addEventListener('dragging-changed', function (event) {
-                    state.controls.enabled = !event.value;
-                    // Save state when transform operation STARTS
-                    if (event.value && state.transformControls.object) {
-                        console.log("[state.transformControls] Transform operation started, saving state");
-                        saveSceneState(); // Save state before transform begins
-                    }
-                });
-                state.transformControls.addEventListener('objectChange', function () {
-                    // Update the object's world matrix during transformation
-                    if (state.transformControls.object) {
-                        state.transformControls.object.updateMatrixWorld(true);
-                    }
-                });
-                state.transformControls.visible = false; // Initialize as hidden
-            }
+            initTransformControls();
 
             // Ensure state.renderer size is correct on init/re-init
             const viewerDiv = cadCanvas.parentElement;
@@ -6265,18 +6092,6 @@ import {
             } else {
                 addMessageToLog('System', 'No models loaded to show design information.');
                 speakResponse('No models loaded.');
-            }
-        }
-
-        function setTransformMode(mode) {
-            if (state.transformControls) {
-                // Don't save state for mode changes - save when actual transform happens
-                state.transformControls.setMode(mode);
-                addMessageToLog('AI', `Transform mode set to ${mode}.`);
-                speakResponse(`Transform mode set to ${mode}.`);
-            } else {
-                addMessageToLog('System', 'Transform state.controls not available.');
-                speakResponse('Transform state.controls are not available.');
             }
         }
 
