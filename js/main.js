@@ -29,6 +29,8 @@ import {
 
         // --- Undo/Redo History ---
         const MAX_HISTORY_SIZE = 20; // Limit history size to prevent excessive memory usage
+        let history = [];
+        let historyPointer = -1;
 
         // GROUPED UNDO SYSTEM
 
@@ -4550,7 +4552,7 @@ import {
 
         // Get current state.scene state
         function getCurrentState() {
-            const state = [];
+            const sceneState = [];
             state.loadedModels.forEach(model => {
                 const modelState = {
                     name: model.name || 'Unnamed Model',
@@ -4577,9 +4579,9 @@ import {
                     }
                 });
 
-                state.push(modelState);
+                sceneState.push(modelState);
             });
-            return state;
+            return sceneState;
         }
 
         // CORRECTED: Only remove mesh objects, preserve lights/state.camera/state.controls
