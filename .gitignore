@@ -1,0 +1,6 @@
+.claude/
+tmp-edge-profile/
+tmp-browser-smoke.mjs
+node_modules/
+.env
+*.log

@@ -25,6 +25,9 @@ let _addUndoAction = () => {};
 let _detectFaceFromClick = () => null;
 let _onSelectionChanged = () => {};
 let _raycastFaceOverlays = () => null;
+let _handleFaceClick = () => false;
+let _clearFaceSelection = () => {};
+let _updateFaceHover = () => {};
 
 export function initSelectionCallbacks(cbs) {
     _speakResponse = cbs.speakResponse;
@@ -37,6 +40,9 @@ export function initSelectionCallbacks(cbs) {
     _detectFaceFromClick = cbs.detectFaceFromClick;
     _onSelectionChanged = cbs.onSelectionChanged;
     _raycastFaceOverlays = cbs.raycastFaceOverlays;
+    _handleFaceClick = cbs.handleFaceClick || _handleFaceClick;
+    _clearFaceSelection = cbs.clearFaceSelection || _clearFaceSelection;
+    _updateFaceHover = cbs.updateFaceHover || _updateFaceHover;
 }
 
 export function getSelectedObjects() {
@@ -301,64 +307,8 @@ export function onCanvasClick(event) {
             }
 
             if (faceGroupId) {
-                // Face overlay clicked - SELECTION ONLY!
                 console.log("[onCanvasClick] Face overlay clicked:", faceGroupId);
-
-                // ✅ EXACT FACE SELECTION - Toggle + Multi-select
-                if (state.faceEditState.isActive) {
-                    console.log('=== FACE SELECTION DEBUG ===');
-                    console.log('[onFaceClick] Face clicked:', faceGroupId);
-                    console.log('[onFaceClick] Multi-select mode:', state.faceEditState.multiSelect);
-                    console.log('[onFaceClick] Currently selected:', Array.from(state.faceEditState.selectedFaceIds));
-
-                    _onSelectionChanged(); // Clear pending operations
-
-                    // EXACT LOGIC FROM SPEC
-                    if (!state.faceEditState.multiSelect) {
-                        // Single-select toggle
-                        if (state.faceEditState.selectedFaceIds.has(faceGroupId) && state.faceEditState.selectedFaceIds.size === 1) {
-                            state.faceEditState.selectedFaceIds.clear(); // Deselect on second tap
-                            console.log('[onFaceClick] Deselected face on second tap');
-                        } else {
-                            state.faceEditState.selectedFaceIds.clear();
-                            state.faceEditState.selectedFaceIds.add(faceGroupId);
-                            console.log('[onFaceClick] Single-selected face');
-                        }
-                    } else {
-                        // Multi-select toggle
-                        if (state.faceEditState.selectedFaceIds.has(faceGroupId)) {
-                            state.faceEditState.selectedFaceIds.delete(faceGroupId);
-                            console.log('[onFaceClick] Removed from multi-selection');
-                        } else {
-                            state.faceEditState.selectedFaceIds.add(faceGroupId);
-                            console.log('[onFaceClick] Added to multi-selection');
-                        }
-                    }
-
-                    // Update visual state
-                    state.faceEditState.groups.forEach(group => {
-                        const isSelected = state.faceEditState.selectedFaceIds.has(group.id);
-                        if (group.overlay && group.overlay.material) {
-                            group.overlay.material.opacity = isSelected ? 0.7 : 0.4;
-                            group.overlay.material.color.setHex(isSelected ? 0xff0000 : 0x00ff00);
-                        }
-                        if (group.outline) {
-                            group.outline.visible = isSelected;
-                            if (group.outline.material) {
-                                group.outline.material.color.setHex(isSelected ? 0xff0000 : 0x000000);
-                            }
-                        }
-                    });
-
-                    // Update legacy compatibility
-                    state.faceEditState.selectedGroupId = Array.from(state.faceEditState.selectedFaceIds)[0] || null;
-
-                    const selectedCount = state.faceEditState.selectedFaceIds.size;
-                    const message = selectedCount ? `${selectedCount} face(s) selected` : 'No face selected';
-                    console.log("[onFaceClick]", message);
-                    addMessageToLog('System', message + '. Say "extrude" or press E.');
-                    _speakResponse(selectedCount ? 'Face selected.' : 'Face deselected.');
-                }
+                _handleFaceClick(faceGroupId);
 
                 // Show debug sphere at face center
                 const group = state.faceEditState.groups.find(g => g.id === faceGroupId);
@@ -396,7 +346,7 @@ export function onCanvasClick(event) {
 
                 // Clear face selection if in face edit mode
                 if (state.faceEditState.isActive) {
-                    state.faceEditState.selectedGroupId = null;
+                    _clearFaceSelection();
                 }
             }
         }
@@ -815,28 +765,7 @@ export function onCanvasMouseMove(event) {
 
     // ✅ HOVER = HIGHLIGHT ONLY! NO EDITING!
     if (hoveredGroupId !== lastHoveredGroupId) {
-        // Update hover visual state
-        state.faceEditState.groups.forEach(group => {
-            const isHovered = group.id === hoveredGroupId;
-            const isSelected = state.faceEditState.selectedFaceIds.has(group.id);
-
-            if (group.overlay && group.overlay.material) {
-                if (isSelected) {
-                    // Keep selected appearance (red)
-                    group.overlay.material.opacity = 0.6;
-                    group.overlay.material.color.setHex(0xff0000);
-                } else if (isHovered) {
-                    // Hover appearance (bright green)
-                    group.overlay.material.opacity = 0.35;
-                    group.overlay.material.color.setHex(0x44ff44);
-                } else {
-                    // Normal appearance (visible green - like Fusion 360)
-                    group.overlay.material.opacity = 0.4;
-                    group.overlay.material.color.setHex(0x00ff00);
-                }
-            }
-        });
-
+        _updateFaceHover(hoveredGroupId);
         lastHoveredGroupId = hoveredGroupId;
     }
 
