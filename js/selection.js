@@ -28,6 +28,7 @@ let _raycastFaceOverlays = () => null;
 let _handleFaceClick = () => false;
 let _clearFaceSelection = () => {};
 let _updateFaceHover = () => {};
+let _onObjectSelected = () => {};
 
 export function initSelectionCallbacks(cbs) {
     _speakResponse = cbs.speakResponse;
@@ -43,6 +44,7 @@ export function initSelectionCallbacks(cbs) {
     _handleFaceClick = cbs.handleFaceClick || _handleFaceClick;
     _clearFaceSelection = cbs.clearFaceSelection || _clearFaceSelection;
     _updateFaceHover = cbs.updateFaceHover || _updateFaceHover;
+    _onObjectSelected = cbs.onObjectSelected || _onObjectSelected;
 }
 
 export function getSelectedObjects() {
@@ -423,6 +425,7 @@ export function selectObject(object) {
 
         addMessageToLog('System', `Selected: ${object.name || 'Unnamed Part'} (UUID: ${object.uuid}). Press S to scale, R to rotate, G to move.`);
         _speakResponse(`Selected ${object.name || 'a part'}. Press S to scale.`);
+        _onObjectSelected(object);
 
         // Don't save state on selection - save when actual changes happen
     } else {
@@ -483,6 +486,7 @@ export function clearSelection() {
         console.log("[clearSelection] No object selected or no original material properties to restore.");
     }
     state.currentlySelectedObjectsForEditing = []; // Clear the functional selection array
+    _onObjectSelected(null);
     console.log(`[clearSelection] Function finished. state.selectedObject AFTER: ${state.selectedObject ? state.selectedObject.name || state.selectedObject.uuid : 'null'}`);
     // Do NOT add message to log or speak here, as it's often called internally before a new selection.
     // addMessageToLog('System', 'Selection cleared.');

@@ -24,6 +24,7 @@ import {
     loadRandomModel, loadModel,
     initLoaderCallbacks, initLoaderEventHandlers
 } from './loader.js';
+import { initDocLink, onObjectSelected as docLinkOnSelected } from './docLink.js';
 import {
     initFaceEditCallbacks,
     buildFaceBoundaryPolygon,
@@ -160,7 +161,8 @@ import {
             raycastFaceOverlays,
             handleFaceClick,
             clearFaceSelection,
-            updateFaceHover
+            updateFaceHover,
+            onObjectSelected: docLinkOnSelected
         });
 
         initHistoryCallbacks({
@@ -182,6 +184,7 @@ import {
             goToEditor
         });
         initLoaderEventHandlers();
+        initDocLink();
 
         initFaceEditCallbacks({
             speakResponse,
@@ -3425,6 +3428,9 @@ import {
             editorPage.classList.remove('page-inactive');
             editorPage.classList.add('page-active');
             console.log("[goToEditor] Page transition complete. Editor page is now active.");
+
+            // The renderer was sized before the page became visible — fix it now
+            requestAnimationFrame(() => onWindowResize());
         }
 
         function goBack() {
@@ -3546,6 +3552,9 @@ import {
 
             // Initialize undo/redo buttons but don't save empty state yet
             updateUndoRedoButtons();
+
+            // Restart the animation loop every time the scene is (re)initialized
+            startAnimateLoop();
         }
 
         // FACE EDITING OPERATIONS

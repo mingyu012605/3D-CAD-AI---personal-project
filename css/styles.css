@@ -694,4 +694,61 @@
             /* Reuse view-control-button styles */
             padding: 8px 15px;
             font-size: 0.9em;
+        }
+
+        /* Linked Document panel */
+        .doc-link-group {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 8px !important;
+            border-top: 1px solid #2d3748;
+            padding-top: 12px;
+            margin-top: 4px;
+        }
+
+        .doc-object-name {
+            font-size: 0.8rem;
+            color: #a0aec0;
+            font-style: italic;
+        }
+
+        .doc-url-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px 10px;
+            background: #1a202c;
+            border: 1px solid #4a5568;
+            border-radius: 5px;
+            color: #e2e8f0;
+            font-size: 0.85rem;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .doc-url-input:focus {
+            outline: none;
+            border-color: #4299e1;
+        }
+
+        .doc-url-input:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .doc-link-actions {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .doc-open-btn {
+            background-color: #2b6cb0 !important;
+        }
+
+        .doc-open-btn:hover:not(:disabled) {
+            background-color: #2c5282 !important;
+        }
+
+        .doc-link-actions button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
         }

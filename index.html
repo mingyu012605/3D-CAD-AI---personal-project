@@ -86,7 +86,16 @@
                         <input type="color" id="objectColorPicker" value="#1e90ff" />
                         <button class="view-control-button" id="applyObjectColorBtn">Apply Color</button>
                     </div>
-                    <!-- More properties can be added here later -->
+                    <!-- Linked Document -->
+                    <div class="property-group doc-link-group">
+                        <label>Linked Document</label>
+                        <div id="docObjectName" class="doc-object-name">No object selected</div>
+                        <input type="text" id="docUrlInput" class="doc-url-input" placeholder="Paste document URL..." disabled />
+                        <div class="doc-link-actions">
+                            <button class="view-control-button" id="saveDocUrlBtn" disabled>Save URL</button>
+                            <button class="view-control-button doc-open-btn" id="openDocUrlBtn" disabled>Open ↗</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Chat Content remains visible by default -->
