@@ -712,6 +712,11 @@
             font-style: italic;
         }
 
+        .doc-object-meta {
+            font-size: 0.75rem;
+            color: #68d391;
+        }
+
         .doc-url-input {
             width: 100%;
             box-sizing: border-box;
