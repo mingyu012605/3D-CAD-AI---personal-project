@@ -1447,17 +1447,25 @@ import {
 
         // Build context for the AI model
         function buildModelContext() {
-            const index = indexScene(state.scene);
-            return {
-                objects: index.map(obj => ({
-                    uuid: obj.uuid,
-                    name: obj.name,
-                    tags: obj.tags,
-                    color: obj.color,
-                    positionHint: obj.positionHint,
-                    sizeHint: obj.sizeHint
-                }))
-            };
+            const objects = [];
+            const MAX_MESHES = 120;   // cap tokens sent to AI
+
+            for (const model of state.loadedModels) {
+                if (!model) continue;
+                objects.push({ uuid: model.uuid, name: model.name || 'Model', type: 'model' });
+
+                model.traverse(child => {
+                    if (objects.length >= MAX_MESHES) return;
+                    if (!child.isMesh) return;
+                    objects.push({
+                        uuid: child.uuid,
+                        name: child.name || `mesh_${child.uuid.slice(0, 8)}`,
+                        type: child.userData?.isIFCElement ? 'ifc' : 'mesh',
+                    });
+                });
+            }
+
+            return { objects };
         }
 
         // FACE EDITING SYSTEM
@@ -3474,7 +3482,7 @@ import {
             // Only create new state.scene, state.renderer, state.camera, state.controls if they don't exist
             if (!state.scene) {
                 state.scene = new THREE.Scene();
-                state.scene.background = new THREE.Color(0xFFFFFF); // Pure white background
+                state.scene.background = new THREE.Color(0xFFFFFF);
             }
             if (!state.renderer) {
                 state.renderer = new THREE.WebGLRenderer({ canvas: cadCanvas, antialias: true });
@@ -3483,7 +3491,7 @@ import {
             }
             if (!state.camera) {
                 const viewerDiv = cadCanvas.parentElement;
-                state.camera = new THREE.PerspectiveCamera(75, viewerDiv.clientWidth / viewerDiv.clientHeight, 0.1, 1000);
+                state.camera = new THREE.PerspectiveCamera(75, viewerDiv.clientWidth / viewerDiv.clientHeight, 0.01, 500000);
                 // Adjusted initial state.camera position for a more "twisted" or perspective view
                 state.camera.position.set(30, 30, 30); // Set state.camera at an angle
             }
@@ -3510,7 +3518,7 @@ import {
             // Remove existing lights before adding new ones to prevent duplicates on re-init
             state.scene.children.filter(c => c.isLight).forEach(light => state.scene.remove(light));
 
-            const ambientLight = new THREE.AmbientLight(0x808080); // Brighter ambient light
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
             state.scene.add(ambientLight);
             // FIX: Corrected typo from DirectionionalLight to DirectionalLight
             const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // Full intensity directional light
@@ -3613,6 +3621,34 @@ import {
         // Exit extrude mode
         // EXTRUDE GIZMO INTERACTION HANDLERS
 
+        // Set camera to a preset view angle
+        function setView(preset) {
+            if (!state.camera || !state.controls) return;
+            const bbox = new THREE.Box3();
+            state.loadedModels.forEach(m => bbox.expandByObject(m));
+            const center = bbox.isEmpty() ? new THREE.Vector3() : bbox.getCenter(new THREE.Vector3());
+            const size   = bbox.isEmpty() ? 10 : bbox.getSize(new THREE.Vector3()).length();
+            const d = size * 1.5;
+
+            // Scale clipping planes to the model so nothing gets clipped
+            state.camera.near = Math.max(0.01, size / 100000);
+            state.camera.far  = Math.max(1000, size * 200);
+            state.camera.updateProjectionMatrix();
+
+            // Slight Z offset for top view avoids OrbitControls gimbal-lock singularity
+            const offsets = {
+                top:   new THREE.Vector3(0,   d,   d * 0.0001),
+                front: new THREE.Vector3(0,   0,   d),
+                right: new THREE.Vector3(d,   0,   0),
+                iso:   new THREE.Vector3(d * 0.6, d * 0.6, d * 0.6),
+            };
+            const dir = offsets[preset] || offsets.iso;
+            state.camera.position.copy(center).add(dir);
+            state.controls.target.copy(center);
+            state.controls.update();
+        }
+        window.setView = setView;
+
         // SMART DELETE HANDLER - Face vs Object
         function resetView() {
             // Don't save state for view changes - this is just state.camera movement
@@ -3639,12 +3675,13 @@ import {
                 console.log("[resetView] Size:", size);
                 console.log("[resetView] Max Dimension:", maxDim);
 
-                const fov = state.camera.fov * (Math.PI / 180);
-                const cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+                // Scale clipping planes so the entire model is visible at any distance
+                state.camera.near = Math.max(0.01, maxDim / 100000);
+                state.camera.far  = Math.max(1000, maxDim * 200);
+                state.camera.updateProjectionMatrix();
 
                 const newCameraPosition = center.clone().add(new THREE.Vector3(maxDim * 0.8, maxDim * 0.8, maxDim * 0.8));
                 state.camera.position.copy(newCameraPosition);
-                state.camera.lookAt(center);
                 state.controls.target.copy(center);
                 state.controls.update();
 
@@ -3710,26 +3747,37 @@ import {
         }
 
         function selectPartByName(partName) {
-            if (state.loadedModels.length > 0) {
-                let foundObject = null;
-                for (const model of state.loadedModels) {
-                    model.traverse((obj) => {
-                        if (obj.isMesh && obj.name === partName) {
-                            foundObject = obj;
-                        }
-                    });
-                    if (foundObject) break; // Stop searching once found
-                }
-
-                if (foundObject) {
-                    selectObject(foundObject);
-                } else {
-                    addMessageToLog('System', `Part "${partName}" not found in any loaded models.`);
-                    speakResponse(`Part ${partName} not found.`);
-                }
-            } else {
+            if (state.loadedModels.length === 0) {
                 addMessageToLog('System', 'No models loaded to select parts from.');
                 speakResponse('No models loaded.');
+                return;
+            }
+
+            // Strip "Name (UUID: xxx)" format that AI sometimes produces
+            const uuidFromLabel = partName.match(/UUID:\s*([0-9a-f-]{8,})/i);
+            const query = (uuidFromLabel ? uuidFromLabel[1] : partName).toLowerCase().trim();
+
+            let foundObject = null;
+            // Priority: exact UUID > exact name > partial name
+            for (const pass of ['uuid', 'exact', 'partial']) {
+                for (const model of state.loadedModels) {
+                    model.traverse(obj => {
+                        if (!obj.isMesh || foundObject) return;
+                        if (pass === 'uuid'    && obj.uuid.toLowerCase() === query) foundObject = obj;
+                        if (pass === 'exact'   && obj.name.toLowerCase() === query) foundObject = obj;
+                        if (pass === 'partial' && obj.name.toLowerCase().includes(query)) foundObject = obj;
+                    });
+                    if (foundObject) break;
+                }
+                if (foundObject) break;
+            }
+
+            if (foundObject) {
+                selectObject(foundObject);
+                addMessageToLog('AI', `Selected: "${foundObject.name || foundObject.uuid}"`);
+            } else {
+                addMessageToLog('System', `Part "${partName}" not found in any loaded models.`);
+                speakResponse(`Part ${partName} not found.`);
             }
         }
 
@@ -3927,11 +3975,14 @@ import {
                         {"action": "listParts"}
                         \`\`\`
 
-                    8.  **To select a part by its name:**
-                        User input example: "select the wheel", "select part A", "choose the main body"
+                    8.  **To select a part by its name or UUID:**
+                        User input examples: "select the wheel", "select roof", "select part A", "choose the main body", "select UUID abc-123"
+                        Use the object list in the context below to find the best match.
+                        You may pass a partial name (e.g., "roof") — the system will do partial matching.
+                        You may also pass an exact UUID from the list.
                         Return:
                         \`\`\`json
-                        {"action": "selectPart", "value": "[part_name]"}
+                        {"action": "selectPart", "value": "[part_name_or_uuid]"}
                         \`\`\`
 
                     9.  **To highlight all objects in the state.scene:**

@@ -247,9 +247,9 @@ async function _loadIFCModel(file) {
 
         state.scene.add(group);
 
-        // Place on top of grid
+        // Snap bottom of model to ground plane (Y=0)
         const bbox = new THREE.Box3().setFromObject(group);
-        if (bbox.min.y < 0) group.position.y -= bbox.min.y;
+        if (!bbox.isEmpty()) group.position.y -= bbox.min.y;
 
         state.loadedModels.push(group);
         _resetView();
