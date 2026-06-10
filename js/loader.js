@@ -29,7 +29,7 @@ export function initLoaderCallbacks(cbs) {
 export function initLoaderEventHandlers() {
     dropZone.addEventListener('dragover', e => {
         e.preventDefault();
-        dropZone.textContent = 'Release to drop your .gltf or .glb file(s)';
+        dropZone.textContent = 'Release to drop your .gltf, .glb, or .ifc file';
         dropZone.style.borderColor = '#007bff';
         dropZone.style.display = 'flex'; // Show dropZone on dragover
         dropZone.style.pointerEvents = 'auto'; // Enable pointer events
@@ -239,12 +239,10 @@ export function loadRandomModel() {
 }
 
 async function _loadIFCModel(file) {
-    loadingMsg.textContent = `Loading IFC: ${file.name}…`;
-    loadingMsg.style.color = '#007bff';
-    loadingMsg.style.display = 'block';
+    addMessageToLog('System', `Loading IFC: ${file.name}…`);
     try {
         const group = await loadIFCFile(file, msg => {
-            loadingMsg.textContent = msg;
+            addMessageToLog('System', msg);
         });
 
         state.scene.add(group);
@@ -255,15 +253,13 @@ async function _loadIFCModel(file) {
 
         state.loadedModels.push(group);
         _resetView();
-        loadingMsg.style.display = 'none';
         const count = group.children.length;
-        addMessageToLog('System', `IFC model '${file.name}' loaded — ${count} element${count !== 1 ? 's' : ''}.`);
+        addMessageToLog('System', `✅ IFC model '${file.name}' loaded — ${count} element${count !== 1 ? 's' : ''}. Click any element to see its properties.`);
         _speakResponse('IFC model loaded.');
         saveSceneState();
     } catch (e) {
         console.error('[loader] IFC load error:', e);
-        loadingMsg.textContent = `❌ Error loading IFC: ${e.message}`;
-        loadingMsg.style.color = 'red';
+        addMessageToLog('System', `❌ Error loading IFC: ${e.message}`);
     }
 }
 

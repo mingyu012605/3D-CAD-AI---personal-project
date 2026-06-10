@@ -1,28 +1,26 @@
-// IFC file loader using web-ifc (loaded from CDN as ES module)
+// IFC file loader using web-ifc served from /vendor/web-ifc/
 // Uses the global THREE object (loaded via CDN script tag in index.html)
 
-const WASM_BASE = 'https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/';
-const MODULE_URL = `${WASM_BASE}web-ifc-api.module.js`;
+// Derive the vendor path relative to the current page, so it works on any host
+const VENDOR_BASE = new URL('/vendor/web-ifc/', location.href).href;
+const MODULE_URL  = `${VENDOR_BASE}web-ifc-api.js`;
 
-let webIFCModule = null;  // the imported ES module namespace
+let webIFCModule = null;  // the dynamically imported ES module namespace
 let ifcAPI       = null;  // singleton IfcAPI instance
-let typeCodeMap  = null;  // type code (number) → 'IFCWALL' string
+let typeCodeMap  = null;  // numeric type code → 'IFCWALL' string
 
 async function ensureAPI() {
     if (ifcAPI) return;
 
-    try {
-        webIFCModule = await import(MODULE_URL);
-    } catch (e) {
-        throw new Error(`Failed to load web-ifc from CDN: ${e.message}`);
-    }
+    webIFCModule = await import(MODULE_URL);
 
     const api = new webIFCModule.IfcAPI();
-    api.SetWasmPath(WASM_BASE);
+    // absolute=true → wasmPath is used as-is without prepending scriptDirectory
+    api.SetWasmPath(VENDOR_BASE, true);
     await api.Init();
     ifcAPI = api;
 
-    // Build reverse-lookup map: numeric type code → IFC class name string
+    // Build reverse-lookup: numeric type code → IFC class name string
     typeCodeMap = {};
     for (const [name, val] of Object.entries(webIFCModule)) {
         if (typeof val === 'number' && name.startsWith('IFC')) {
@@ -43,7 +41,7 @@ function buildMesh(api, modelID, placedGeom) {
 
         if (!vSize || !iSize) return null;
 
-        // Copy out of WASM heap before any further API calls (heap may realloc)
+        // Copy out of WASM heap before any further API calls (heap may be reallocated)
         const verts   = new Float32Array(api.wasmModule.HEAPF32.buffer).slice(vPtr >> 2, (vPtr >> 2) + vSize);
         const indices = new Uint32Array(api.wasmModule.HEAPU32.buffer).slice(iPtr >> 2, (iPtr >> 2) + iSize);
 
@@ -89,13 +87,14 @@ function buildMesh(api, modelID, placedGeom) {
 /**
  * Parse an IFC file and return a Three.js Group containing all geometry.
  * Each child mesh has userData.expressID, userData.modelID, userData.isIFCElement = true.
+ * onProgress(message) is called with status strings during loading.
  */
 export async function loadIFCFile(file, onProgress) {
+    onProgress?.('Loading IFC engine…');
     await ensureAPI();
 
     onProgress?.(`Parsing ${file.name}…`);
-
-    // Give the browser a frame to render the loading message before freezing
+    // Yield to browser so the status message renders before the synchronous parse
     await new Promise(r => setTimeout(r, 60));
 
     const buffer  = await file.arrayBuffer();
@@ -118,10 +117,10 @@ export async function loadIFCFile(file, onProgress) {
         for (let i = 0; i < count; i++) {
             const m = buildMesh(ifcAPI, modelID, mesh.geometries.get(i));
             if (!m) continue;
-            m.name                    = `IFC_${expressID}`;
-            m.userData.expressID      = expressID;
-            m.userData.modelID        = modelID;
-            m.userData.isIFCElement   = true;
+            m.name                  = `IFC_${expressID}`;
+            m.userData.expressID    = expressID;
+            m.userData.modelID      = modelID;
+            m.userData.isIFCElement = true;
             group.add(m);
         }
     });
@@ -134,7 +133,7 @@ export async function loadIFCFile(file, onProgress) {
 
 /**
  * Fetch IFC entity properties for a given element.
- * Returns null if the API hasn't been initialised (no IFC file loaded yet).
+ * Returns null if no IFC file has been loaded yet (API not initialised).
  */
 export function getIFCElementProperties(modelID, expressID) {
     if (!ifcAPI) return null;
