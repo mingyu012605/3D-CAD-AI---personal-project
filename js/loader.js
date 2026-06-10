@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import { addMessageToLog } from './utils.js';
 import { saveSceneState } from './history.js';
+import { loadIFCFile } from './ifcLoader.js';
 
 const RANDOM_MODEL_URLS = [
     'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF-Binary/Box.glb',
@@ -182,13 +183,13 @@ export function initLoaderEventHandlers() {
 
 export function validateFile(file) {
     console.log("[Validation] Validating file:", file ? file.name : "null");
-    if (file && (file.name.toLowerCase().endsWith('.gltf') || file.name.toLowerCase().endsWith('.glb'))) {
-        console.log("[Validation] File is a valid GLTF/GLB.");
+    const name = file?.name.toLowerCase() ?? '';
+    if (name.endsWith('.gltf') || name.endsWith('.glb') || name.endsWith('.ifc')) {
+        console.log("[Validation] File is a valid GLTF/GLB/IFC.");
         return true;
     } else {
-        console.error("[Validation] Unsupported file type! Please upload a .gltf or .glb file.");
-        // Set message for the caller to display/hide
-        loadingMsg.textContent = '❌ Unsupported file type! Please upload a .gltf or .glb file.';
+        console.error("[Validation] Unsupported file type! Please upload a .gltf, .glb, or .ifc file.");
+        loadingMsg.textContent = '❌ Unsupported file type! Please upload a .gltf, .glb, or .ifc file.';
         loadingMsg.style.color = 'red';
         state.uploadedFile = null;
         return false;
@@ -237,7 +238,40 @@ export function loadRandomModel() {
     });
 }
 
+async function _loadIFCModel(file) {
+    loadingMsg.textContent = `Loading IFC: ${file.name}…`;
+    loadingMsg.style.color = '#007bff';
+    loadingMsg.style.display = 'block';
+    try {
+        const group = await loadIFCFile(file, msg => {
+            loadingMsg.textContent = msg;
+        });
+
+        state.scene.add(group);
+
+        // Place on top of grid
+        const bbox = new THREE.Box3().setFromObject(group);
+        if (bbox.min.y < 0) group.position.y -= bbox.min.y;
+
+        state.loadedModels.push(group);
+        _resetView();
+        loadingMsg.style.display = 'none';
+        const count = group.children.length;
+        addMessageToLog('System', `IFC model '${file.name}' loaded — ${count} element${count !== 1 ? 's' : ''}.`);
+        _speakResponse('IFC model loaded.');
+        saveSceneState();
+    } catch (e) {
+        console.error('[loader] IFC load error:', e);
+        loadingMsg.textContent = `❌ Error loading IFC: ${e.message}`;
+        loadingMsg.style.color = 'red';
+    }
+}
+
 export function loadModel(file) {
+    if (file.name.toLowerCase().endsWith('.ifc')) {
+        _loadIFCModel(file);
+        return;
+    }
     console.log("[loadModel] Attempting to load file:", file.name);
     const loader = new THREE.GLTFLoader();
     const fileLoader = new THREE.FileLoader();
@@ -282,9 +316,14 @@ export function loadModel(file) {
             newModel.name = file.name; // Assign the file name to the model for identification
             state.scene.add(newModel); // Add the new model to the state.scene
 
-            // Store initial material(s) for the entire model or its meshes
+            // Fix materials and store originals
             newModel.traverse((obj) => {
                 if (obj.isMesh && obj.material) {
+                    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+                    mats.forEach(mat => {
+                        mat.side = THREE.DoubleSide; // Fix inverted normals from Revit/CAD exports
+                        mat.needsUpdate = true;
+                    });
                     if (Array.isArray(obj.material)) {
                         obj.userData.initialMaterial = obj.material.map(mat => mat.clone());
                     } else {
@@ -292,6 +331,12 @@ export function loadModel(file) {
                     }
                 }
             });
+
+            // Always place model on top of grid (Y=0), never below it
+            const bbox = new THREE.Box3().setFromObject(newModel);
+            if (bbox.min.y < 0) {
+                newModel.position.y -= bbox.min.y;
+            }
 
             state.loadedModels.push(newModel); // Store the new model in our array
 

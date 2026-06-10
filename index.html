@@ -38,18 +38,27 @@
                     <button class="button secondary" id="loadRandomModelButton">Load Random Model</button>
                 </div>
                 <div id="dropZone">
-                    Drag and Drop your .gltf or .glb file(s) here
+                    Drag and Drop your .gltf, .glb, or .ifc file here
                 </div>
                 <p id="loadingMsg">Loading model, please wait...</p>
                 <!-- The file input is kept here, hidden, as it's triggered programmatically -->
-                <input type="file" id="fileInput" accept=".gltf,.glb" style="display: none;" />
+                <input type="file" id="fileInput" accept=".gltf,.glb,.ifc" style="display: none;" />
             </div>
         </section>
 
         <section id="editorPage" class="page page-inactive">
             <main id="cadViewer">
                 <canvas id="cadCanvas"></canvas>
-                <div id="viewAxesContainer"></div> <!-- Container for the static view axes -->
+                <div id="viewAxesContainer"></div>
+
+                <!-- Floating view control toolbar -->
+                <div id="viewToolbar">
+                    <button class="view-btn" onclick="setView('top')"    title="Top View">Top</button>
+                    <button class="view-btn" onclick="setView('front')"  title="Front View">Front</button>
+                    <button class="view-btn" onclick="setView('right')"  title="Right View">Right</button>
+                    <button class="view-btn" onclick="setView('iso')"    title="Isometric">Iso</button>
+                    <button class="view-btn" onclick="resetView()"       title="Fit All">Fit</button>
+                </div>
 
 
             </main>
