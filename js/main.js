@@ -1449,21 +1449,29 @@ import {
         // Build context for the AI model
         function buildModelContext() {
             const objects = [];
-            const MAX_MESHES = 120;   // cap tokens sent to AI
 
             for (const model of state.loadedModels) {
                 if (!model) continue;
-                objects.push({ uuid: model.uuid, name: model.name || 'Model', type: 'model' });
 
-                model.traverse(child => {
-                    if (objects.length >= MAX_MESHES) return;
-                    if (!child.isMesh) return;
-                    objects.push({
-                        uuid: child.uuid,
-                        name: child.name || `mesh_${child.uuid.slice(0, 8)}`,
-                        type: child.userData?.isIFCElement ? 'ifc' : 'mesh',
+                if (model.userData?.isIFCModel) {
+                    const entry = { uuid: model.uuid, name: model.name, type: 'ifc_model' };
+                    const ti = model.userData.typeIndex;
+                    if (ti && Object.keys(ti).length > 0) {
+                        entry.selectableTypes = {};
+                        for (const [k, v] of Object.entries(ti)) entry.selectableTypes[k] = v.length;
+                    } else {
+                        entry.note = 'IFC model — use selectPart or selectAllByType with: window, wall, door, roof, floor, slab, beam, column, stair, railing, space, furniture';
+                    }
+                    objects.push(entry);
+                } else {
+                    objects.push({ uuid: model.uuid, name: model.name || 'Model', type: 'model' });
+                    let n = 0;
+                    model.traverse(child => {
+                        if (n >= 100 || !child.isMesh) return;
+                        objects.push({ uuid: child.uuid, name: child.name || `mesh_${child.uuid.slice(0, 8)}` });
+                        n++;
                     });
-                });
+                }
             }
 
             return { objects };
@@ -3754,9 +3762,22 @@ import {
                 return;
             }
 
+            // Redirect "all [type]" → selectAllByType
+            const allMatch = partName.trim().match(/^all\s+(.+)/i);
+            if (allMatch) {
+                selectAllByType(allMatch[1]);
+                return;
+            }
+
             // Strip "Name (UUID: xxx)" format that AI sometimes produces
             const uuidFromLabel = partName.match(/UUID:\s*([0-9a-f-]{8,})/i);
-            const query = (uuidFromLabel ? uuidFromLabel[1] : partName).toLowerCase().trim();
+            const rawQuery = uuidFromLabel ? uuidFromLabel[1] : partName;
+            // Normalize: strip leading articles and trailing noise words
+            const query = rawQuery
+                .toLowerCase()
+                .replace(/^(all|the|a|an)\s+/i, '')
+                .replace(/\s+(element|object|type|part)s?$/i, '')
+                .trim();
 
             let foundObject = null;
 
@@ -3774,21 +3795,21 @@ import {
                 if (foundObject) break;
             }
 
-            // Pass 4: IFC type name / element name (for queries like "window", "roof", "wall")
+            // Pass 4: IFC type index lookup — O(1) per type, cached after first build
             if (!foundObject) {
                 for (const model of state.loadedModels) {
                     if (!model.userData?.isIFCModel) continue;
-                    model.traverse(obj => {
-                        if (!obj.isMesh || foundObject) return;
-                        if (!obj.userData?.isIFCElement) return;
-                        const props = getIFCElementProperties(obj.userData.modelID, obj.userData.expressID);
-                        if (!props) return;
-                        const typeLower = (props.typeName || '').toLowerCase().replace('ifc', '');
-                        const nameLower = (props.name || '').toLowerCase();
-                        if (typeLower.includes(query) || nameLower.includes(query)) {
-                            foundObject = obj;
+                    const typeIndex = getOrBuildTypeIndex(model);
+                    if (!typeIndex) continue;
+                    for (const [key, meshes] of Object.entries(typeIndex)) {
+                        if (key.includes(query) || query.includes(key)) {
+                            foundObject = meshes[0];
+                            if (meshes.length > 1) {
+                                addMessageToLog('AI', `Found ${meshes.length} "${key}" elements — selecting the first. Say "select all ${key}s" to highlight all.`);
+                            }
+                            break;
                         }
-                    });
+                    }
                     if (foundObject) break;
                 }
             }
@@ -3800,9 +3821,63 @@ import {
                     : foundObject.name;
                 addMessageToLog('AI', `Selected: "${label || foundObject.uuid}"`);
             } else {
-                addMessageToLog('System', `Part "${partName}" not found in any loaded models.`);
-                speakResponse(`Part ${partName} not found.`);
+                const availableTypes = [];
+                for (const model of state.loadedModels) {
+                    const ti = model.userData?.typeIndex;
+                    if (ti) availableTypes.push(...Object.keys(ti).slice(0, 8));
+                }
+                const hint = availableTypes.length > 0 ? ` Available types: ${[...new Set(availableTypes)].join(', ')}` : '';
+                addMessageToLog('System', `"${partName}" not found.${hint}`);
+                speakResponse(`${partName} not found.`);
             }
+        }
+
+        function getOrBuildTypeIndex(model) {
+            if (model.userData.typeIndex) return model.userData.typeIndex;
+            if (!model.userData.isIFCModel) return null;
+            addMessageToLog('System', 'Indexing IFC elements for search (one-time)…');
+            const typeIndex = {};
+            model.traverse(mesh => {
+                if (!mesh.userData?.isIFCElement) return;
+                const props = getIFCElementProperties(mesh.userData.modelID, mesh.userData.expressID);
+                if (!props) return;
+                const key = (props.typeName || 'unknown').toLowerCase().replace('ifc', '');
+                if (!typeIndex[key]) typeIndex[key] = [];
+                typeIndex[key].push(mesh);
+            });
+            model.userData.typeIndex = typeIndex;
+            const summary = Object.entries(typeIndex).map(([k, v]) => `${k}:${v.length}`).join(', ');
+            console.log(`[IFC] Type index built — ${summary}`);
+            return typeIndex;
+        }
+
+        function selectAllByType(typeName) {
+            if (state.loadedModels.length === 0) {
+                addMessageToLog('System', 'No models loaded.');
+                return;
+            }
+            const query = typeName
+                .toLowerCase()
+                .replace(/^(the|a|an)\s+/i, '')
+                .replace(/s\s*$/, '')
+                .replace(/\s+(element|object|type|part)s?$/i, '')
+                .trim();
+
+            for (const model of state.loadedModels) {
+                if (!model.userData?.isIFCModel) continue;
+                const typeIndex = getOrBuildTypeIndex(model);
+                if (!typeIndex) continue;
+                for (const [key, meshes] of Object.entries(typeIndex)) {
+                    if (key.includes(query) || query.includes(key)) {
+                        setSelectedObjects(meshes);
+                        addMessageToLog('AI', `Selected all ${meshes.length} "${key}" elements.`);
+                        speakResponse(`Selected ${meshes.length} ${key} elements.`);
+                        return;
+                    }
+                }
+            }
+            addMessageToLog('System', `No elements of type "${typeName}" found.`);
+            speakResponse(`No ${typeName} elements found.`);
         }
 
         // --- state.camera View Functions (now including negative axes) ---
@@ -4000,14 +4075,21 @@ import {
                         {"action": "listParts"}
                         \`\`\`
 
-                    8.  **To select a part by its name or UUID:**
-                        User input examples: "select the wheel", "select roof", "select part A", "choose the main body", "select UUID abc-123"
-                        Use the object list in the context below to find the best match.
-                        You may pass a partial name (e.g., "roof") — the system will do partial matching.
+                    8.  **To select a single part by name, IFC type, or UUID:**
+                        User input examples: "select the wheel", "select roof", "select a window", "select wall", "select UUID abc-123"
+                        For IFC models, check the "selectableTypes" field in the context below — use those exact type names as values (e.g., "window", "wall", "door", "slab", "beam", "column", "stair", "roof", "railing", "space").
                         You may also pass an exact UUID from the list.
                         Return:
                         \`\`\`json
-                        {"action": "selectPart", "value": "[part_name_or_uuid]"}
+                        {"action": "selectPart", "value": "[type_name_or_uuid]"}
+                        \`\`\`
+
+                    8b. **To select ALL elements of a specific IFC type:**
+                        User input examples: "select all windows", "highlight all walls", "select every door", "show all beams"
+                        Use this whenever the user says "all [type]" or "every [type]" or "highlight all [type]s".
+                        Return:
+                        \`\`\`json
+                        {"action": "selectAllByType", "value": "[type_name]"}
                         \`\`\`
 
                     9.  **To highlight all objects in the state.scene:**
@@ -4505,6 +4587,13 @@ import {
                             } else {
                                 addMessageToLog('AI', 'Please specify a part name to select.');
                                 speakResponse('Please tell me which part to select.');
+                            }
+                            break;
+                        case 'selectAllByType':
+                            if (parsedResponse.value) {
+                                selectAllByType(parsedResponse.value);
+                            } else {
+                                addMessageToLog('AI', 'Please specify a type (e.g., "window", "wall", "door").');
                             }
                             break;
                         case 'selectAll': // Handle select all command
