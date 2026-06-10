@@ -5,9 +5,7 @@ const cadCanvas = document.getElementById('cadCanvas');
 const viewAxesContainer = document.getElementById('viewAxesContainer');
 
 function updateDynamicGrid() {
-            // Defensive check: only proceed if state.controls is defined
-            if (!state.controls) {
-                console.warn("[updateDynamicGrid] state.controls not initialized, skipping dynamic grid update.");
+            if (!state.scene) {
                 return;
             }
 
@@ -25,22 +23,23 @@ function updateDynamicGrid() {
             });
             state.currentGridLabels = [];
 
-            // Grid covers 4× camera distance so it's always visible at any zoom level.
-            // Rounded to the nearest power-of-10 multiple for clean cell boundaries.
-            const distance = state.camera.position.distanceTo(state.controls.target);
-            const rawSize  = Math.max(20, distance * 4);
+            // Keep the grid stable in world space. Its size follows the model, not camera zoom.
+            const bounds = new THREE.Box3();
+            state.loadedModels.forEach(model => bounds.expandByObject(model));
+            const size = bounds.isEmpty() ? new THREE.Vector3(20, 0, 20) : bounds.getSize(new THREE.Vector3());
+            const center = bounds.isEmpty() ? new THREE.Vector3() : bounds.getCenter(new THREE.Vector3());
+            const rawSize  = Math.max(20, size.x * 1.5, size.z * 1.5);
             const exp      = Math.floor(Math.log10(rawSize));
             const base     = Math.pow(10, exp);
             const gridSize = Math.ceil(rawSize / base) * base;
             const divisions = 40;
 
-            // Create new GridHelper, centered on the orbit target
+            // Create new GridHelper centered beneath the loaded model.
             const newGridHelper = new THREE.GridHelper(gridSize, divisions, 0x888888, 0xbbbbbb);
             newGridHelper.material.opacity = 0.2;
             newGridHelper.material.transparent = true;
             newGridHelper.name = 'gridHelper';
-            // Follow the camera target so the grid is always visible under what the user is looking at
-            newGridHelper.position.set(state.controls.target.x, 0, state.controls.target.z);
+            newGridHelper.position.set(center.x, 0, center.z);
             state.scene.add(newGridHelper);
             state.currentGridHelper = newGridHelper;
         }

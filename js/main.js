@@ -3186,6 +3186,7 @@ import {
         // The "Upload New File" button now directly triggers the file input click
         uploadNewFileButton.addEventListener('click', () => {
             console.log("[Upload New File] button clicked."); // Debug log
+            fileInput.value = '';
             fileInput.click(); // Programmatically click the hidden file input
             addMessageToLog('System', 'Clicking "Upload New File" will open file dialog to add another model to the state.scene.');
         });
@@ -3222,6 +3223,7 @@ import {
             editExistingModelButton.addEventListener('click', () => {
                 console.log("[Edit Existing Model] button clicked. Opening file dialog.");
                 // Do NOT show dropZone or loadingMsg here. The fileInput 'change' listener will handle cleanup.
+                fileInput.value = '';
                 fileInput.click(); // Programmatically click the hidden file input
                 addMessageToLog('System', 'Please select a .gltf or .glb file.');
             });
@@ -3508,7 +3510,6 @@ import {
                 state.controls = new THREE.OrbitControls(state.camera, state.renderer.domElement);
                 state.controls.enableDamping = true;
                 state.controls.dampingFactor = 0.25;
-                state.controls.addEventListener('change', updateDynamicGrid); // Call on state.camera change
                 state.controls.target.set(0, 0, 0); // Ensure state.controls target the origin
             }
             initTransformControls();
@@ -3693,6 +3694,7 @@ import {
                 state.camera.position.copy(newCameraPosition);
                 state.controls.target.copy(center);
                 state.controls.update();
+                updateDynamicGrid();
 
                 addMessageToLog('AI', 'View reset to fit all models.');
                 speakResponse('View reset to fit all models.');
@@ -3701,6 +3703,7 @@ import {
                 state.camera.lookAt(0, 0, 0);
                 state.controls.target.set(0, 0, 0);
                 state.controls.update();
+                updateDynamicGrid();
                 addMessageToLog('System', 'No models loaded. Resetting to default view.');
                 speakResponse('No models loaded. Resetting to default view.');
             } else {
@@ -3839,9 +3842,10 @@ import {
             const typeIndex = {};
             model.traverse(mesh => {
                 if (!mesh.userData?.isIFCElement) return;
-                const props = getIFCElementProperties(mesh.userData.modelID, mesh.userData.expressID);
-                if (!props) return;
-                const key = (props.typeName || 'unknown').toLowerCase().replace('ifc', '');
+                const props = mesh.userData.ifcProperties
+                    || getIFCElementProperties(mesh.userData.modelID, mesh.userData.expressID);
+                const key = mesh.userData.ifcTypeKey
+                    || (props?.typeName || 'unknown').replace(/^ifc/i, '').trim().toLowerCase();
                 if (!typeIndex[key]) typeIndex[key] = [];
                 typeIndex[key].push(mesh);
             });
@@ -5057,40 +5061,6 @@ import {
             // Don't save initial empty state - let first action create the baseline
             console.log("[Init] Undo/redo system ready - first action will create baseline state");
 
-
-            // Add backup event listeners using document.getElementById
-            setTimeout(() => {
-                console.log("[Init] Adding backup event listeners...");
-
-                const backupCreateBtn = document.getElementById('createNewEmptyModelButton');
-                const backupEditBtn = document.getElementById('editExistingModelButton');
-                const backupRandomBtn = document.getElementById('loadRandomModelButton');
-
-                if (backupCreateBtn) {
-                    backupCreateBtn.onclick = function() {
-                        console.log("[Backup] Create Empty Model clicked!");
-                        goToEditor('empty');
-                    };
-                    console.log("[Init] Backup Create Empty Model listener added");
-                }
-
-                if (backupEditBtn) {
-                    backupEditBtn.onclick = function() {
-                        console.log("[Backup] Edit Existing Model clicked!");
-                        const fileInput = document.getElementById('fileInput');
-                        if (fileInput) fileInput.click();
-                    };
-                    console.log("[Init] Backup Edit Existing Model listener added");
-                }
-
-                if (backupRandomBtn) {
-                    backupRandomBtn.onclick = function() {
-                        console.log("[Backup] Load Random Model clicked!");
-                        goToEditor('random');
-                    };
-                    console.log("[Init] Backup Load Random Model listener added");
-                }
-            }, 100);
 
             console.log("[Init] Initialization complete. Try testButtonClicks() or forceCreateEmpty() in console if buttons don't work.");
         };

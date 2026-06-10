@@ -7,7 +7,6 @@ const MODULE_URL  = `${VENDOR_BASE}web-ifc-api.js`;
 
 let webIFCModule = null;  // the dynamically imported ES module namespace
 let ifcAPI       = null;  // singleton IfcAPI instance
-let typeCodeMap  = null;  // numeric type code → 'IFCWALL' string
 
 async function ensureAPI() {
     if (ifcAPI) return;
@@ -20,13 +19,24 @@ async function ensureAPI() {
     await api.Init();
     ifcAPI = api;
 
-    // Build reverse-lookup: numeric type code → IFC class name string
-    typeCodeMap = {};
-    for (const [name, val] of Object.entries(webIFCModule)) {
-        if (typeof val === 'number' && name.startsWith('IFC')) {
-            typeCodeMap[val] = name;
-        }
-    }
+}
+
+function getElementProperties(modelID, expressID) {
+    const line = ifcAPI.GetLine(modelID, expressID);
+    return {
+        expressID,
+        typeName:   ifcAPI.GetNameFromTypeCode(line.type) || 'IFC Element',
+        globalId:   line.GlobalId?.value    ?? null,
+        name:       line.Name?.value        ?? null,
+        objectType: line.ObjectType?.value  ?? null,
+    };
+}
+
+function normalizeIFCType(typeName) {
+    return String(typeName || 'IFC Element')
+        .replace(/^ifc/i, '')
+        .trim()
+        .toLowerCase();
 }
 
 function buildMesh(api, modelID, placedGeom) {
@@ -107,12 +117,21 @@ export async function loadIFCFile(file, onProgress) {
     group.name = file.name;
     group.userData.isIFCModel  = true;
     group.userData.ifcModelID  = modelID;
+    group.userData.typeIndex   = {};
 
     onProgress?.('Building geometry — this may take a moment…');
     await new Promise(r => setTimeout(r, 60));
 
     ifcAPI.StreamAllMeshes(modelID, (mesh) => {
         const expressID = mesh.expressID;
+        let props;
+        try {
+            props = getElementProperties(modelID, expressID);
+        } catch (error) {
+            console.warn('[ifcLoader] Could not read IFC element properties:', expressID, error);
+            props = { expressID, typeName: 'IFC Element', globalId: null, name: null, objectType: null };
+        }
+        const typeKey = normalizeIFCType(props.typeName);
         const count     = mesh.geometries.size();
         for (let i = 0; i < count; i++) {
             const m = buildMesh(ifcAPI, modelID, mesh.geometries.get(i));
@@ -121,6 +140,10 @@ export async function loadIFCFile(file, onProgress) {
             m.userData.expressID    = expressID;
             m.userData.modelID      = modelID;
             m.userData.isIFCElement = true;
+            m.userData.ifcTypeKey   = typeKey;
+            m.userData.ifcProperties = props;
+            if (!group.userData.typeIndex[typeKey]) group.userData.typeIndex[typeKey] = [];
+            group.userData.typeIndex[typeKey].push(m);
             group.add(m);
         }
     });
@@ -138,14 +161,7 @@ export async function loadIFCFile(file, onProgress) {
 export function getIFCElementProperties(modelID, expressID) {
     if (!ifcAPI) return null;
     try {
-        const line = ifcAPI.GetLine(modelID, expressID);
-        return {
-            expressID,
-            typeName:   typeCodeMap?.[line.type] ?? 'IFC Element',
-            globalId:   line.GlobalId?.value    ?? null,
-            name:       line.Name?.value         ?? null,
-            objectType: line.ObjectType?.value   ?? null,
-        };
+        return getElementProperties(modelID, expressID);
     } catch (e) {
         console.warn('[ifcLoader] getIFCElementProperties:', e);
         return { expressID, typeName: 'IFC Element', globalId: null, name: null };

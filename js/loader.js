@@ -253,6 +253,7 @@ async function _loadIFCModel(file) {
 
         state.loadedModels.push(group);
         _resetView();
+        loadingMsg.style.display = 'none';
         const count = group.children.length;
         addMessageToLog('System', `✅ IFC model '${file.name}' loaded — ${count} element${count !== 1 ? 's' : ''}. Click any element to see its properties.`);
         _speakResponse('IFC model loaded.');
@@ -260,6 +261,7 @@ async function _loadIFCModel(file) {
     } catch (e) {
         console.error('[loader] IFC load error:', e);
         addMessageToLog('System', `❌ Error loading IFC: ${e.message}`);
+        loadingMsg.style.display = 'none';
     }
 }
 
