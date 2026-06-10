@@ -565,13 +565,41 @@
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         } */
 
+        /* Floating view toolbar */
+        #viewToolbar {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            z-index: 10;
+        }
+
+        .view-btn {
+            padding: 6px 14px;
+            background: rgba(26, 32, 44, 0.85);
+            color: #e2e8f0;
+            border: 1px solid #4a5568;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .view-btn:hover {
+            background: rgba(66, 153, 225, 0.8);
+            border-color: #4299e1;
+        }
+
         /* Style for the static view axes helper */
         #viewAxesContainer {
             position: absolute;
             bottom: 20px;
             left: 20px;
-            width: 100px;
-            height: 100px;
+            width: 120px;
+            height: 120px;
             z-index: 5;
             pointer-events: auto;
             background-color: rgba(0, 0, 0, 0.3);
@@ -715,6 +743,23 @@
         .doc-object-meta {
             font-size: 0.75rem;
             color: #68d391;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin: 2px 0;
+        }
+
+        .meta-tag {
+            background: #2d3748;
+            border: 1px solid #4a5568;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-size: 0.72rem;
+            color: #a0aec0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
         }
 
         .doc-url-input {
