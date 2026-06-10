@@ -125,8 +125,8 @@ export async function loadIFCFile(file, onProgress) {
         }
     });
 
-    // IFC default coordinate system is Z-up; Three.js is Y-up
-    group.rotation.x = -Math.PI / 2;
+    // COORDINATE_TO_ORIGIN:true already converts the coordinate system to Y-up,
+    // so no additional group rotation is needed here.
 
     return group;
 }

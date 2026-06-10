@@ -25,6 +25,7 @@ import {
     initLoaderCallbacks, initLoaderEventHandlers
 } from './loader.js';
 import { initDocLink, onObjectSelected as docLinkOnSelected } from './docLink.js';
+import { getIFCElementProperties } from './ifcLoader.js';
 import {
     initFaceEditCallbacks,
     buildFaceBoundaryPolygon,
@@ -3758,7 +3759,8 @@ import {
             const query = (uuidFromLabel ? uuidFromLabel[1] : partName).toLowerCase().trim();
 
             let foundObject = null;
-            // Priority: exact UUID > exact name > partial name
+
+            // Pass 1-3: UUID / exact name / partial name match on Three.js mesh name
             for (const pass of ['uuid', 'exact', 'partial']) {
                 for (const model of state.loadedModels) {
                     model.traverse(obj => {
@@ -3772,9 +3774,31 @@ import {
                 if (foundObject) break;
             }
 
+            // Pass 4: IFC type name / element name (for queries like "window", "roof", "wall")
+            if (!foundObject) {
+                for (const model of state.loadedModels) {
+                    if (!model.userData?.isIFCModel) continue;
+                    model.traverse(obj => {
+                        if (!obj.isMesh || foundObject) return;
+                        if (!obj.userData?.isIFCElement) return;
+                        const props = getIFCElementProperties(obj.userData.modelID, obj.userData.expressID);
+                        if (!props) return;
+                        const typeLower = (props.typeName || '').toLowerCase().replace('ifc', '');
+                        const nameLower = (props.name || '').toLowerCase();
+                        if (typeLower.includes(query) || nameLower.includes(query)) {
+                            foundObject = obj;
+                        }
+                    });
+                    if (foundObject) break;
+                }
+            }
+
             if (foundObject) {
                 selectObject(foundObject);
-                addMessageToLog('AI', `Selected: "${foundObject.name || foundObject.uuid}"`);
+                const label = foundObject.userData?.isIFCElement
+                    ? getIFCElementProperties(foundObject.userData.modelID, foundObject.userData.expressID)?.name || foundObject.name
+                    : foundObject.name;
+                addMessageToLog('AI', `Selected: "${label || foundObject.uuid}"`);
             } else {
                 addMessageToLog('System', `Part "${partName}" not found in any loaded models.`);
                 speakResponse(`Part ${partName} not found.`);
