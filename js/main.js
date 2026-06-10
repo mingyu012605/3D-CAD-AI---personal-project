@@ -3944,6 +3944,7 @@ import {
             const payload = {
                 prompt: `You are an AI assistant for a CAD editor. Your primary goal is to interpret user commands and return a JSON object with an "action" and "value" property.
                     **VERY IMPORTANT:** Always respond with a single JSON object. Do not include any other text outside the JSON.
+                    **CRITICAL RULE:** When the user says "select [anything]" (e.g. "select window", "select roof", "select wall"), you MUST return {"action":"selectPart","value":"[the thing]"}. NEVER respond conversationally to a select command. NEVER say "no object is selected" for a selectPart command — selection IS the action, it does not require anything to be pre-selected.
 
                     Available actions and their expected JSON format:
 

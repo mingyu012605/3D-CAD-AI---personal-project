@@ -25,89 +25,24 @@ function updateDynamicGrid() {
             });
             state.currentGridLabels = [];
 
-            // Calculate distance to the center of the orbit (state.controls.target is usually 0,0,0)
+            // Grid covers 4× camera distance so it's always visible at any zoom level.
+            // Rounded to the nearest power-of-10 multiple for clean cell boundaries.
             const distance = state.camera.position.distanceTo(state.controls.target);
+            const rawSize  = Math.max(20, distance * 4);
+            const exp      = Math.floor(Math.log10(rawSize));
+            const base     = Math.pow(10, exp);
+            const gridSize = Math.ceil(rawSize / base) * base;
+            const divisions = 40;
 
-            let gridSize, divisions, labelInterval, labelFontSize, labelScaleFactor;
-            let gridLineColor = 0xbbbbbb; // Light grey for grid lines
-            let centerLineColor = 0x888888; // Slightly darker for center lines
-            // Very light grey for "less bright" effect on pure white background
-            let labelTextColor = { r: 180, g: 180, b: 180, a: 1.0 };
-
-            // Define grid levels based on state.camera distance
-            // Further reduced labelScaleFactor and labelFontSize for all levels
-            if (distance < 5) { // Very close zoom
-                gridSize = 20;
-                divisions = 20; // 1 unit per division
-                labelInterval = 2; // Labels every 2 units
-                labelFontSize = 10; // Very small base font size
-                labelScaleFactor = 0.02; // Very small scale factor
-            } else if (distance < 20) { // Close zoom
-                gridSize = 50;
-                divisions = 25; // 2 units per division
-                labelInterval = 5; // Labels every 5 units
-                labelFontSize = 12; // Very small base font size
-                labelScaleFactor = 0.025; // Very small scale factor
-            } else if (distance < 80) { // Medium zoom
-                gridSize = 100;
-                divisions = 20; // 5 units per division
-                labelInterval = 10; // Labels every 10 units
-                labelFontSize = 14; // Small base font size
-                labelScaleFactor = 0.03; // Small scale factor
-            } else if (distance < 250) { // Further zoom
-                gridSize = 250;
-                divisions = 25; // 10 units per division
-                labelInterval = 25; // Labels every 25 units
-                labelFontSize = 16; // Small base font size
-                labelScaleFactor = 0.035; // Small scale factor
-            } else if (distance < 600) { // Even further zoom
-                gridSize = 600;
-                divisions = 30; // 20 units per division
-                labelInterval = 50; // Labels every 50 units
-                labelFontSize = 18; // Slightly larger base font size
-                labelScaleFactor = 0.04; // Slightly larger scale factor
-            }
-            else { // Very far zoom
-                gridSize = 1000;
-                divisions = 25; // 40 units per division
-                labelInterval = 100; // Labels every 100 units
-                labelFontSize = 20; // Slightly larger base font size
-                labelScaleFactor = 0.045; // Slightly larger scale factor
-            }
-
-            // Create new GridHelper
-            const newGridHelper = new THREE.GridHelper(gridSize, divisions, centerLineColor, gridLineColor);
+            // Create new GridHelper, centered on the orbit target
+            const newGridHelper = new THREE.GridHelper(gridSize, divisions, 0x888888, 0xbbbbbb);
             newGridHelper.material.opacity = 0.2;
             newGridHelper.material.transparent = true;
             newGridHelper.name = 'gridHelper';
+            // Follow the camera target so the grid is always visible under what the user is looking at
+            newGridHelper.position.set(state.controls.target.x, 0, state.controls.target.z);
             state.scene.add(newGridHelper);
             state.currentGridHelper = newGridHelper;
-
-            // Create new labels
-            const labelOffset = 0.5; // Kept small and fixed for now
-            // Only add labels if the current grid density makes sense for them
-            if (labelInterval <= gridSize / 5) { // Arbitrary threshold to avoid too many labels
-                for (let i = -gridSize / 2; i <= gridSize / 2; i += labelInterval) {
-                    // Skip origin and potentially very small numbers if interval is large
-                    if (i === 0 || (labelInterval > 10 && Math.abs(i) < labelInterval)) continue;
-
-                    // X-axis labels
-                    const xLabel = makeTextSprite(i.toString(), { textColor: labelTextColor, fontsize: labelFontSize });
-                    // Position along Z-edge, adjusted by label size, and slightly offset to prevent overlap with grid lines
-                    xLabel.position.set(i, labelOffset, -gridSize / 2 - (labelFontSize * labelScaleFactor * 0.75));
-                    xLabel.scale.set(labelFontSize * labelScaleFactor, labelFontSize * labelScaleFactor, 1); // Scale based on font size and factor
-                    state.scene.add(xLabel);
-                    state.currentGridLabels.push(xLabel);
-
-                    // Z-axis labels
-                    const zLabel = makeTextSprite(i.toString(), { textColor: labelTextColor, fontsize: labelFontSize });
-                    // Position along X-edge, adjusted by label size, and slightly offset
-                    zLabel.position.set(-gridSize / 2 - (labelFontSize * labelScaleFactor * 0.75), labelOffset, i);
-                    zLabel.scale.set(labelFontSize * labelScaleFactor, labelFontSize * labelScaleFactor, 1);
-                    state.scene.add(zLabel);
-                    state.currentGridLabels.push(zLabel);
-                }
-            }
         }
 
 function animate() {
