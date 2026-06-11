@@ -3510,6 +3510,8 @@ import {
                 state.controls = new THREE.OrbitControls(state.camera, state.renderer.domElement);
                 state.controls.enableDamping = true;
                 state.controls.dampingFactor = 0.25;
+                state.controls.zoomSpeed = 1.35;
+                state.controls.minDistance = 0.01;
                 state.controls.target.set(0, 0, 0); // Ensure state.controls target the origin
             }
             initTransformControls();
@@ -3547,6 +3549,8 @@ import {
             cadCanvas.addEventListener('mousedown', onCanvasClick, false);
             cadCanvas.addEventListener('touchstart', onCanvasClick, false);
             cadCanvas.addEventListener('mousemove', onCanvasMouseMove, false);
+            cadCanvas.removeEventListener('wheel', focusZoomOnPointer, false);
+            cadCanvas.addEventListener('wheel', focusZoomOnPointer, { passive: true });
 
             // Add extrude gizmo interaction handlers
             cadCanvas.addEventListener('mousedown', onExtrudePointerDown, false);
@@ -3573,6 +3577,27 @@ import {
 
             // Restart the animation loop every time the scene is (re)initialized
             startAnimateLoop();
+        }
+
+        function focusZoomOnPointer(event) {
+            if (event.deltaY >= 0 || !state.controls || !state.raycaster || !state.camera) return;
+
+            const rect = state.renderer.domElement.getBoundingClientRect();
+            state.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            state.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            state.raycaster.setFromCamera(state.mouse, state.camera);
+
+            const meshes = [];
+            state.loadedModels.forEach(model => {
+                model.traverse(obj => {
+                    if (obj.isMesh && obj.visible && !obj.userData.isSelectionOutline) meshes.push(obj);
+                });
+            });
+            const hit = state.raycaster.intersectObjects(meshes, false)[0];
+            if (!hit) return;
+
+            state.controls.target.lerp(hit.point, 0.3);
+            state.controls.update();
         }
 
         // FACE EDITING OPERATIONS

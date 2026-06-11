@@ -139,7 +139,7 @@ export async function onObjectSelected(obj) {
         if (linked) {
             // Full match in element_links.json via IfcGUID
             nameDisplay.textContent = linked.familyAndType || ifcProps?.name || 'IFC Element';
-            renderMeta(metaDisplay, [linked.category, linked.familyAndType, linked.level]);
+            renderMeta(metaDisplay, [linked.category, linked.familyAndType, ifcProps?.level || linked.level]);
             if (linked.doc_url) {
                 obj.userData.docUrl  = linked.doc_url;
                 urlInput.value       = linked.doc_url;
@@ -154,6 +154,7 @@ export async function onObjectSelected(obj) {
             renderMeta(metaDisplay, [
                 ifcProps.typeName,
                 ifcProps.objectType,
+                ifcProps.level,
                 ifcProps.globalId ? `GUID: ${ifcProps.globalId}` : null,
             ]);
             urlInput.value      = obj.userData.docUrl || '';

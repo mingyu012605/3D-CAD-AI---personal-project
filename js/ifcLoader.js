@@ -7,6 +7,7 @@ const MODULE_URL  = `${VENDOR_BASE}web-ifc-api.js`;
 
 let webIFCModule = null;  // the dynamically imported ES module namespace
 let ifcAPI       = null;  // singleton IfcAPI instance
+const spatialLevelByModel = new Map();
 
 async function ensureAPI() {
     if (ifcAPI) return;
@@ -29,7 +30,29 @@ function getElementProperties(modelID, expressID) {
         globalId:   line.GlobalId?.value    ?? null,
         name:       line.Name?.value        ?? null,
         objectType: line.ObjectType?.value  ?? null,
+        level:      spatialLevelByModel.get(modelID)?.get(expressID) ?? null,
     };
+}
+
+async function buildSpatialLevelIndex(modelID) {
+    const levelByExpressID = new Map();
+
+    try {
+        const spatialTree = await ifcAPI.properties.getSpatialStructure(modelID, true);
+        const visit = (node, currentLevel = null) => {
+            const level = node.type === 'IFCBUILDINGSTOREY'
+                ? node.Name?.value || node.LongName?.value || `Storey ${node.expressID}`
+                : currentLevel;
+            if (level && node.expressID != null) levelByExpressID.set(node.expressID, level);
+            (node.children || []).forEach(child => visit(child, level));
+        };
+        visit(spatialTree);
+    } catch (error) {
+        console.warn('[ifcLoader] Could not build IFC spatial level index:', error);
+    }
+
+    spatialLevelByModel.set(modelID, levelByExpressID);
+    return levelByExpressID;
 }
 
 function normalizeIFCType(typeName) {
@@ -121,6 +144,7 @@ export async function loadIFCFile(file, onProgress) {
 
     onProgress?.('Building geometry — this may take a moment…');
     await new Promise(r => setTimeout(r, 60));
+    await buildSpatialLevelIndex(modelID);
 
     ifcAPI.StreamAllMeshes(modelID, (mesh) => {
         const expressID = mesh.expressID;
@@ -129,7 +153,7 @@ export async function loadIFCFile(file, onProgress) {
             props = getElementProperties(modelID, expressID);
         } catch (error) {
             console.warn('[ifcLoader] Could not read IFC element properties:', expressID, error);
-            props = { expressID, typeName: 'IFC Element', globalId: null, name: null, objectType: null };
+            props = { expressID, typeName: 'IFC Element', globalId: null, name: null, objectType: null, level: null };
         }
         const typeKey = normalizeIFCType(props.typeName);
         const count     = mesh.geometries.size();
@@ -164,6 +188,6 @@ export function getIFCElementProperties(modelID, expressID) {
         return getElementProperties(modelID, expressID);
     } catch (e) {
         console.warn('[ifcLoader] getIFCElementProperties:', e);
-        return { expressID, typeName: 'IFC Element', globalId: null, name: null };
+        return { expressID, typeName: 'IFC Element', globalId: null, name: null, level: null };
     }
 }

@@ -5,6 +5,7 @@ const cadViewer = document.getElementById('cadViewer');
 let mouseDownX = 0;
 let mouseDownY = 0;
 const CLICK_TOLERANCE = 15;
+const SELECTION_ASSIST_RADIUS_PX = 9;
 const highlightMaterial = new THREE.MeshBasicMaterial({
     color: 0x1e90ff,
     transparent: true,
@@ -14,6 +15,41 @@ const highlightMaterial = new THREE.MeshBasicMaterial({
 });
 const SELECTION_OUTLINE_NAME = '__selectionOutline';
 let lastHoveredGroupId = null;
+
+function findObjectIntersections(clientX, clientY, objectsToIntersect) {
+    const rect = state.renderer.domElement.getBoundingClientRect();
+    const offsets = [
+        [0, 0],
+        [SELECTION_ASSIST_RADIUS_PX, 0],
+        [-SELECTION_ASSIST_RADIUS_PX, 0],
+        [0, SELECTION_ASSIST_RADIUS_PX],
+        [0, -SELECTION_ASSIST_RADIUS_PX],
+        [SELECTION_ASSIST_RADIUS_PX * 0.7, SELECTION_ASSIST_RADIUS_PX * 0.7],
+        [-SELECTION_ASSIST_RADIUS_PX * 0.7, SELECTION_ASSIST_RADIUS_PX * 0.7],
+        [SELECTION_ASSIST_RADIUS_PX * 0.7, -SELECTION_ASSIST_RADIUS_PX * 0.7],
+        [-SELECTION_ASSIST_RADIUS_PX * 0.7, -SELECTION_ASSIST_RADIUS_PX * 0.7],
+    ];
+
+    for (const [offsetX, offsetY] of offsets) {
+        state.mouse.x = ((clientX + offsetX - rect.left) / rect.width) * 2 - 1;
+        state.mouse.y = -((clientY + offsetY - rect.top) / rect.height) * 2 + 1;
+        state.raycaster.setFromCamera(state.mouse, state.camera);
+        const intersections = state.raycaster.intersectObjects(objectsToIntersect, false);
+        if (intersections.length > 0) return intersections;
+    }
+
+    return [];
+}
+
+function isTransformControlPart(object) {
+    let current = object;
+    while (current) {
+        if (current === state.transformControls) return true;
+        if (String(current.type || '').startsWith('TransformControls')) return true;
+        current = current.parent;
+    }
+    return false;
+}
 
 function addSelectionOutline(object) {
     if (!object) return;
@@ -327,10 +363,10 @@ export function onCanvasClick(event) {
         } else {
             // It was a click, proceed with raycasting
             console.log("[onCanvasClick] Detected click (movement within tolerance), processing selection.");
-            // Normalize state.mouse coordinates for raycasting using the initial mousedown position
+            // Normalize state.mouse coordinates for raycasting using the release position.
             const rect = state.renderer.domElement.getBoundingClientRect();
-            state.mouse.x = ((mouseDownX - rect.left) / rect.width) * 2 - 1;
-            state.mouse.y = -((mouseDownY - rect.top) / rect.height) * 2 + 1;
+            state.mouse.x = ((currentX - rect.left) / rect.width) * 2 - 1;
+            state.mouse.y = -((currentY - rect.top) / rect.height) * 2 + 1;
             console.log(`[onCanvasClick] Normalized state.mouse coords for raycasting: X=${state.mouse.x.toFixed(4)}, Y=${state.mouse.y.toFixed(4)}`);
             console.log(`[onCanvasClick] state.raycaster set from state.camera. state.mouse: (${state.mouse.x.toFixed(3)}, ${state.mouse.y.toFixed(3)})`);
             console.log(`[onCanvasClick] state.camera position: (${state.camera.position.x.toFixed(3)}, ${state.camera.position.y.toFixed(3)}, ${state.camera.position.z.toFixed(3)})`);
@@ -342,7 +378,12 @@ export function onCanvasClick(event) {
             const objectsToIntersect = [];
             state.scene.traverse((obj) => { // Traverse the entire state.scene
                 // Only consider meshes that are visible and not part of the grid or labels
-                if (obj.isMesh && obj.visible && !obj.userData.isGridLabel && obj !== state.currentGridHelper && obj !== state.raycastDebugSphere) { // Exclude debug sphere
+                if (obj.isMesh
+                    && obj.visible
+                    && !obj.userData.isGridLabel
+                    && obj !== state.currentGridHelper
+                    && obj !== state.raycastDebugSphere
+                    && !isTransformControlPart(obj)) {
                     objectsToIntersect.push(obj);
                 }
             });
@@ -376,7 +417,7 @@ export function onCanvasClick(event) {
             }
 
             // PRIORITY 2: Normal object intersection
-            const intersects = state.raycaster.intersectObjects(objectsToIntersect, true);
+            const intersects = findObjectIntersections(currentX, currentY, objectsToIntersect);
             console.log(`[onCanvasClick] Intersections found by state.raycaster: ${intersects.length}`);
 
             if (intersects.length > 0) {
