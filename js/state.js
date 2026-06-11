@@ -63,6 +63,7 @@ export const state = {
   synth: null,
   isVoiceAssistActive: false,
   pendingDisambiguation: null,
+  pendingIFCSelection: null,
 
   // File upload
   uploadedFile: null,

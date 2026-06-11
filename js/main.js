@@ -3790,64 +3790,9 @@ import {
                 return;
             }
 
-            // Redirect "all [type]" → selectAllByType
-            const allMatch = partName.trim().match(/^all\s+(.+)/i);
-            if (allMatch) {
-                selectAllByType(allMatch[1]);
-                return;
-            }
-
-            // Strip "Name (UUID: xxx)" format that AI sometimes produces
-            const uuidFromLabel = partName.match(/UUID:\s*([0-9a-f-]{8,})/i);
-            const rawQuery = uuidFromLabel ? uuidFromLabel[1] : partName;
-            // Normalize: strip leading articles and trailing noise words
-            const query = rawQuery
-                .toLowerCase()
-                .replace(/^(all|the|a|an)\s+/i, '')
-                .replace(/\s+(element|object|type|part)s?$/i, '')
-                .trim();
-
-            let foundObject = null;
-
-            // Pass 1-3: UUID / exact name / partial name match on Three.js mesh name
-            for (const pass of ['uuid', 'exact', 'partial']) {
-                for (const model of state.loadedModels) {
-                    model.traverse(obj => {
-                        if (!obj.isMesh || foundObject) return;
-                        if (pass === 'uuid'    && obj.uuid.toLowerCase() === query) foundObject = obj;
-                        if (pass === 'exact'   && obj.name.toLowerCase() === query) foundObject = obj;
-                        if (pass === 'partial' && obj.name.toLowerCase().includes(query)) foundObject = obj;
-                    });
-                    if (foundObject) break;
-                }
-                if (foundObject) break;
-            }
-
-            // Pass 4: IFC type index lookup — O(1) per type, cached after first build
-            if (!foundObject) {
-                for (const model of state.loadedModels) {
-                    if (!model.userData?.isIFCModel) continue;
-                    const typeIndex = getOrBuildTypeIndex(model);
-                    if (!typeIndex) continue;
-                    for (const [key, meshes] of Object.entries(typeIndex)) {
-                        if (key.includes(query) || query.includes(key)) {
-                            foundObject = meshes[0];
-                            if (meshes.length > 1) {
-                                addMessageToLog('AI', `Found ${meshes.length} "${key}" elements — selecting the first. Say "select all ${key}s" to highlight all.`);
-                            }
-                            break;
-                        }
-                    }
-                    if (foundObject) break;
-                }
-            }
-
-            if (foundObject) {
-                selectObject(foundObject);
-                const label = foundObject.userData?.isIFCElement
-                    ? getIFCElementProperties(foundObject.userData.modelID, foundObject.userData.expressID)?.name || foundObject.name
-                    : foundObject.name;
-                addMessageToLog('AI', `Selected: "${label || foundObject.uuid}"`);
+            const candidates = findIFCSelectionCandidates(partName);
+            if (candidates.length > 0) {
+                startIFCSelectionClarification(partName, candidates);
             } else {
                 const availableTypes = [];
                 for (const model of state.loadedModels) {
@@ -3858,6 +3803,157 @@ import {
                 addMessageToLog('System', `"${partName}" not found.${hint}`);
                 speakResponse(`${partName} not found.`);
             }
+        }
+
+        function normalizeSelectionText(value) {
+            const normalized = String(value || '')
+                .toLowerCase()
+                .replace(/^ifc/i, '')
+                .replace(/^(select|highlight|show)\s+/i, '')
+                .replace(/^(all|every|the|a|an)\s+/i, '')
+                .replace(/\s+(element|object|type|part)s?$/i, '')
+                .trim();
+            return normalized.length > 3 && normalized.endsWith('s') && normalized !== 'yes'
+                ? normalized.slice(0, -1)
+                : normalized;
+        }
+
+        function getIFCSelectionMeta(mesh) {
+            const props = mesh.userData.ifcProperties
+                || getIFCElementProperties(mesh.userData.modelID, mesh.userData.expressID)
+                || {};
+            return {
+                mesh,
+                meshes: [mesh],
+                uuid: mesh.uuid,
+                type: props.typeName || mesh.userData.ifcTypeKey || 'IFC Element',
+                name: props.name || props.objectType || mesh.name || 'Unnamed IFC element',
+                level: props.level || 'Unknown level',
+            };
+        }
+
+        function findIFCSelectionCandidates(rawQuery) {
+            const query = normalizeSelectionText(rawQuery);
+            if (!query) return [];
+            const candidates = [];
+            const candidatesByElement = new Map();
+
+            state.loadedModels.forEach(model => {
+                model.traverse(mesh => {
+                    if (!mesh.userData?.isIFCElement) return;
+                    const meta = getIFCSelectionMeta(mesh);
+                    const searchable = [meta.uuid, meta.type, meta.name, meta.level, mesh.name]
+                        .map(normalizeSelectionText);
+                    if (searchable.some(value => value === query || value.includes(query) || query.includes(value))) {
+                        const elementKey = mesh.userData.modelID != null && mesh.userData.expressID != null
+                            ? `${mesh.userData.modelID}:${mesh.userData.expressID}`
+                            : mesh.uuid;
+                        const existing = candidatesByElement.get(elementKey);
+                        if (existing) {
+                            existing.meshes.push(mesh);
+                        } else {
+                            candidatesByElement.set(elementKey, meta);
+                            candidates.push(meta);
+                        }
+                    }
+                });
+            });
+            return candidates;
+        }
+
+        function distinctSelectionValues(candidates, field) {
+            return [...new Set(candidates.map(candidate => candidate[field]).filter(Boolean))];
+        }
+
+        function askNextIFCSelectionQuestion() {
+            const pending = state.pendingIFCSelection;
+            if (!pending) return;
+
+            const dimensions = [
+                ['level', 'Which level?'],
+                ['type', 'Which IFC type?'],
+                ['name', 'Which specific name?'],
+            ];
+            const next = dimensions.find(([field]) =>
+                !pending.askedFields.includes(field)
+                && distinctSelectionValues(pending.candidates, field).length > 1
+            );
+
+            if (next) {
+                const [field, prompt] = next;
+                const options = distinctSelectionValues(pending.candidates, field);
+                pending.awaiting = field;
+                pending.options = options;
+                pending.askedFields.push(field);
+                const question = `${prompt} ${options.map((option, index) => `${index + 1}) ${option}`).join(', ')}`;
+                addMessageToLog('AI', question);
+                speakResponse(question);
+                return;
+            }
+
+            pending.awaiting = 'confirm';
+            pending.options = [];
+            const first = pending.candidates[0];
+            const description = pending.candidates.length === 1
+                ? `"${first.name}" (${first.type}, ${first.level})`
+                : `${pending.candidates.length} elements matching "${pending.query}"`;
+            const question = `Ready to select ${description}. Confirm?`;
+            addMessageToLog('AI', question);
+            speakResponse(question);
+        }
+
+        function startIFCSelectionClarification(query, candidates) {
+            state.pendingIFCSelection = {
+                query,
+                candidates,
+                askedFields: [],
+                awaiting: null,
+                options: [],
+            };
+            addMessageToLog('AI', `I found ${candidates.length} matching IFC element${candidates.length === 1 ? '' : 's'}. I will narrow the selection before selecting.`);
+            askNextIFCSelectionQuestion();
+        }
+
+        function handleIFCSelectionClarification(response) {
+            const pending = state.pendingIFCSelection;
+            if (!pending) return false;
+
+            const normalized = normalizeSelectionText(response);
+            if (['cancel', 'stop', 'nevermind', 'never mind'].includes(normalized)) {
+                state.pendingIFCSelection = null;
+                addMessageToLog('AI', 'Selection cancelled.');
+                return true;
+            }
+
+            if (pending.awaiting === 'confirm') {
+                if (!['yes', 'confirm', 'ok', 'okay', 'select', 'them', 'it'].includes(normalized)) {
+                    addMessageToLog('AI', 'Please answer "yes" to select these elements, or "cancel".');
+                    return true;
+                }
+                const meshes = pending.candidates.flatMap(candidate => candidate.meshes);
+                const elementCount = pending.candidates.length;
+                state.pendingIFCSelection = null;
+                if (meshes.length === 1) selectObject(meshes[0]);
+                else setSelectedObjects(meshes);
+                addMessageToLog('AI', `Selected ${elementCount} IFC element${elementCount === 1 ? '' : 's'}.`);
+                return true;
+            }
+
+            const numericChoice = /^\d+$/.test(response.trim()) ? Number(response.trim()) - 1 : -1;
+            const chosenValue = numericChoice >= 0 && numericChoice < pending.options.length
+                ? pending.options[numericChoice]
+                : pending.options.find(option => normalizeSelectionText(option) === normalized
+                    || normalizeSelectionText(option).includes(normalized)
+                    || normalized.includes(normalizeSelectionText(option)));
+
+            if (!chosenValue) {
+                addMessageToLog('AI', `Please choose one of: ${pending.options.map((option, index) => `${index + 1}) ${option}`).join(', ')}, or say "cancel".`);
+                return true;
+            }
+
+            pending.candidates = pending.candidates.filter(candidate => candidate[pending.awaiting] === chosenValue);
+            askNextIFCSelectionQuestion();
+            return true;
         }
 
         function getOrBuildTypeIndex(model) {
@@ -3881,32 +3977,7 @@ import {
         }
 
         function selectAllByType(typeName) {
-            if (state.loadedModels.length === 0) {
-                addMessageToLog('System', 'No models loaded.');
-                return;
-            }
-            const query = typeName
-                .toLowerCase()
-                .replace(/^(the|a|an)\s+/i, '')
-                .replace(/s\s*$/, '')
-                .replace(/\s+(element|object|type|part)s?$/i, '')
-                .trim();
-
-            for (const model of state.loadedModels) {
-                if (!model.userData?.isIFCModel) continue;
-                const typeIndex = getOrBuildTypeIndex(model);
-                if (!typeIndex) continue;
-                for (const [key, meshes] of Object.entries(typeIndex)) {
-                    if (key.includes(query) || query.includes(key)) {
-                        setSelectedObjects(meshes);
-                        addMessageToLog('AI', `Selected all ${meshes.length} "${key}" elements.`);
-                        speakResponse(`Selected ${meshes.length} ${key} elements.`);
-                        return;
-                    }
-                }
-            }
-            addMessageToLog('System', `No elements of type "${typeName}" found.`);
-            speakResponse(`No ${typeName} elements found.`);
+            selectPartByName(typeName);
         }
 
         // --- state.camera View Functions (now including negative axes) ---
@@ -4048,7 +4119,7 @@ import {
             const payload = {
                 prompt: `You are an AI assistant for a CAD editor. Your primary goal is to interpret user commands and return a JSON object with an "action" and "value" property.
                     **VERY IMPORTANT:** Always respond with a single JSON object. Do not include any other text outside the JSON.
-                    **CRITICAL RULE:** When the user says "select [anything]" (e.g. "select window", "select roof", "select wall"), you MUST return {"action":"selectPart","value":"[the thing]"}. NEVER respond conversationally to a select command. NEVER say "no object is selected" for a selectPart command — selection IS the action, it does not require anything to be pre-selected.
+                    **CRITICAL RULE:** When the user says "select [anything]" (including "select all walls"), return {"action":"selectPart","value":"[the thing]"}. The editor will ask one clarification question at a time and will not select until the user confirms.
 
                     Available actions and their expected JSON format:
 
@@ -4113,9 +4184,9 @@ import {
                         {"action": "selectPart", "value": "[type_name_or_uuid]"}
                         \`\`\`
 
-                    8b. **To select ALL elements of a specific IFC type:**
+                    8b. **Legacy IFC type selection action:**
                         User input examples: "select all windows", "highlight all walls", "select every door", "show all beams"
-                        Use this whenever the user says "all [type]" or "every [type]" or "highlight all [type]s".
+                        This also starts clarification and requires user confirmation before selection.
                         Return:
                         \`\`\`json
                         {"action": "selectAllByType", "value": "[type_name]"}
@@ -4777,7 +4848,7 @@ import {
             state.recognition.onresult = (event) => {
                 const command = event.results[0][0].transcript;
                 addMessageToLog('System', `You said: "${command}"`);
-                sendAICommand(command);
+                if (!handleIFCSelectionClarification(command)) sendAICommand(command);
             };
 
             state.recognition.onerror = (event) => {
@@ -4838,7 +4909,9 @@ import {
                 addMessageToLog('User', command); // Add user message to log immediately
 
                 // Check if this is a disambiguation response (number)
-                if (state.pendingDisambiguation && /^\d+$/.test(command)) {
+                if (handleIFCSelectionClarification(command)) {
+                    // IFC selection clarification replies are handled locally.
+                } else if (state.pendingDisambiguation && /^\d+$/.test(command)) {
                     handleDisambiguationChoice(command);
                 } else {
                     sendAICommand(command);
