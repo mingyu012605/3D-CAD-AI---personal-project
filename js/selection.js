@@ -12,7 +12,51 @@ const highlightMaterial = new THREE.MeshBasicMaterial({
     depthTest: false,
     depthWrite: false
 });
+const SELECTION_OUTLINE_NAME = '__selectionOutline';
 let lastHoveredGroupId = null;
+
+function addSelectionOutline(object) {
+    if (!object) return;
+
+    const meshes = [];
+    object.traverse(child => {
+        if (child.isMesh && child.geometry) meshes.push(child);
+    });
+
+    meshes.forEach(mesh => {
+        if (mesh.children.some(child => child.name === SELECTION_OUTLINE_NAME)) return;
+
+        const outline = new THREE.LineSegments(
+            new THREE.EdgesGeometry(mesh.geometry, 20),
+            new THREE.LineBasicMaterial({
+                color: 0x168cff,
+                transparent: true,
+                opacity: 1,
+                depthTest: false,
+                depthWrite: false
+            })
+        );
+        outline.name = SELECTION_OUTLINE_NAME;
+        outline.userData.isSelectionOutline = true;
+        outline.renderOrder = 1000;
+        mesh.add(outline);
+    });
+}
+
+function removeSelectionOutline(object) {
+    if (!object) return;
+
+    const outlines = [];
+    object.traverse(child => {
+        if (child.name === SELECTION_OUTLINE_NAME) outlines.push(child);
+    });
+
+    outlines.forEach(outline => {
+        outline.parent?.remove(outline);
+        outline.geometry?.dispose();
+        outline.material?.dispose();
+    });
+}
 
 // Callbacks for functions not yet extracted (registered by main.js via initSelectionCallbacks)
 let _speakResponse = () => {};
@@ -86,8 +130,15 @@ export function setSelectedObjects(objects) {
 
                 // Apply highlight
                 materials.forEach(mat => {
-                    mat.emissive = new THREE.Color(0x444444);
+                    if (mat.emissive !== undefined) {
+                        mat.emissive.copy(highlightMaterial.color);
+                        mat.emissiveIntensity = 1;
+                    } else if (mat.color !== undefined) {
+                        mat.color.copy(highlightMaterial.color);
+                    }
+                    mat.needsUpdate = true;
                 });
+                addSelectionOutline(obj);
             }
         });
 
@@ -396,7 +447,7 @@ export function selectObject(object) {
                 // Apply highlight
                 if (mat.emissive !== undefined) {
                     mat.emissive.copy(highlightMaterial.color);
-                    mat.emissiveIntensity = 0.5; // Adjust intensity as needed
+                    mat.emissiveIntensity = 1;
                     console.log(`[selectObject] Applied emissive highlight to material for ${state.selectedObject.name || 'Unnamed Object'} (material index ${index}).`);
                 } else if (mat.color !== undefined) {
                     // If no emissive, change the main color
@@ -410,6 +461,7 @@ export function selectObject(object) {
                 console.warn(`[selectObject] Material at index ${index} for object ${object.name || object.uuid} is null or not a valid material. Skipping highlight.`);
             }
         });
+        addSelectionOutline(state.selectedObject);
         state.originalMaterialProperties.set(state.selectedObject.uuid, objectOriginalMaterials); // Store the array of current materials for individual selection reversion
 
         state.transformControls.attach(state.selectedObject);
@@ -440,6 +492,7 @@ export function clearSelection() {
 
     // Clear pending operations when selection is cleared
     _onSelectionChanged();
+    removeSelectionOutline(state.selectedObject);
 
     if (state.selectedObject && state.originalMaterialProperties.has(state.selectedObject.uuid)) {
         console.log(`[clearSelection] Reverting highlight for: ${state.selectedObject.name || 'Unnamed Part'} (UUID: ${state.selectedObject.uuid})`);
@@ -484,6 +537,11 @@ export function clearSelection() {
         console.log("[clearSelection] Individual selection cleared and highlight reverted.");
     } else {
         console.log("[clearSelection] No object selected or no original material properties to restore.");
+        if (state.selectedObject && state.transformControls) {
+            state.transformControls.detach();
+            state.transformControls.visible = false;
+        }
+        state.selectedObject = null;
     }
     state.currentlySelectedObjectsForEditing = []; // Clear the functional selection array
     _onObjectSelected(null);
@@ -524,7 +582,7 @@ export function highlightAllModels() {
                         objOriginalMaterials.push(mat.clone());
                         if (mat.emissive !== undefined) {
                             mat.emissive.copy(highlightMaterial.color);
-                            mat.emissiveIntensity = 0.5;
+                            mat.emissiveIntensity = 1;
                         } else if (mat.color !== undefined) {
                             mat.color.copy(highlightMaterial.color);
                         }
@@ -532,6 +590,7 @@ export function highlightAllModels() {
                         highlightedCount++;
                     }
                 });
+                addSelectionOutline(obj);
 
                 state.allHighlightsOriginalMaterials.set(obj.uuid, objOriginalMaterials);
                 state.currentlySelectedObjectsForEditing.push(obj);
@@ -637,6 +696,8 @@ export function highlightAllModels() {
 export function clearAllHighlights() {
     console.log("[clearAllHighlights] Attempting to clear all highlights.");
 
+    state.currentlySelectedObjectsForEditing.forEach(removeSelectionOutline);
+
     // Remove group helper if it exists
     const groupHelper = state.scene.getObjectByProperty('name', 'GroupMovementHelper');
     if (groupHelper) {
@@ -652,6 +713,7 @@ export function clearAllHighlights() {
     }
 
     if (state.allHighlightsOriginalMaterials.size === 0) {
+        state.currentlySelectedObjectsForEditing = [];
         console.log("[clearAllHighlights] No global highlights to clear.");
         return;
     }
@@ -660,6 +722,7 @@ export function clearAllHighlights() {
     for (const [uuid, originalMaterials] of state.allHighlightsOriginalMaterials.entries()) {
         const object = state.scene.getObjectByProperty('uuid', uuid);
         if (object && object.isMesh) {
+            removeSelectionOutline(object);
             const currentMaterials = Array.isArray(object.material) ? object.material : [object.material];
             currentMaterials.forEach((mat, index) => {
                 if (mat && mat.isMaterial && originalMaterials[index]) {
