@@ -8,8 +8,24 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css" />
     <style>
-        .right-panel { overflow-y: auto; }
-        .cad-tools-panel { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+        .right-panel { overflow: hidden; min-width: 0; }
+        #cadViewer { min-width: 0; }
+        .tab-buttons { overflow: hidden; }
+        .tab-buttons .tab-button { min-width: 0; padding: 8px 5px; font-size: 12px; }
+        .sidebar-workspace { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 3px; }
+        .cad-mode-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 10px 0; }
+        .cad-mode-tab { min-width: 0; padding: 7px 3px; border: 0; border-radius: 5px; color: #a0aec0; background: #202938; cursor: pointer; font-size: 11px; font-weight: 600; }
+        .cad-mode-tab.active { color: #fff; background: #DAA520; }
+        .cad-mode-panel { display: none; }
+        .cad-mode-panel.active { display: block; }
+        .cad-panel-heading { margin: 8px 0 4px; color: #fff; font-size: 18px; }
+        .cad-panel-subtitle { color: #a0aec0; font-size: 12px; margin-bottom: 10px; }
+        .cad-empty-state { padding: 14px; color: #cbd5e0; background: #202938; border-radius: 7px; line-height: 1.5; }
+        .cad-inspector-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid #364156; }
+        .cad-inspector-section h4 { margin: 0 0 7px; color: #f7fafc; font-size: 13px; }
+        .cad-stat-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 10px; color: #cbd5e0; font-size: 12px; }
+        .cad-stat-grid span:nth-child(odd) { color: #718096; }
+        .cad-tools-panel { display: flex; flex-direction: column; gap: 8px; }
         .cad-tools-panel details { background: #202938; border: 1px solid #364156; border-radius: 7px; padding: 8px; }
         .cad-tools-panel summary { cursor: pointer; color: #f7fafc; font-weight: 600; }
         .cad-tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
@@ -32,6 +48,18 @@
         .cad-tree-row.selected { outline: 1px solid #DAA520; }
         .cad-tree-name { overflow: hidden; color: #e2e8f0; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
         .cad-tree-row button { padding: 2px 5px; border: 0; border-radius: 3px; color: #e2e8f0; background: #2d3748; cursor: pointer; }
+        .cad-object-selected .object-properties-controls { margin-top: 0; padding-top: 0; border-top: 0; }
+        .cad-object-selected .object-properties-controls h3 { display: none; }
+        .cad-object-selected .doc-link-group { margin-top: 12px; }
+        .sidebar-chat { flex: 0 0 210px !important; min-height: 150px; border-top: 1px solid #2d3748; padding-top: 10px; }
+        .sidebar-chat #aiLog { min-height: 55px; }
+        .sidebar-chat .ai-input-group { flex-shrink: 0; }
+        .ai-input-group { min-width: 0; }
+        .ai-input-group input { min-width: 0; width: 0; }
+        .ai-input-group button { flex-shrink: 0; }
+        @media (max-height: 760px) {
+            .sidebar-chat { flex-basis: 155px !important; }
+        }
     </style>
     <!-- Import Map for ES Modules -->
 </head>
@@ -113,55 +141,116 @@
                     </button>
                 </div>
 
-                <div id="cadToolsPanel" class="cad-tools-panel">
-                    <details open>
-                        <summary>Models & Layers</summary>
+                <div class="cad-mode-tabs" role="tablist" aria-label="Sidebar mode">
+                    <button class="cad-mode-tab active" data-cad-mode="object">Object</button>
+                    <button class="cad-mode-tab" data-cad-mode="scene">Scene</button>
+                    <button class="cad-mode-tab" data-cad-mode="tools">Tools</button>
+                    <button class="cad-mode-tab" data-cad-mode="project">Project</button>
+                </div>
+
+                <div class="sidebar-workspace">
+                    <section id="cadModeObject" class="cad-mode-panel active">
+                        <h3 class="cad-panel-heading">Object Inspector</h3>
+                        <div id="cadObjectEmpty" class="cad-empty-state">
+                            <strong>No object selected</strong><br>
+                            Select a shape or model to view dimensions, area, volume, color, and transform.
+                        </div>
+                        <div id="cadObjectSelected" class="cad-object-selected" hidden>
+                            <div id="cadInspectorName" class="cad-panel-heading">Selected Object</div>
+                            <div id="cadInspectorType" class="cad-panel-subtitle">Mesh</div>
+                            <div class="cad-inspector-section">
+                                <h4>Quick Stats</h4>
+                                <div class="cad-stat-grid">
+                                    <span>Dimensions</span><span id="cadInspectorDimensions">-</span>
+                                    <span id="cadInspectorPrimaryLabel">Volume</span><span id="cadInspectorPrimary">-</span>
+                                    <span id="cadInspectorSecondaryLabel">Surface Area</span><span id="cadInspectorSecondary">-</span>
+                                </div>
+                            </div>
+                            <div class="cad-inspector-section">
+                                <h4>Appearance & Linked Document</h4>
+                                <div class="object-properties-controls">
+                                    <div class="property-group">
+                                        <label for="objectColorPicker">Color:</label>
+                                        <input type="color" id="objectColorPicker" value="#1e90ff" />
+                                        <button class="view-control-button" id="applyObjectColorBtn">Apply Color</button>
+                                    </div>
+                                    <div class="property-group doc-link-group">
+                                        <label>Linked Document</label>
+                                        <div id="docObjectName" class="doc-object-name">No object selected</div>
+                                        <div id="docObjectMeta" class="doc-object-meta" style="display:none;"></div>
+                                        <input type="text" id="docUrlInput" class="doc-url-input" placeholder="Paste document URL..." disabled />
+                                        <div class="doc-link-actions">
+                                            <button class="view-control-button" id="saveDocUrlBtn" disabled>Save URL</button>
+                                            <button class="view-control-button doc-open-btn" id="openDocUrlBtn" disabled>Open ↗</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="cad-inspector-section">
+                                <h4>Transform</h4>
+                                <div class="cad-tool-grid">
+                                    <label>Position X<input id="cadPosX" type="number" step="0.1"></label>
+                                    <label>Y<input id="cadPosY" type="number" step="0.1"></label>
+                                    <label>Z<input id="cadPosZ" type="number" step="0.1"></label>
+                                    <label>Rotation X<input id="cadRotX" type="number" step="1"></label>
+                                    <label>Y<input id="cadRotY" type="number" step="1"></label>
+                                    <label>Z<input id="cadRotZ" type="number" step="1"></label>
+                                    <label>Scale X<input id="cadScaleX" type="number" step="0.1"></label>
+                                    <label>Y<input id="cadScaleY" type="number" step="0.1"></label>
+                                    <label>Z<input id="cadScaleZ" type="number" step="0.1"></label>
+                                </div>
+                                <div class="cad-tool-row">
+                                    <button id="cadApplyTransform">Apply Transform</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="cadModeScene" class="cad-mode-panel">
+                        <h3 class="cad-panel-heading">Scene</h3>
+                        <div class="cad-panel-subtitle">Select, rename, hide, lock, or isolate models.</div>
                         <div id="cadObjectTree" class="cad-object-tree"></div>
-                    </details>
-                    <details>
-                        <summary>Precise Transform & Snap</summary>
-                        <div class="cad-tool-grid">
-                            <label>Position X<input id="cadPosX" type="number" step="0.1"></label>
-                            <label>Y<input id="cadPosY" type="number" step="0.1"></label>
-                            <label>Z<input id="cadPosZ" type="number" step="0.1"></label>
-                            <label>Rotation X<input id="cadRotX" type="number" step="1"></label>
-                            <label>Y<input id="cadRotY" type="number" step="1"></label>
-                            <label>Z<input id="cadRotZ" type="number" step="1"></label>
-                            <label>Scale X<input id="cadScaleX" type="number" step="0.1"></label>
-                            <label>Y<input id="cadScaleY" type="number" step="0.1"></label>
-                            <label>Z<input id="cadScaleZ" type="number" step="0.1"></label>
+                    </section>
+
+                    <section id="cadModeTools" class="cad-mode-panel">
+                        <h3 class="cad-panel-heading">CAD Tools</h3>
+                        <div id="cadToolsPanel" class="cad-tools-panel">
+                        <details open>
+                            <summary>Snap Settings</summary>
+                            <div class="cad-tool-row">
+                                <label><input id="cadSnapEnabled" type="checkbox"> Snap</label>
+                                <input id="cadSnapSize" type="number" value="0.5" min="0.001" step="0.1" title="Translation snap">
+                            </div>
+                        </details>
+                        <details>
+                            <summary>Measurements</summary>
+                            <div id="cadMeasurementOutput" class="cad-tool-output">Select an object to measure it.</div>
+                            <button id="cadRefreshMeasurement">Refresh Measurement</button>
+                        </details>
+                        <details>
+                            <summary>Section Plane</summary>
+                            <div class="cad-tool-row">
+                                <label><input id="cadSectionEnabled" type="checkbox"> Enable</label>
+                                <select id="cadSectionAxis"><option>X</option><option selected>Y</option><option>Z</option></select>
+                                <label><input id="cadSectionInvert" type="checkbox"> Flip</label>
+                            </div>
+                            <input id="cadSectionOffset" type="range" min="-50" max="50" value="0" step="0.1">
+                        </details>
+                        <details>
+                            <summary>Boolean Tools</summary>
+                            <div class="cad-tool-output">Bounds-based axis-aligned operations. Select two objects first.</div>
+                            <div class="cad-tool-row">
+                                <button data-cad-boolean="union">Union</button>
+                                <button data-cad-boolean="subtract">Subtract</button>
+                                <button data-cad-boolean="intersect">Intersect</button>
+                            </div>
+                        </details>
                         </div>
-                        <div class="cad-tool-row">
-                            <label><input id="cadSnapEnabled" type="checkbox"> Snap</label>
-                            <input id="cadSnapSize" type="number" value="0.5" min="0.001" step="0.1" title="Translation snap">
-                            <button id="cadApplyTransform">Apply</button>
-                        </div>
-                    </details>
-                    <details>
-                        <summary>Measurements</summary>
-                        <div id="cadMeasurementOutput" class="cad-tool-output">Select an object to measure it.</div>
-                        <button id="cadRefreshMeasurement">Refresh Measurement</button>
-                    </details>
-                    <details>
-                        <summary>Section Plane</summary>
-                        <div class="cad-tool-row">
-                            <label><input id="cadSectionEnabled" type="checkbox"> Enable</label>
-                            <select id="cadSectionAxis"><option>X</option><option selected>Y</option><option>Z</option></select>
-                            <label><input id="cadSectionInvert" type="checkbox"> Flip</label>
-                        </div>
-                        <input id="cadSectionOffset" type="range" min="-50" max="50" value="0" step="0.1">
-                    </details>
-                    <details>
-                        <summary>Boolean Tools</summary>
-                        <div class="cad-tool-output">Bounds-based axis-aligned operations. Select two objects first.</div>
-                        <div class="cad-tool-row">
-                            <button data-cad-boolean="union">Union</button>
-                            <button data-cad-boolean="subtract">Subtract</button>
-                            <button data-cad-boolean="intersect">Intersect</button>
-                        </div>
-                    </details>
-                    <details>
-                        <summary>Project & Recovery</summary>
+                    </section>
+
+                    <section id="cadModeProject" class="cad-mode-panel">
+                        <h3 class="cad-panel-heading">Project</h3>
+                        <div class="cad-panel-subtitle">Save, open, export, and recover your work.</div>
                         <div class="cad-tool-row">
                             <button id="cadSaveProject">Save Project</button>
                             <button id="cadOpenProject">Open Project</button>
@@ -169,32 +258,11 @@
                         </div>
                         <div id="cadAutosaveStatus" class="cad-tool-output">Autosave ready.</div>
                         <input id="cadProjectFileInput" type="file" accept=".cadproject,.json" hidden>
-                    </details>
-                </div>
-
-                <!-- Object Properties Section -->
-                <div class="object-properties-controls">
-                    <h3>Object Properties</h3>
-                    <div class="property-group">
-                        <label for="objectColorPicker">Color:</label>
-                        <input type="color" id="objectColorPicker" value="#1e90ff" />
-                        <button class="view-control-button" id="applyObjectColorBtn">Apply Color</button>
-                    </div>
-                    <!-- Linked Document -->
-                    <div class="property-group doc-link-group">
-                        <label>Linked Document</label>
-                        <div id="docObjectName" class="doc-object-name">No object selected</div>
-                        <div id="docObjectMeta" class="doc-object-meta" style="display:none;"></div>
-                        <input type="text" id="docUrlInput" class="doc-url-input" placeholder="Paste document URL..." disabled />
-                        <div class="doc-link-actions">
-                            <button class="view-control-button" id="saveDocUrlBtn" disabled>Save URL</button>
-                            <button class="view-control-button doc-open-btn" id="openDocUrlBtn" disabled>Open ↗</button>
-                        </div>
-                    </div>
+                    </section>
                 </div>
 
                 <!-- Chat Content remains visible by default -->
-                <div id="chatContent" class="tab-content active">
+                <div id="chatContent" class="tab-content active sidebar-chat">
                     <div id="aiLog">
                         <p class="system-message">System: AI Chat Log Initialized.</p>
                     </div>

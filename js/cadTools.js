@@ -13,6 +13,16 @@ import {
 const sectionPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
 let isolateModel = null;
 let lastTreeSignature = '';
+let lastInspectorSignature = '';
+
+function setCADMode(mode) {
+    document.querySelectorAll('.cad-mode-tab').forEach(button => {
+        button.classList.toggle('active', button.dataset.cadMode === mode);
+    });
+    document.querySelectorAll('.cad-mode-panel').forEach(panel => {
+        panel.classList.toggle('active', panel.id === `cadMode${mode.charAt(0).toUpperCase()}${mode.slice(1)}`);
+    });
+}
 
 function selectedTopModels() {
     const found = new Set();
@@ -90,6 +100,7 @@ function handleTreeClick(event) {
             setSelectedObjects([...next]);
         } else {
             selectObject(model);
+            setCADMode('object');
         }
     }
     refreshObjectTree(true);
@@ -183,6 +194,53 @@ function measureObject(object) {
         }
     });
     return { size, area, volume: Math.abs(volume), diagonal: size.length() };
+}
+
+function refreshObjectInspector() {
+    const objects = getSelectedObjects();
+    const empty = document.getElementById('cadObjectEmpty');
+    const selected = document.getElementById('cadObjectSelected');
+    if (!empty || !selected) return;
+
+    empty.hidden = objects.length > 0;
+    selected.hidden = objects.length === 0;
+    if (objects.length === 0) {
+        lastInspectorSignature = '';
+        return;
+    }
+
+    const bounds = new THREE.Box3();
+    let totalArea = 0;
+    let totalVolume = 0;
+    objects.forEach(object => {
+        bounds.expandByObject(object);
+        const measurement = measureObject(object);
+        totalArea += measurement.area;
+        totalVolume += measurement.volume;
+    });
+    const size = bounds.getSize(new THREE.Vector3());
+    const planarAxis = [size.x, size.y, size.z].findIndex(value => value < Math.max(size.x, size.y, size.z) * 0.001);
+    const is2D = planarAxis !== -1;
+    const name = objects.length === 1 ? objects[0].name || 'Unnamed Object' : `${objects.length} objects selected`;
+    const type = objects.length === 1
+        ? (is2D ? '2D Shape' : objects[0].userData?.isIFCElement ? 'IFC Element' : '3D Mesh')
+        : 'Multiple Selection';
+
+    document.getElementById('cadInspectorName').textContent = name;
+    document.getElementById('cadInspectorType').textContent = type;
+    document.getElementById('cadInspectorDimensions').textContent =
+        `${size.x.toFixed(3)} x ${size.y.toFixed(3)} x ${size.z.toFixed(3)}`;
+    document.getElementById('cadInspectorPrimaryLabel').textContent = is2D ? 'Area' : 'Volume';
+    document.getElementById('cadInspectorPrimary').textContent = (is2D ? totalArea : totalVolume).toFixed(3);
+    document.getElementById('cadInspectorSecondaryLabel').textContent = is2D ? 'Bounding diagonal' : 'Surface Area';
+    document.getElementById('cadInspectorSecondary').textContent =
+        (is2D ? size.length() : totalArea).toFixed(3);
+
+    const signature = objects.map(object => object.uuid).join('|');
+    if (signature !== lastInspectorSignature) {
+        lastInspectorSignature = signature;
+        setCADMode('object');
+    }
 }
 
 function refreshMeasurement() {
@@ -330,6 +388,7 @@ function wireProjectControls() {
 
 export function refreshAllTools() {
     refreshObjectTree();
+    refreshObjectInspector();
     refreshTransformInputs();
     refreshMeasurement();
     updateSectionPlane();
@@ -338,6 +397,9 @@ export function refreshAllTools() {
 }
 
 export function initCADTools() {
+    document.querySelectorAll('.cad-mode-tab').forEach(button => {
+        button.addEventListener('click', () => setCADMode(button.dataset.cadMode));
+    });
     document.getElementById('cadObjectTree').addEventListener('click', handleTreeClick);
     document.getElementById('cadObjectTree').addEventListener('dblclick', handleTreeRename);
     document.getElementById('cadApplyTransform').addEventListener('click', applyPreciseTransform);
