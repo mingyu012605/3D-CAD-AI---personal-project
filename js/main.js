@@ -26,6 +26,8 @@ import {
 } from './loader.js';
 import { initDocLink, onObjectSelected as docLinkOnSelected } from './docLink.js';
 import { getIFCElementProperties } from './ifcLoader.js';
+import { saveSceneAsGLB } from './exporter.js';
+import { initCADTools } from './cadTools.js';
 import {
     initFaceEditCallbacks,
     buildFaceBoundaryPolygon,
@@ -186,6 +188,7 @@ import {
         });
         initLoaderEventHandlers();
         initDocLink();
+        initCADTools();
 
         initFaceEditCallbacks({
             speakResponse,
@@ -3237,8 +3240,10 @@ import {
 
         // --- Keyboard Shortcuts for Undo/Redo and Transform Modes ---
         document.addEventListener('keydown', function(event) {
-            // Only handle shortcuts when not typing in input fields
-            if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
+            const isTyping = event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea';
+            const isSaveShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's';
+            // Save should always work, but other editor shortcuts should not fire while typing.
+            if (isTyping && !isSaveShortcut) {
                 return;
             }
 
@@ -3250,6 +3255,9 @@ import {
                 } else if ((event.key === 'y') || (event.key === 'z' && event.shiftKey)) {
                     event.preventDefault();
                     redo();
+                } else if (event.key.toLowerCase() === 's') {
+                    event.preventDefault();
+                    saveModel();
                 }
             }
 
@@ -3273,11 +3281,25 @@ import {
         });
 
 
-        // --- Placeholder Save Model Function ---
-        function saveModel() {
-            addMessageToLog('System', 'Save functionality is a placeholder. To implement actual model saving (e.g., to GLTF/GLB), a GLTFExporter would be required, which involves more complex Three.js serialization.');
-            speakResponse('Save feature is not fully implemented yet.');
-            console.warn("Save Model: Placeholder function executed. Actual GLTF/GLB export not implemented.");
+        async function saveModel() {
+            if (saveButton.disabled) return;
+
+            saveButton.disabled = true;
+            saveButton.textContent = 'Saving...';
+            addMessageToLog('System', 'Saving the current scene as a GLB file...');
+
+            try {
+                const filename = await saveSceneAsGLB();
+                addMessageToLog('System', `Scene saved successfully as "${filename}".`);
+                speakResponse('Scene saved successfully.');
+            } catch (error) {
+                console.error('[Save] Could not export scene:', error);
+                addMessageToLog('System', `Could not save scene: ${error.message}`);
+                speakResponse('Could not save the scene.');
+            } finally {
+                saveButton.disabled = false;
+                saveButton.textContent = 'Save Scene';
+            }
         }
 
         // --- Apply CSS Function (remains the same, but now accessed via AI command or direct console) ---

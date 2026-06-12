@@ -16,6 +16,15 @@ const highlightMaterial = new THREE.MeshBasicMaterial({
 const SELECTION_OUTLINE_NAME = '__selectionOutline';
 let lastHoveredGroupId = null;
 
+function isObjectLocked(object) {
+    let current = object;
+    while (current) {
+        if (current.userData?.cadLocked) return true;
+        current = current.parent;
+    }
+    return false;
+}
+
 function findObjectIntersections(clientX, clientY, objectsToIntersect) {
     const rect = state.renderer.domElement.getBoundingClientRect();
     const offsets = [
@@ -146,7 +155,8 @@ export function setSelectedObjects(objects) {
     clearSelection();
     clearAllHighlights();
 
-    if (!objects || objects.length === 0) {
+    objects = (objects || []).filter(object => !isObjectLocked(object));
+    if (objects.length === 0) {
         return;
     }
 
@@ -470,6 +480,12 @@ export function selectObject(object) {
 
     // Clear any previous individual selection
     clearSelection();
+
+    if (object && isObjectLocked(object)) {
+        addMessageToLog('System', `${object.name || 'Object'} is locked. Unlock it in Models & Layers before editing.`);
+        clearSelection();
+        return;
+    }
 
     if (object) {
         state.selectedObject = object;

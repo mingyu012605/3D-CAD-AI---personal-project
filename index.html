@@ -7,6 +7,32 @@
     <!-- Using Inter font from Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css" />
+    <style>
+        .right-panel { overflow-y: auto; }
+        .cad-tools-panel { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+        .cad-tools-panel details { background: #202938; border: 1px solid #364156; border-radius: 7px; padding: 8px; }
+        .cad-tools-panel summary { cursor: pointer; color: #f7fafc; font-weight: 600; }
+        .cad-tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+        .cad-tool-grid label { color: #a0aec0; font-size: 11px; }
+        .cad-tool-grid input, .cad-tool-row input, .cad-tool-row select {
+            width: 100%; box-sizing: border-box; margin-top: 3px; padding: 5px; color: #edf2f7;
+            background: #151c28; border: 1px solid #4a5568; border-radius: 4px;
+        }
+        .cad-tool-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+        .cad-tool-row button, .cad-tools-panel > details > button {
+            padding: 6px 8px; border: 0; border-radius: 4px; color: #fff; background: #4a5568; cursor: pointer;
+        }
+        .cad-tool-row button:hover, .cad-tools-panel > details > button:hover { background: #DAA520; }
+        .cad-tool-output { margin-top: 8px; color: #cbd5e0; font-size: 12px; line-height: 1.4; }
+        .cad-object-tree { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; max-height: 170px; overflow-y: auto; }
+        .cad-tree-row {
+            display: grid; grid-template-columns: 1fr auto auto auto; gap: 4px; align-items: center;
+            padding: 4px; border-radius: 4px; background: #151c28;
+        }
+        .cad-tree-row.selected { outline: 1px solid #DAA520; }
+        .cad-tree-name { overflow: hidden; color: #e2e8f0; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+        .cad-tree-row button { padding: 2px 5px; border: 0; border-radius: 3px; color: #e2e8f0; background: #2d3748; cursor: pointer; }
+    </style>
     <!-- Import Map for ES Modules -->
 </head>
 <body>
@@ -87,6 +113,65 @@
                     </button>
                 </div>
 
+                <div id="cadToolsPanel" class="cad-tools-panel">
+                    <details open>
+                        <summary>Models & Layers</summary>
+                        <div id="cadObjectTree" class="cad-object-tree"></div>
+                    </details>
+                    <details>
+                        <summary>Precise Transform & Snap</summary>
+                        <div class="cad-tool-grid">
+                            <label>Position X<input id="cadPosX" type="number" step="0.1"></label>
+                            <label>Y<input id="cadPosY" type="number" step="0.1"></label>
+                            <label>Z<input id="cadPosZ" type="number" step="0.1"></label>
+                            <label>Rotation X<input id="cadRotX" type="number" step="1"></label>
+                            <label>Y<input id="cadRotY" type="number" step="1"></label>
+                            <label>Z<input id="cadRotZ" type="number" step="1"></label>
+                            <label>Scale X<input id="cadScaleX" type="number" step="0.1"></label>
+                            <label>Y<input id="cadScaleY" type="number" step="0.1"></label>
+                            <label>Z<input id="cadScaleZ" type="number" step="0.1"></label>
+                        </div>
+                        <div class="cad-tool-row">
+                            <label><input id="cadSnapEnabled" type="checkbox"> Snap</label>
+                            <input id="cadSnapSize" type="number" value="0.5" min="0.001" step="0.1" title="Translation snap">
+                            <button id="cadApplyTransform">Apply</button>
+                        </div>
+                    </details>
+                    <details>
+                        <summary>Measurements</summary>
+                        <div id="cadMeasurementOutput" class="cad-tool-output">Select an object to measure it.</div>
+                        <button id="cadRefreshMeasurement">Refresh Measurement</button>
+                    </details>
+                    <details>
+                        <summary>Section Plane</summary>
+                        <div class="cad-tool-row">
+                            <label><input id="cadSectionEnabled" type="checkbox"> Enable</label>
+                            <select id="cadSectionAxis"><option>X</option><option selected>Y</option><option>Z</option></select>
+                            <label><input id="cadSectionInvert" type="checkbox"> Flip</label>
+                        </div>
+                        <input id="cadSectionOffset" type="range" min="-50" max="50" value="0" step="0.1">
+                    </details>
+                    <details>
+                        <summary>Boolean Tools</summary>
+                        <div class="cad-tool-output">Bounds-based axis-aligned operations. Select two objects first.</div>
+                        <div class="cad-tool-row">
+                            <button data-cad-boolean="union">Union</button>
+                            <button data-cad-boolean="subtract">Subtract</button>
+                            <button data-cad-boolean="intersect">Intersect</button>
+                        </div>
+                    </details>
+                    <details>
+                        <summary>Project & Recovery</summary>
+                        <div class="cad-tool-row">
+                            <button id="cadSaveProject">Save Project</button>
+                            <button id="cadOpenProject">Open Project</button>
+                            <button id="cadRecoverProject">Recover Autosave</button>
+                        </div>
+                        <div id="cadAutosaveStatus" class="cad-tool-output">Autosave ready.</div>
+                        <input id="cadProjectFileInput" type="file" accept=".cadproject,.json" hidden>
+                    </details>
+                </div>
+
                 <!-- Object Properties Section -->
                 <div class="object-properties-controls">
                     <h3>Object Properties</h3>
@@ -136,6 +221,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/VRButton.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
 
