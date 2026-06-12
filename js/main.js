@@ -4982,7 +4982,7 @@ import {
         function setActiveTab(tabName) {
             // Remove 'active' class from all tab buttons and content
             // Ensure we only affect the tab buttons within the right-panel
-            document.querySelectorAll('.header-actions .tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.editor-actions .tab-button').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.right-panel .tab-content').forEach(content => content.classList.remove('active'));
 
             // Add 'active' class to the clicked tab button and corresponding content

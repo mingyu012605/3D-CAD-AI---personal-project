@@ -10,18 +10,14 @@
     <style>
         [hidden] { display: none !important; }
         .right-panel { overflow: hidden; min-width: 0; padding: 12px 14px 14px; }
-        header { height: 58px; padding: 7px 14px; font-size: 1.45rem; justify-content: space-between; }
-        header svg { width: 29px; height: 29px; }
-        .header-brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
-        .header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 5px; min-width: 0; }
-        .header-actions button { height: 36px; padding: 6px 10px; border: 0; border-radius: 6px; color: #dbe5f3; background: #293448; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-        .header-actions .tab-button { flex: 0 0 auto; }
-        .header-actions button:hover:not(:disabled) { color: #fff; background: #3b4b65; }
-        .header-actions button.active, .header-actions .primary-action { color: #fff; background: #DAA520; }
-        .header-actions button:disabled { opacity: 0.38; cursor: not-allowed; }
-        .header-actions .structure-action { background: #168cff; }
-        .header-actions .clear-action { background: #4a5568; }
-        .header-actions .clear-action:not(:disabled) { background: #b44444; }
+        .editor-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; margin-bottom: 7px; padding-bottom: 9px; border-bottom: 1px solid #2d3748; }
+        .editor-actions button { min-width: 0; height: 34px; padding: 5px 3px; overflow: hidden; border: 0; border-radius: 5px; color: #dbe5f3; background: #293448; font-size: 10px; font-weight: 700; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; }
+        .editor-actions button:hover:not(:disabled) { color: #fff; background: #3b4b65; }
+        .editor-actions button.active, .editor-actions .primary-action { color: #fff; background: #DAA520; }
+        .editor-actions button:disabled { opacity: 0.38; cursor: not-allowed; }
+        .editor-actions .structure-action { grid-column: span 2; background: #168cff; }
+        .editor-actions .clear-action { background: #4a5568; }
+        .editor-actions .clear-action:not(:disabled) { background: #b44444; }
         #cadViewer { min-width: 0; }
         .sidebar-workspace { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 3px; }
         .cad-mode-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 5px 0 7px; }
@@ -78,10 +74,6 @@
         .appearance-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         #applyCssButton { background: #DAA520 !important; }
         #resetCssButton { background: #4a5568; }
-        @media (max-width: 1050px) {
-            .header-brand span { display: none; }
-            .header-actions button { padding: 6px 7px; font-size: 10px; }
-        }
         @media (max-height: 760px) {
             .sidebar-chat { flex-basis: 190px !important; min-height: 150px; }
         }
@@ -89,28 +81,6 @@
     <!-- Import Map for ES Modules -->
 </head>
 <body>
-    <header>
-        <div class="header-brand">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 1L2 6v12l10 5 10-5V6L12 1zm0 2.31L18.47 6 12 9.31 5.53 6 12 3.31zM4 7.69l6 3.15v6.52L4 13.84V7.69zm8 11.01L6.47 16 12 12.69l5.53 3.31L12 18.7zM20 13.84l-6 3.15V10.84l6-3.15v6.15z" />
-                <circle cx="12" cy="12" r="2" fill="#DAA520" />
-                <path d="M12 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" fill="#fff" />
-            </svg>
-            <span>AI VR CAD Editor</span>
-        </div>
-        <nav id="headerEditorActions" class="header-actions" aria-label="Editor actions" hidden>
-            <button id="backToUploadCircleButton" onclick="window.goBack()" title="Back to start">Back</button>
-            <button class="tab-button active" id="chatTabButton">Chat</button>
-            <button class="tab-button" id="codeEditorTabButton">Appearance</button>
-            <button class="tab-button" id="uploadNewFileButton">Add Model</button>
-            <button class="tab-button primary-action" id="saveButton">Save</button>
-            <button id="undoButton">Undo</button>
-            <button id="redoButton">Redo</button>
-            <button id="structureHighlightButton" class="structure-action">Show Structure</button>
-            <button id="clearStructureButton" class="clear-action">Clear</button>
-        </nav>
-    </header>
-
     <div class="page-container">
         <section id="uploadPage" class="page page-active">
             <div class="upload-content">
@@ -155,6 +125,17 @@
 
             <!-- NEW: Right-side chat panel with updated buttons -->
             <div class="right-panel">
+                <nav id="headerEditorActions" class="editor-actions" aria-label="Editor actions">
+                    <button id="backToUploadCircleButton" onclick="window.goBack()" title="Back to start">Back</button>
+                    <button class="tab-button active" id="chatTabButton">Chat</button>
+                    <button class="tab-button" id="codeEditorTabButton">Appearance</button>
+                    <button class="tab-button" id="uploadNewFileButton">Add Model</button>
+                    <button class="tab-button primary-action" id="saveButton">Save</button>
+                    <button id="undoButton">Undo</button>
+                    <button id="redoButton">Redo</button>
+                    <button id="structureHighlightButton" class="structure-action">Show Structure</button>
+                    <button id="clearStructureButton" class="clear-action">Clear</button>
+                </nav>
                 <div class="cad-mode-tabs" role="tablist" aria-label="Sidebar mode">
                     <button class="cad-mode-tab active" data-cad-mode="object">Object</button>
                     <button class="cad-mode-tab" data-cad-mode="scene">Scene</button>
