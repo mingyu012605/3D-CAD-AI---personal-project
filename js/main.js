@@ -3522,7 +3522,7 @@ import {
             // Only create new state.scene, state.renderer, state.camera, state.controls if they don't exist
             if (!state.scene) {
                 state.scene = new THREE.Scene();
-                state.scene.background = new THREE.Color(0xFFFFFF);
+                state.scene.background = new THREE.Color(0x111b29);
             }
             if (!state.renderer) {
                 state.renderer = new THREE.WebGLRenderer({ canvas: cadCanvas, antialias: true });
@@ -5117,9 +5117,8 @@ import {
             }
 
             // Set initial CSS for the CAD viewer background
-            cadViewer.style.backgroundColor = '#FFFFFF';
-            cadViewer.style.backgroundImage = 'repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(0,0,0,0.1) 20px), repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(0,0,0,0.1) 20px)';
-            cadViewer.style.backgroundSize = '20px 20px';
+            cadViewer.style.backgroundColor = '#111b29';
+            cadViewer.style.backgroundImage = 'none';
 
             // RESTORED: Show upload page first (more professional)
             uploadPage.classList.add('page-active');

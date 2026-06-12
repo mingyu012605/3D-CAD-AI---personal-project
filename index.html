@@ -9,7 +9,8 @@
     <link rel="stylesheet" href="css/styles.css" />
     <style>
         [hidden] { display: none !important; }
-        .right-panel { overflow: hidden; min-width: 0; padding: 12px 14px 14px; }
+        html, body { background: #101722; background-image: none; }
+        .right-panel { overflow: hidden; min-width: 0; padding: 12px 14px 14px; background: #141d2a; border-left-color: #273449; }
         .editor-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; margin-bottom: 7px; padding-bottom: 9px; border-bottom: 1px solid #2d3748; }
         .editor-actions button { min-width: 0; height: 34px; padding: 5px 3px; overflow: hidden; border: 0; border-radius: 5px; color: #dbe5f3; background: #293448; font-size: 10px; font-weight: 700; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; }
         .editor-actions button:hover:not(:disabled) { color: #fff; background: #3b4b65; }
@@ -18,10 +19,14 @@
         .editor-actions .structure-action { grid-column: span 2; background: #168cff; }
         .editor-actions .clear-action { background: #4a5568; }
         .editor-actions .clear-action:not(:disabled) { background: #b44444; }
-        #cadViewer { min-width: 0; }
+        #cadViewer { min-width: 0; background: #111b29; background-image: none; }
+        #viewToolbar { top: auto; left: auto; right: 18px; bottom: 18px; flex-direction: row; padding: 5px; border: 1px solid #34445c; border-radius: 9px; background: rgba(15, 24, 36, 0.9); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32); }
+        #viewToolbar .view-btn { min-width: 42px; padding: 7px 9px; background: #202d40; border-color: #34445c; }
+        #viewAxesContainer { display: none !important; }
         .sidebar-workspace { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 3px; }
         .cad-mode-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 5px 0 7px; }
-        .cad-mode-tab { min-width: 0; padding: 7px 3px; border: 0; border-radius: 5px; color: #a0aec0; background: #202938; cursor: pointer; font-size: 11px; font-weight: 600; }
+        .cad-mode-tab { min-width: 0; height: 34px; padding: 6px; border: 0; border-radius: 5px; color: #a0aec0; background: #202938; cursor: pointer; font-size: 0; font-weight: 600; }
+        .cad-mode-tab svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
         .cad-mode-tab.active { color: #fff; background: #DAA520; }
         .cad-mode-panel { display: none; }
         .cad-mode-panel.active { display: block; }
@@ -30,8 +35,10 @@
         .cad-empty-state { padding: 14px; color: #cbd5e0; background: #202938; border-radius: 7px; line-height: 1.5; }
         .cad-inspector-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid #364156; }
         .cad-inspector-section h4 { margin: 0 0 7px; color: #f7fafc; font-size: 13px; }
-        .cad-stat-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 10px; color: #cbd5e0; font-size: 12px; }
-        .cad-stat-grid span:nth-child(odd) { color: #718096; }
+        .cad-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; color: #cbd5e0; }
+        .cad-stat-grid span { padding: 8px; border-radius: 6px; background: #192536; }
+        .cad-stat-grid span:nth-child(odd) { color: #8291a7; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+        .cad-stat-grid span:nth-child(even) { color: #f4f8ff; font-size: 14px; font-weight: 700; text-align: right; }
         .cad-tools-panel { display: flex; flex-direction: column; gap: 8px; }
         .cad-tools-panel details { background: #202938; border: 1px solid #364156; border-radius: 7px; padding: 8px; }
         .cad-tools-panel summary { cursor: pointer; color: #f7fafc; font-weight: 600; }
@@ -58,6 +65,13 @@
         .cad-object-selected .object-properties-controls { margin-top: 0; padding-top: 0; border-top: 0; }
         .cad-object-selected .object-properties-controls h3 { display: none; }
         .cad-object-selected .doc-link-group { margin-top: 12px; }
+        .doc-link-group { width: 100%; box-sizing: border-box; padding: 12px !important; border: 1px solid #34445c !important; border-radius: 8px; background: #192536; }
+        .doc-link-group > label { color: #f4f8ff; font-weight: 700; }
+        .doc-object-name { color: #dbe7f7 !important; font-size: 13px !important; font-style: normal !important; font-weight: 600; }
+        .doc-object-meta { color: #8dd8ff !important; }
+        .meta-tag { background: #223149 !important; border-color: #3c526f !important; color: #bcd0e8 !important; }
+        .doc-url-input { background: #101925 !important; border-color: #34445c !important; }
+        #cadDecorStatus { margin-top: 8px; }
         .sidebar-chat { flex: 0 0 270px !important; min-height: 190px; border-top: 1px solid #2d3748; padding-top: 8px; }
         .sidebar-chat #aiLog { min-height: 55px; }
         .sidebar-chat .ai-input-group { flex-shrink: 0; }
@@ -137,10 +151,10 @@
                     <button id="clearStructureButton" class="clear-action">Clear</button>
                 </nav>
                 <div class="cad-mode-tabs" role="tablist" aria-label="Sidebar mode">
-                    <button class="cad-mode-tab active" data-cad-mode="object">Object</button>
-                    <button class="cad-mode-tab" data-cad-mode="scene">Scene</button>
-                    <button class="cad-mode-tab" data-cad-mode="tools">Tools</button>
-                    <button class="cad-mode-tab" data-cad-mode="project">Project</button>
+                    <button class="cad-mode-tab active" data-cad-mode="object" title="Object" aria-label="Object"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 7v10L12 21l7.5-4V7L12 3Z"/><path d="m4.5 7 7.5 4 7.5-4M12 11v10"/></svg></button>
+                    <button class="cad-mode-tab" data-cad-mode="scene" title="Scene" aria-label="Scene"><svg viewBox="0 0 24 24"><path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="m4 12 8 4 8-4M4 17l8 4 8-4"/></svg></button>
+                    <button class="cad-mode-tab" data-cad-mode="tools" title="Tools" aria-label="Tools"><svg viewBox="0 0 24 24"><path d="m14 6 4-3 3 3-3 4"/><path d="m16 8-9 9"/><path d="m8 16-4 1-1 4 4-1 9-9"/></svg></button>
+                    <button class="cad-mode-tab" data-cad-mode="project" title="Project" aria-label="Project"><svg viewBox="0 0 24 24"><path d="M4 5h6l2 2h8v12H4V5Z"/><path d="M4 10h16"/></svg></button>
                 </div>
 
                 <div class="sidebar-workspace">
@@ -204,6 +218,10 @@
                     <section id="cadModeScene" class="cad-mode-panel">
                         <h3 class="cad-panel-heading">Scene</h3>
                         <div class="cad-panel-subtitle">Select, rename, hide, lock, or isolate models.</div>
+                        <div class="cad-tool-row">
+                            <button id="cadToggleDecor">Hide Decorative Blobs</button>
+                        </div>
+                        <div id="cadDecorStatus" class="cad-tool-output">Decorative translucent objects are visible.</div>
                         <div id="cadObjectTree" class="cad-object-tree"></div>
                     </section>
 

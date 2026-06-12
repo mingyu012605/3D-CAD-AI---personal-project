@@ -35,8 +35,8 @@ function updateDynamicGrid() {
             const divisions = 40;
 
             // Create new GridHelper centered beneath the loaded model.
-            const newGridHelper = new THREE.GridHelper(gridSize, divisions, 0x888888, 0xbbbbbb);
-            newGridHelper.material.opacity = 0.2;
+            const newGridHelper = new THREE.GridHelper(gridSize, divisions, 0x41617d, 0x293b50);
+            newGridHelper.material.opacity = 0.16;
             newGridHelper.material.transparent = true;
             newGridHelper.name = 'gridHelper';
             newGridHelper.position.set(center.x, 0, center.z);

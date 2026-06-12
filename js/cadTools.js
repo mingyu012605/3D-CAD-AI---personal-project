@@ -17,6 +17,7 @@ const sectionPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
 let isolateModel = null;
 let lastTreeSignature = '';
 let lastInspectorSignature = '';
+let decorativeMeshesHidden = true;
 
 function setCADMode(mode) {
     document.querySelectorAll('.cad-mode-tab').forEach(button => {
@@ -56,6 +57,47 @@ function selectedTopModels() {
         if (current) found.add(current);
     });
     return [...found];
+}
+
+function isDecorativeBlob(mesh) {
+    if (!mesh?.isMesh || !mesh.material) return false;
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    return materials.some(material => {
+        if (!material?.transparent || material.opacity >= 0.9 || !material.color) return false;
+        const hsl = {};
+        material.color.getHSL(hsl);
+        return hsl.s > 0.18 && hsl.l > 0.45 && (hsl.h > 0.72 || hsl.h < 0.04);
+    });
+}
+
+function refreshDecorStatus() {
+    const button = document.getElementById('cadToggleDecor');
+    const status = document.getElementById('cadDecorStatus');
+    if (!button || !status) return;
+    let count = 0;
+    state.loadedModels.forEach(model => model.traverse(mesh => {
+        if (isDecorativeBlob(mesh)) {
+            count++;
+            mesh.visible = !decorativeMeshesHidden;
+            mesh.userData.cadDecorHidden = decorativeMeshesHidden;
+        }
+    }));
+    button.disabled = count === 0;
+    button.textContent = decorativeMeshesHidden ? 'Show Decorative Blobs' : 'Hide Decorative Blobs';
+    status.textContent = count
+        ? `${count} translucent pink/purple decorative object${count === 1 ? '' : 's'} ${decorativeMeshesHidden ? 'hidden' : 'visible'}.`
+        : 'No translucent decorative blobs detected.';
+}
+
+function toggleDecorativeMeshes() {
+    decorativeMeshesHidden = !decorativeMeshesHidden;
+    state.loadedModels.forEach(model => model.traverse(mesh => {
+        if (isDecorativeBlob(mesh)) {
+            mesh.visible = !decorativeMeshesHidden;
+            mesh.userData.cadDecorHidden = decorativeMeshesHidden;
+        }
+    }));
+    refreshDecorStatus();
 }
 
 function pushUndoState() {
@@ -417,6 +459,7 @@ export function refreshAllTools() {
     refreshMeasurement();
     updateSectionPlane();
     refreshStructureButton();
+    refreshDecorStatus();
     const recover = document.getElementById('cadRecoverProject');
     if (recover) recover.disabled = !hasAutosave();
 }
@@ -429,6 +472,7 @@ export function initCADTools() {
     document.getElementById('cadObjectTree').addEventListener('dblclick', handleTreeRename);
     document.getElementById('structureHighlightButton').addEventListener('click', showStructureHighlight);
     document.getElementById('clearStructureButton').addEventListener('click', clearStructureHighlight);
+    document.getElementById('cadToggleDecor').addEventListener('click', toggleDecorativeMeshes);
     document.getElementById('cadApplyTransform').addEventListener('click', applyPreciseTransform);
     document.getElementById('cadSnapEnabled').addEventListener('change', updateSnapping);
     document.getElementById('cadSnapSize').addEventListener('change', updateSnapping);

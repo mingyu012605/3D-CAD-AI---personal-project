@@ -7,7 +7,7 @@ let mouseDownY = 0;
 const CLICK_TOLERANCE = 15;
 const SELECTION_ASSIST_RADIUS_PX = 9;
 const highlightMaterial = new THREE.MeshBasicMaterial({
-    color: 0x1e90ff,
+    color: 0x00bfff,
     transparent: true,
     opacity: 0.8,
     depthTest: false,
