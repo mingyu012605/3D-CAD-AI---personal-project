@@ -8,9 +8,10 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "dotenv": "^16.4.5",
     "cors": "^2.8.5",
-    "openai": "^4.0.0"
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "openai": "^4.0.0",
+    "web-ifc": "^0.0.44"
   }
 }

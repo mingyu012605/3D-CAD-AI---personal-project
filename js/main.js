@@ -3787,12 +3787,13 @@ import {
             if (state.loadedModels.length === 0) {
                 addMessageToLog('System', 'No models loaded to select parts from.');
                 speakResponse('No models loaded.');
-                return;
+                return false;
             }
 
             const candidates = findIFCSelectionCandidates(partName);
             if (candidates.length > 0) {
                 startIFCSelectionClarification(partName, candidates);
+                return true;
             } else {
                 const availableTypes = [];
                 for (const model of state.loadedModels) {
@@ -3802,6 +3803,7 @@ import {
                 const hint = availableTypes.length > 0 ? ` Available types: ${[...new Set(availableTypes)].join(', ')}` : '';
                 addMessageToLog('System', `"${partName}" not found.${hint}`);
                 speakResponse(`${partName} not found.`);
+                return false;
             }
         }
 
@@ -3837,6 +3839,7 @@ import {
             if (!query) return [];
             const candidates = [];
             const candidatesByElement = new Map();
+            const matchAll = ['all', 'everything', 'model'].includes(query);
 
             state.loadedModels.forEach(model => {
                 model.traverse(mesh => {
@@ -3844,7 +3847,7 @@ import {
                     const meta = getIFCSelectionMeta(mesh);
                     const searchable = [meta.uuid, meta.type, meta.name, meta.level, mesh.name]
                         .map(normalizeSelectionText);
-                    if (searchable.some(value => value === query || value.includes(query) || query.includes(value))) {
+                    if (matchAll || searchable.some(value => value === query || value.includes(query) || query.includes(value))) {
                         const elementKey = mesh.userData.modelID != null && mesh.userData.expressID != null
                             ? `${mesh.userData.modelID}:${mesh.userData.expressID}`
                             : mesh.uuid;
@@ -3859,6 +3862,17 @@ import {
                 });
             });
             return candidates;
+        }
+
+        function tryHandleIFCSelectionRequest(command) {
+            const match = String(command || '').trim().match(/^(?:please\s+)?(?:select|highlight|show(?:\s+me)?)\s+(.+)$/i);
+            if (!match) return false;
+
+            const candidates = findIFCSelectionCandidates(match[1]);
+            if (candidates.length === 0) return false;
+
+            startIFCSelectionClarification(match[1], candidates);
+            return true;
         }
 
         function distinctSelectionValues(candidates, field) {
@@ -4848,7 +4862,9 @@ import {
             state.recognition.onresult = (event) => {
                 const command = event.results[0][0].transcript;
                 addMessageToLog('System', `You said: "${command}"`);
-                if (!handleIFCSelectionClarification(command)) sendAICommand(command);
+                if (!handleIFCSelectionClarification(command) && !tryHandleIFCSelectionRequest(command)) {
+                    sendAICommand(command);
+                }
             };
 
             state.recognition.onerror = (event) => {
@@ -4913,6 +4929,8 @@ import {
                     // IFC selection clarification replies are handled locally.
                 } else if (state.pendingDisambiguation && /^\d+$/.test(command)) {
                     handleDisambiguationChoice(command);
+                } else if (tryHandleIFCSelectionRequest(command)) {
+                    // IFC selection requests bypass the backend so clarification cannot be skipped.
                 } else {
                     sendAICommand(command);
                 }
