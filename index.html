@@ -8,17 +8,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css" />
     <style>
-        .right-panel { overflow: hidden; min-width: 0; padding: 14px; }
-        header { height: 54px; padding: 8px 18px; font-size: 1.75rem; }
+        [hidden] { display: none !important; }
+        .right-panel { overflow: hidden; min-width: 0; padding: 12px 14px 14px; }
+        header { height: 58px; padding: 7px 14px; font-size: 1.45rem; justify-content: space-between; }
         header svg { width: 29px; height: 29px; }
+        .header-brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+        .header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 5px; min-width: 0; }
+        .header-actions button { height: 36px; padding: 6px 10px; border: 0; border-radius: 6px; color: #dbe5f3; background: #293448; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .header-actions .tab-button { flex: 0 0 auto; }
+        .header-actions button:hover:not(:disabled) { color: #fff; background: #3b4b65; }
+        .header-actions button.active, .header-actions .primary-action { color: #fff; background: #DAA520; }
+        .header-actions button:disabled { opacity: 0.38; cursor: not-allowed; }
+        .header-actions .structure-action { background: #168cff; }
+        .header-actions .clear-action { background: #4a5568; }
+        .header-actions .clear-action:not(:disabled) { background: #b44444; }
         #cadViewer { min-width: 0; }
-        .tab-buttons { overflow: hidden; margin-bottom: 6px; padding: 3px; }
-        .tab-buttons .tab-button { min-width: 0; padding: 6px 4px; font-size: 11px; }
-        #backToUploadCircleButton { width: 32px; height: 32px; }
-        .undo-redo-buttons { margin-bottom: 6px; padding: 4px 0 8px; gap: 6px; }
-        .undo-redo-buttons button { min-width: 36px; height: 36px; padding: 6px 8px; }
-        #structureHighlightButton { margin-left: auto; padding: 6px 10px; color: #fff; background: #168cff; font-size: 11px; font-weight: 700; }
-        #structureHighlightButton.active { background: #0b5fb8; box-shadow: 0 0 0 2px rgba(22, 140, 255, 0.35); }
         .sidebar-workspace { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 3px; }
         .cad-mode-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 5px 0 7px; }
         .cad-mode-tab { min-width: 0; padding: 7px 3px; border: 0; border-radius: 5px; color: #a0aec0; background: #202938; cursor: pointer; font-size: 11px; font-weight: 600; }
@@ -64,6 +68,20 @@
         .ai-input-group { min-width: 0; }
         .ai-input-group input { min-width: 0; width: 0; }
         .ai-input-group button { flex-shrink: 0; }
+        .appearance-panel { display: flex; flex-direction: column; gap: 12px; }
+        .appearance-panel h3, .appearance-panel p { margin: 0; }
+        .appearance-panel p { color: #aebbd0; font-size: 12px; line-height: 1.5; }
+        .appearance-presets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .appearance-presets button, #resetCssButton, #applyCssButton { min-height: 40px; border: 1px solid #44516a; border-radius: 7px; color: #edf2f7; background: #263247; font-weight: 700; cursor: pointer; }
+        .appearance-presets button:hover, #resetCssButton:hover, #applyCssButton:hover { border-color: #DAA520; background: #33425b; }
+        #cssCodeEditor { min-height: 110px !important; flex: 0 0 110px !important; margin: 0 !important; resize: none !important; }
+        .appearance-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        #applyCssButton { background: #DAA520 !important; }
+        #resetCssButton { background: #4a5568; }
+        @media (max-width: 1050px) {
+            .header-brand span { display: none; }
+            .header-actions button { padding: 6px 7px; font-size: 10px; }
+        }
         @media (max-height: 760px) {
             .sidebar-chat { flex-basis: 190px !important; min-height: 150px; }
         }
@@ -72,14 +90,25 @@
 </head>
 <body>
     <header>
-        <!-- New Innovative Logo SVG -->
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 1L2 6v12l10 5 10-5V6L12 1zm0 2.31L18.47 6 12 9.31 5.53 6 12 3.31zM4 7.69l6 3.15v6.52L4 13.84V7.69zm8 11.01L6.47 16 12 12.69l5.53 3.31L12 18.7zM20 13.84l-6 3.15V10.84l6-3.15v6.15z" />
-            <circle cx="12" cy="12" r="2" fill="#DAA520" /> <!-- Dark Yellow -->
-            <path d="M12 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" fill="#fff" />
-        </svg>
-        AI VR CAD Editor
-        <!-- Removed API Key Status Indicator -->
+        <div class="header-brand">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 1L2 6v12l10 5 10-5V6L12 1zm0 2.31L18.47 6 12 9.31 5.53 6 12 3.31zM4 7.69l6 3.15v6.52L4 13.84V7.69zm8 11.01L6.47 16 12 12.69l5.53 3.31L12 18.7zM20 13.84l-6 3.15V10.84l6-3.15v6.15z" />
+                <circle cx="12" cy="12" r="2" fill="#DAA520" />
+                <path d="M12 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" fill="#fff" />
+            </svg>
+            <span>AI VR CAD Editor</span>
+        </div>
+        <nav id="headerEditorActions" class="header-actions" aria-label="Editor actions" hidden>
+            <button id="backToUploadCircleButton" onclick="window.goBack()" title="Back to start">Back</button>
+            <button class="tab-button active" id="chatTabButton">Chat</button>
+            <button class="tab-button" id="codeEditorTabButton">Appearance</button>
+            <button class="tab-button" id="uploadNewFileButton">Add Model</button>
+            <button class="tab-button primary-action" id="saveButton">Save</button>
+            <button id="undoButton">Undo</button>
+            <button id="redoButton">Redo</button>
+            <button id="structureHighlightButton" class="structure-action">Show Structure</button>
+            <button id="clearStructureButton" class="clear-action">Clear</button>
+        </nav>
     </header>
 
     <div class="page-container">
@@ -126,29 +155,6 @@
 
             <!-- NEW: Right-side chat panel with updated buttons -->
             <div class="right-panel">
-                <div class="tab-buttons">
-                    <!-- Small circular "Back to Upload" button -->
-                    <button id="backToUploadCircleButton" onclick="window.goBack()">
-                        <!-- Left arrow SVG -->
-                        <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#FFFFFF"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6z" /></svg>
-                    </button>
-                    <button class="tab-button active" id="chatTabButton">AI Chat</button>
-                    <button class="tab-button" id="codeEditorTabButton">Code Editor</button>
-                    <button class="tab-button" id="uploadNewFileButton">Add New Model</button>
-                    <button class="tab-button" id="saveButton">Save Scene</button>
-                </div>
-
-                <!-- NEW: Undo/Redo Buttons -->
-                <div class="undo-redo-buttons">
-                    <button id="undoButton">
-                        <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#FFFFFF"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.61-3.61c1.39-1.16 3.16-1.89 5.11-1.89 3.73 0 6.84 2.55 7.73 6h2.08c-.9-4.5-4.77-8-9.81-8z" /></svg>
-                    </button>
-                    <button id="redoButton">
-                        <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#FFFFFF"><path d="M18.41 16.59L22 13V4h-9l3.61 3.61c-1.39 1.16-3.16 1.89-5.11 1.89-3.73 0-6.84-2.55-7.73-6H2.27c.9 4.5 4.77 8 9.81 8 2.65 0 5.05-.99 6.9-2.6z" /></svg>
-                    </button>
-                    <button id="structureHighlightButton" title="Toggle blue structure highlight">Structure</button>
-                </div>
-
                 <div class="cad-mode-tabs" role="tablist" aria-label="Sidebar mode">
                     <button class="cad-mode-tab active" data-cad-mode="object">Object</button>
                     <button class="cad-mode-tab" data-cad-mode="scene">Scene</button>
@@ -284,10 +290,22 @@
                     </div>
                 </div>
 
-                <!-- Code Editor Content is now hidden by default without a direct button -->
                 <div id="codeEditorContent" class="tab-content">
-                    <textarea id="cssCodeEditor" placeholder="Enter CSS for CAD viewer background..."></textarea>
-                    <button id="applyCssButton">Preview CSS</button>
+                    <div class="appearance-panel">
+                        <h3>Viewer Appearance</h3>
+                        <p>Choose a clean viewer background. Advanced CSS is optional.</p>
+                        <div class="appearance-presets">
+                            <button data-viewer-style="light">Light</button>
+                            <button data-viewer-style="blueprint">Blueprint</button>
+                            <button data-viewer-style="dark">Dark</button>
+                            <button data-viewer-style="grid">Grid</button>
+                        </div>
+                        <textarea id="cssCodeEditor" placeholder="Optional advanced CSS, for example: background: #eef4ff;"></textarea>
+                        <div class="appearance-actions">
+                            <button id="resetCssButton">Reset</button>
+                            <button id="applyCssButton">Apply Style</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>

@@ -789,19 +789,11 @@ export function clearAllHighlights() {
             currentMaterials.forEach((mat, index) => {
                 if (mat && mat.isMaterial && originalMaterials[index]) {
                     mat.dispose(); // Dispose current material before replacing
-                    // Use the initialMaterial if available, otherwise fallback to the one stored for temporary highlight
-                    if (object.userData.initialMaterial && (Array.isArray(object.userData.initialMaterial) ? object.userData.initialMaterial[index] : object.userData.initialMaterial)) {
-                        if (Array.isArray(object.material)) {
-                            object.material[index] = object.userData.initialMaterial[index].clone(); // Clone to ensure independence
-                        } else {
-                            object.material = object.userData.initialMaterial.clone(); // Clone to ensure independence
-                        }
+                    // Restore the material as it was immediately before Structure view.
+                    if (Array.isArray(object.material)) {
+                        object.material[index] = originalMaterials[index];
                     } else {
-                        if (Array.isArray(object.material)) {
-                            object.material[index] = originalMaterials[index];
-                        } else {
-                            object.material = originalMaterials[index];
-                        }
+                        object.material = originalMaterials[index];
                     }
                     object.material.needsUpdate = true;
                 }

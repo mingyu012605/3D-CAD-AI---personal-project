@@ -104,6 +104,8 @@ import {
         const codeEditorContent = document.getElementById('codeEditorContent');
         const cssCodeEditor = document.getElementById('cssCodeEditor');
         const applyCssButton = document.getElementById('applyCssButton');
+        const resetCssButton = document.getElementById('resetCssButton');
+        const headerEditorActions = document.getElementById('headerEditorActions');
 
         // NEW: References to tab buttons for setActiveTab function
         const chatTabButton = document.getElementById('chatTabButton');
@@ -3307,26 +3309,29 @@ import {
             console.log("[Apply CSS] button clicked."); // Debug log
             const cssText = cssCodeEditor.value;
             try {
-                // Clear existing inline styles to prevent conflicts
-                cadViewer.style.cssText = '';
-
-                // Apply the new CSS properties
-                const lines = cssText.split(';');
-                lines.forEach(line => {
-                    const parts = line.split(':'); // Corrected from `line = line.split(':')`
-                    if (parts.length === 2) {
-                        const prop = parts[0].trim();
-                        const value = parts[1].trim();
-                        if (prop && value) {
-                            cadViewer.style[prop] = value;
-                        }
-                    }
-                });
-                addMessageToLog('System', 'CAD viewer background CSS applied successfully.');
+                cadViewer.style.cssText = cssText;
+                addMessageToLog('System', 'Viewer appearance applied.');
             } catch (error) {
                 addMessageToLog('System', `Error applying CSS: ${error.message}`);
                 console.error("Error applying CSS:", error);
             }
+        });
+        document.querySelectorAll('[data-viewer-style]').forEach(button => {
+            button.addEventListener('click', () => {
+                const styles = {
+                    light: 'background: #ffffff;',
+                    blueprint: 'background: linear-gradient(135deg, #eaf4ff, #cddff2);',
+                    dark: 'background: #182231;',
+                    grid: 'background-color: #ffffff; background-image: linear-gradient(#dfe7ef 1px, transparent 1px), linear-gradient(90deg, #dfe7ef 1px, transparent 1px); background-size: 24px 24px;',
+                };
+                cssCodeEditor.value = styles[button.dataset.viewerStyle] || '';
+                applyCssButton.click();
+            });
+        });
+        resetCssButton.addEventListener('click', () => {
+            cssCodeEditor.value = '';
+            cadViewer.style.cssText = '';
+            addMessageToLog('System', 'Viewer appearance reset.');
         });
 
 
@@ -3468,6 +3473,7 @@ import {
 
             editorPage.classList.remove('page-inactive');
             editorPage.classList.add('page-active');
+            headerEditorActions.hidden = false;
             console.log("[goToEditor] Page transition complete. Editor page is now active.");
 
             // The renderer was sized before the page became visible — fix it now
@@ -3480,6 +3486,7 @@ import {
             editorPage.classList.add('page-inactive');
             uploadPage.classList.remove('page-inactive');
             uploadPage.classList.add('page-active');
+            headerEditorActions.hidden = true;
             stopVoiceAssist();
             window.removeEventListener('resize', onWindowResize, false);
             disposeSceneResources(); // This will clear all models and re-initialize the state.scene
@@ -4975,7 +4982,7 @@ import {
         function setActiveTab(tabName) {
             // Remove 'active' class from all tab buttons and content
             // Ensure we only affect the tab buttons within the right-panel
-            document.querySelectorAll('.right-panel .tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.header-actions .tab-button').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.right-panel .tab-content').forEach(content => content.classList.remove('active'));
 
             // Add 'active' class to the clicked tab button and corresponding content
@@ -5119,6 +5126,7 @@ import {
             uploadPage.classList.remove('page-inactive');
             editorPage.classList.add('page-inactive');
             editorPage.classList.remove('page-active');
+            headerEditorActions.hidden = true;
 
 
 

@@ -29,15 +29,22 @@ function setCADMode(mode) {
 
 function refreshStructureButton() {
     const button = document.getElementById('structureHighlightButton');
-    if (!button) return;
+    const clearButton = document.getElementById('clearStructureButton');
+    if (!button || !clearButton) return;
     const active = state.allHighlightsOriginalMaterials.size > 0;
     button.classList.toggle('active', active);
-    button.textContent = active ? 'Clear Structure' : 'Structure';
+    button.textContent = active ? 'Structure Shown' : 'Show Structure';
+    button.disabled = active;
+    clearButton.disabled = !active;
 }
 
-function toggleStructureHighlight() {
-    if (state.allHighlightsOriginalMaterials.size > 0) clearAllHighlights();
-    else highlightAllModels();
+function showStructureHighlight() {
+    highlightAllModels();
+    refreshStructureButton();
+}
+
+function clearStructureHighlight() {
+    clearAllHighlights();
     refreshStructureButton();
 }
 
@@ -420,7 +427,8 @@ export function initCADTools() {
     });
     document.getElementById('cadObjectTree').addEventListener('click', handleTreeClick);
     document.getElementById('cadObjectTree').addEventListener('dblclick', handleTreeRename);
-    document.getElementById('structureHighlightButton').addEventListener('click', toggleStructureHighlight);
+    document.getElementById('structureHighlightButton').addEventListener('click', showStructureHighlight);
+    document.getElementById('clearStructureButton').addEventListener('click', clearStructureHighlight);
     document.getElementById('cadApplyTransform').addEventListener('click', applyPreciseTransform);
     document.getElementById('cadSnapEnabled').addEventListener('change', updateSnapping);
     document.getElementById('cadSnapSize').addEventListener('change', updateSnapping);

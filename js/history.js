@@ -116,7 +116,7 @@ export function saveSceneState() {
             isPrimitive: model.userData.isPrimitive || false,
             primitiveType: model.userData.primitiveType || null,
             // Store material properties for meshes within this model
-            materials: []
+            materials: [],
         };
 
         model.traverse(obj => {
@@ -445,6 +445,8 @@ export function updateUndoRedoButtons() {
 
         undoButton.title = undoButton.disabled ? 'No actions to undo' : `Undo (${state.undoStack.length} actions available)`;
         redoButton.title = redoButton.disabled ? 'No actions to redo' : `Redo (${state.redoStack.length} actions available)`;
+        undoButton.textContent = state.undoStack.length ? `Undo ${state.undoStack.length}` : 'Undo';
+        redoButton.textContent = state.redoStack.length ? `Redo ${state.redoStack.length}` : 'Redo';
     }
 }
 
@@ -460,7 +462,8 @@ export function getCurrentState() {
             scale: { x: model.scale.x, y: model.scale.y, z: model.scale.z },
             isPrimitive: model.userData.isPrimitive || false,
             primitiveType: model.userData.primitiveType || null,
-            materials: []
+            materials: [],
+            objectSnapshot: cloneObjectForHistory(model),
         };
 
         model.traverse(child => {
@@ -482,6 +485,17 @@ export function getCurrentState() {
     return sceneState;
 }
 
+function cloneObjectForHistory(object) {
+    const clone = object.clone(true);
+    clone.traverse(child => {
+        if (!child.isMesh) return;
+        if (child.geometry) child.geometry = child.geometry.clone();
+        if (Array.isArray(child.material)) child.material = child.material.map(material => material.clone());
+        else if (child.material) child.material = child.material.clone();
+    });
+    return clone;
+}
+
 // CORRECTED: Only remove mesh objects, preserve lights/state.camera/state.controls
 export function restoreState(snapshot) {
     console.log("[restoreState] Restoring state with", snapshot.length, "objects");
@@ -497,34 +511,19 @@ export function restoreState(snapshot) {
     clearSelection();
     clearAllHighlights();
 
-    // 1. ONLY remove mesh objects from state.scene (preserve lights, state.camera, grid, state.controls)
-    const meshesToRemove = state.scene.children.filter(obj =>
-        obj.isMesh &&
-        !obj.userData.isGridLabel &&
-        obj !== state.currentGridHelper &&
-        obj !== state.raycastDebugSphere
-    );
-
-    // Remove and dispose mesh objects properly
-    meshesToRemove.forEach(mesh => {
-        state.scene.remove(mesh);
-        // Dispose geometry and materials to prevent memory leaks
-        if (mesh.geometry) mesh.geometry.dispose();
-        if (mesh.material) {
-            if (Array.isArray(mesh.material)) {
-                mesh.material.forEach(mat => mat.dispose());
-            } else {
-                mesh.material.dispose();
-            }
-        }
-    });
+    // Remove tracked top-level models, including imported Group objects.
+    [...state.loadedModels].forEach(model => state.scene.remove(model));
 
     // Clear arrays and selections (but don't touch state.scene structure)
     state.loadedModels = [];
 
     // 2. RECREATE objects from saved state
     snapshot.forEach(modelState => {
-        if (modelState.isPrimitive) {
+        if (modelState.objectSnapshot) {
+            const restoredObject = cloneObjectForHistory(modelState.objectSnapshot);
+            state.scene.add(restoredObject);
+            state.loadedModels.push(restoredObject);
+        } else if (modelState.isPrimitive) {
             // Create base material
             let baseMaterial = new THREE.MeshStandardMaterial({
                 color: 0x1e90ff,
