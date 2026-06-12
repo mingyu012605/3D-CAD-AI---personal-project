@@ -8,12 +8,19 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css" />
     <style>
-        .right-panel { overflow: hidden; min-width: 0; }
+        .right-panel { overflow: hidden; min-width: 0; padding: 14px; }
+        header { height: 54px; padding: 8px 18px; font-size: 1.75rem; }
+        header svg { width: 29px; height: 29px; }
         #cadViewer { min-width: 0; }
-        .tab-buttons { overflow: hidden; }
-        .tab-buttons .tab-button { min-width: 0; padding: 8px 5px; font-size: 12px; }
+        .tab-buttons { overflow: hidden; margin-bottom: 6px; padding: 3px; }
+        .tab-buttons .tab-button { min-width: 0; padding: 6px 4px; font-size: 11px; }
+        #backToUploadCircleButton { width: 32px; height: 32px; }
+        .undo-redo-buttons { margin-bottom: 6px; padding: 4px 0 8px; gap: 6px; }
+        .undo-redo-buttons button { min-width: 36px; height: 36px; padding: 6px 8px; }
+        #structureHighlightButton { margin-left: auto; padding: 6px 10px; color: #fff; background: #168cff; font-size: 11px; font-weight: 700; }
+        #structureHighlightButton.active { background: #0b5fb8; box-shadow: 0 0 0 2px rgba(22, 140, 255, 0.35); }
         .sidebar-workspace { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 3px; }
-        .cad-mode-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 10px 0; }
+        .cad-mode-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 5px 0 7px; }
         .cad-mode-tab { min-width: 0; padding: 7px 3px; border: 0; border-radius: 5px; color: #a0aec0; background: #202938; cursor: pointer; font-size: 11px; font-weight: 600; }
         .cad-mode-tab.active { color: #fff; background: #DAA520; }
         .cad-mode-panel { display: none; }
@@ -51,14 +58,14 @@
         .cad-object-selected .object-properties-controls { margin-top: 0; padding-top: 0; border-top: 0; }
         .cad-object-selected .object-properties-controls h3 { display: none; }
         .cad-object-selected .doc-link-group { margin-top: 12px; }
-        .sidebar-chat { flex: 0 0 210px !important; min-height: 150px; border-top: 1px solid #2d3748; padding-top: 10px; }
+        .sidebar-chat { flex: 0 0 270px !important; min-height: 190px; border-top: 1px solid #2d3748; padding-top: 8px; }
         .sidebar-chat #aiLog { min-height: 55px; }
         .sidebar-chat .ai-input-group { flex-shrink: 0; }
         .ai-input-group { min-width: 0; }
         .ai-input-group input { min-width: 0; width: 0; }
         .ai-input-group button { flex-shrink: 0; }
         @media (max-height: 760px) {
-            .sidebar-chat { flex-basis: 155px !important; }
+            .sidebar-chat { flex-basis: 190px !important; min-height: 150px; }
         }
     </style>
     <!-- Import Map for ES Modules -->
@@ -139,6 +146,7 @@
                     <button id="redoButton">
                         <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#FFFFFF"><path d="M18.41 16.59L22 13V4h-9l3.61 3.61c-1.39 1.16-3.16 1.89-5.11 1.89-3.73 0-6.84-2.55-7.73-6H2.27c.9 4.5 4.77 8 9.81 8 2.65 0 5.05-.99 6.9-2.6z" /></svg>
                     </button>
+                    <button id="structureHighlightButton" title="Toggle blue structure highlight">Structure</button>
                 </div>
 
                 <div class="cad-mode-tabs" role="tablist" aria-label="Sidebar mode">
@@ -222,12 +230,12 @@
                                 <input id="cadSnapSize" type="number" value="0.5" min="0.001" step="0.1" title="Translation snap">
                             </div>
                         </details>
-                        <details>
+                        <details open>
                             <summary>Measurements</summary>
                             <div id="cadMeasurementOutput" class="cad-tool-output">Select an object to measure it.</div>
                             <button id="cadRefreshMeasurement">Refresh Measurement</button>
                         </details>
-                        <details>
+                        <details open>
                             <summary>Section Plane</summary>
                             <div class="cad-tool-row">
                                 <label><input id="cadSectionEnabled" type="checkbox"> Enable</label>
@@ -236,7 +244,7 @@
                             </div>
                             <input id="cadSectionOffset" type="range" min="-50" max="50" value="0" step="0.1">
                         </details>
-                        <details>
+                        <details open>
                             <summary>Boolean Tools</summary>
                             <div class="cad-tool-output">Bounds-based axis-aligned operations. Select two objects first.</div>
                             <div class="cad-tool-row">

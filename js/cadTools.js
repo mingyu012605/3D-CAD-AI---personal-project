@@ -1,6 +1,9 @@
 import { state } from './state.js';
 import { addMessageToLog } from './utils.js';
-import { getSelectedObjects, selectObject, setSelectedObjects, clearSelection } from './selection.js';
+import {
+    getSelectedObjects, selectObject, setSelectedObjects, clearSelection,
+    highlightAllModels, clearAllHighlights,
+} from './selection.js';
 import { getCurrentState, updateUndoRedoButtons } from './history.js';
 import {
     saveNativeProject,
@@ -22,6 +25,20 @@ function setCADMode(mode) {
     document.querySelectorAll('.cad-mode-panel').forEach(panel => {
         panel.classList.toggle('active', panel.id === `cadMode${mode.charAt(0).toUpperCase()}${mode.slice(1)}`);
     });
+}
+
+function refreshStructureButton() {
+    const button = document.getElementById('structureHighlightButton');
+    if (!button) return;
+    const active = state.allHighlightsOriginalMaterials.size > 0;
+    button.classList.toggle('active', active);
+    button.textContent = active ? 'Clear Structure' : 'Structure';
+}
+
+function toggleStructureHighlight() {
+    if (state.allHighlightsOriginalMaterials.size > 0) clearAllHighlights();
+    else highlightAllModels();
+    refreshStructureButton();
 }
 
 function selectedTopModels() {
@@ -237,7 +254,7 @@ function refreshObjectInspector() {
         (is2D ? size.length() : totalArea).toFixed(3);
 
     const signature = objects.map(object => object.uuid).join('|');
-    if (signature !== lastInspectorSignature) {
+    if (signature !== lastInspectorSignature && !state.selectedObject?.userData?.isGroupHelper) {
         lastInspectorSignature = signature;
         setCADMode('object');
     }
@@ -392,6 +409,7 @@ export function refreshAllTools() {
     refreshTransformInputs();
     refreshMeasurement();
     updateSectionPlane();
+    refreshStructureButton();
     const recover = document.getElementById('cadRecoverProject');
     if (recover) recover.disabled = !hasAutosave();
 }
@@ -402,6 +420,7 @@ export function initCADTools() {
     });
     document.getElementById('cadObjectTree').addEventListener('click', handleTreeClick);
     document.getElementById('cadObjectTree').addEventListener('dblclick', handleTreeRename);
+    document.getElementById('structureHighlightButton').addEventListener('click', toggleStructureHighlight);
     document.getElementById('cadApplyTransform').addEventListener('click', applyPreciseTransform);
     document.getElementById('cadSnapEnabled').addEventListener('change', updateSnapping);
     document.getElementById('cadSnapSize').addEventListener('change', updateSnapping);

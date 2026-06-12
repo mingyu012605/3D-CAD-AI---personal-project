@@ -765,7 +765,12 @@ export function clearAllHighlights() {
         if (groupHelper.userData.moveListener && state.transformControls) {
             state.transformControls.removeEventListener('objectChange', groupHelper.userData.moveListener);
         }
+        if (state.transformControls?.object === groupHelper) {
+            state.transformControls.detach();
+            state.transformControls.visible = false;
+        }
         state.scene.remove(groupHelper);
+        if (state.selectedObject === groupHelper) state.selectedObject = null;
         console.log("[clearAllHighlights] Removed group editing helper");
     }
 
