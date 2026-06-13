@@ -17,7 +17,12 @@ const sectionPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
 let isolateModel = null;
 let lastTreeSignature = '';
 let lastInspectorSignature = '';
+let lastStatsSignature = '';
 let decorativeMeshesHidden = true;
+let decorativeMeshes = [];
+let lastDecorModelSignature = '';
+let lastMeasurementSignature = '';
+let lastSectionSignature = '';
 
 function setCADMode(mode) {
     document.querySelectorAll('.cad-mode-tab').forEach(button => {
@@ -74,14 +79,19 @@ function refreshDecorStatus() {
     const button = document.getElementById('cadToggleDecor');
     const status = document.getElementById('cadDecorStatus');
     if (!button || !status) return;
-    let count = 0;
-    state.loadedModels.forEach(model => model.traverse(mesh => {
-        if (isDecorativeBlob(mesh)) {
-            count++;
+    const signature = state.loadedModels.map(model => model.uuid).join('|');
+    if (signature !== lastDecorModelSignature) {
+        lastDecorModelSignature = signature;
+        decorativeMeshes = [];
+        state.loadedModels.forEach(model => model.traverse(mesh => {
+            if (isDecorativeBlob(mesh)) decorativeMeshes.push(mesh);
+        }));
+        decorativeMeshes.forEach(mesh => {
             mesh.visible = !decorativeMeshesHidden;
             mesh.userData.cadDecorHidden = decorativeMeshesHidden;
-        }
-    }));
+        });
+    }
+    const count = decorativeMeshes.length;
     button.disabled = count === 0;
     button.textContent = decorativeMeshesHidden ? 'Show Decorative Blobs' : 'Hide Decorative Blobs';
     status.textContent = count
@@ -91,12 +101,10 @@ function refreshDecorStatus() {
 
 function toggleDecorativeMeshes() {
     decorativeMeshesHidden = !decorativeMeshesHidden;
-    state.loadedModels.forEach(model => model.traverse(mesh => {
-        if (isDecorativeBlob(mesh)) {
-            mesh.visible = !decorativeMeshesHidden;
-            mesh.userData.cadDecorHidden = decorativeMeshesHidden;
-        }
-    }));
+    decorativeMeshes.forEach(mesh => {
+        mesh.visible = !decorativeMeshesHidden;
+        mesh.userData.cadDecorHidden = decorativeMeshesHidden;
+    });
     refreshDecorStatus();
 }
 
@@ -237,29 +245,10 @@ function measureObject(object) {
     object.updateMatrixWorld(true);
     const bounds = new THREE.Box3().setFromObject(object);
     const size = bounds.getSize(new THREE.Vector3());
-    let area = 0;
-    let volume = 0;
-    object.traverse(mesh => {
-        if (!mesh.isMesh || !mesh.geometry?.attributes?.position) return;
-        const position = mesh.geometry.attributes.position;
-        const index = mesh.geometry.index;
-        const triangleCount = index ? index.count / 3 : position.count / 3;
-        const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-        const ab = new THREE.Vector3(), ac = new THREE.Vector3(), cross = new THREE.Vector3();
-        for (let i = 0; i < triangleCount; i++) {
-            const ia = index ? index.getX(i * 3) : i * 3;
-            const ib = index ? index.getX(i * 3 + 1) : i * 3 + 1;
-            const ic = index ? index.getX(i * 3 + 2) : i * 3 + 2;
-            a.fromBufferAttribute(position, ia).applyMatrix4(mesh.matrixWorld);
-            b.fromBufferAttribute(position, ib).applyMatrix4(mesh.matrixWorld);
-            c.fromBufferAttribute(position, ic).applyMatrix4(mesh.matrixWorld);
-            ab.subVectors(b, a);
-            ac.subVectors(c, a);
-            area += cross.crossVectors(ab, ac).length() * 0.5;
-            volume += a.dot(cross.crossVectors(b, c)) / 6;
-        }
-    });
-    return { size, area, volume: Math.abs(volume), diagonal: size.length() };
+    const volume = size.x * size.y * size.z;
+    const areaParts = [size.x * size.y, size.x * size.z, size.y * size.z];
+    const totalArea = 2 * areaParts.reduce((sum, part) => sum + part, 0);
+    return { size, volume, totalArea, areaParts, diagonal: size.length() };
 }
 
 function refreshObjectInspector() {
@@ -272,16 +261,26 @@ function refreshObjectInspector() {
     selected.hidden = objects.length === 0;
     if (objects.length === 0) {
         lastInspectorSignature = '';
+        lastStatsSignature = '';
         return;
     }
+
+    objects.forEach(object => object.updateMatrixWorld(true));
+    const statsSignature = objects.map(object =>
+        `${object.uuid}:${object.matrixWorld.elements.map(value => value.toFixed(4)).join(',')}`
+    ).join('|');
+    if (statsSignature === lastStatsSignature) return;
+    lastStatsSignature = statsSignature;
 
     const bounds = new THREE.Box3();
     let totalArea = 0;
     let totalVolume = 0;
+    const measurements = [];
     objects.forEach(object => {
         bounds.expandByObject(object);
         const measurement = measureObject(object);
-        totalArea += measurement.area;
+        measurements.push(measurement);
+        totalArea += measurement.totalArea;
         totalVolume += measurement.volume;
     });
     const size = bounds.getSize(new THREE.Vector3());
@@ -296,11 +295,19 @@ function refreshObjectInspector() {
     document.getElementById('cadInspectorType').textContent = type;
     document.getElementById('cadInspectorDimensions').textContent =
         `${size.x.toFixed(3)} x ${size.y.toFixed(3)} x ${size.z.toFixed(3)}`;
-    document.getElementById('cadInspectorPrimaryLabel').textContent = is2D ? 'Area' : 'Volume';
-    document.getElementById('cadInspectorPrimary').textContent = (is2D ? totalArea : totalVolume).toFixed(3);
-    document.getElementById('cadInspectorSecondaryLabel').textContent = is2D ? 'Bounding diagonal' : 'Surface Area';
-    document.getElementById('cadInspectorSecondary').textContent =
-        (is2D ? size.length() : totalArea).toFixed(3);
+    document.getElementById('cadInspectorPrimaryLabel').textContent = 'Volume from Dimensions';
+    document.getElementById('cadInspectorPrimary').textContent = totalVolume.toFixed(3);
+    document.getElementById('cadInspectorSecondaryLabel').textContent = 'Total Area';
+    document.getElementById('cadInspectorSecondary').textContent = totalArea.toFixed(3);
+    const format = value => Number(value.toFixed(3)).toString();
+    const volumeTerms = measurements.map(({ size: itemSize }) =>
+        `${format(itemSize.x)} x ${format(itemSize.y)} x ${format(itemSize.z)}`);
+    const areaTerms = measurements.map(({ size: itemSize }) =>
+        `2 x (${format(itemSize.x)} x ${format(itemSize.y)} + ${format(itemSize.x)} x ${format(itemSize.z)} + ${format(itemSize.y)} x ${format(itemSize.z)})`);
+    document.getElementById('cadInspectorVolumeFormula').textContent =
+        `Volume: ${volumeTerms.join(' + ')} = ${totalVolume.toFixed(3)}`;
+    document.getElementById('cadInspectorAreaFormula').textContent =
+        `Total Area: ${areaTerms.join(' + ')} = ${totalArea.toFixed(3)}`;
 
     const signature = objects.map(object => object.uuid).join('|');
     if (signature !== lastInspectorSignature && !state.selectedObject?.userData?.isGroupHelper) {
@@ -314,9 +321,16 @@ function refreshMeasurement() {
     const objects = getSelectedObjects();
     if (!output) return;
     if (objects.length === 0) {
+        lastMeasurementSignature = '';
         output.textContent = 'Select an object to measure it.';
         return;
     }
+    objects.forEach(object => object.updateMatrixWorld(true));
+    const signature = objects.map(object =>
+        `${object.uuid}:${object.matrixWorld.elements.map(value => value.toFixed(4)).join(',')}`
+    ).join('|');
+    if (signature === lastMeasurementSignature) return;
+    lastMeasurementSignature = signature;
     if (objects.length >= 3) {
         const a = new THREE.Box3().setFromObject(objects[0]).getCenter(new THREE.Vector3());
         const vertex = new THREE.Box3().setFromObject(objects[1]).getCenter(new THREE.Vector3());
@@ -332,7 +346,7 @@ function refreshMeasurement() {
         return;
     }
     const result = measureObject(objects[0]);
-    output.textContent = `Size: ${result.size.x.toFixed(3)} x ${result.size.y.toFixed(3)} x ${result.size.z.toFixed(3)} | Diagonal: ${result.diagonal.toFixed(3)} | Surface: ${result.area.toFixed(3)} | Volume: ${result.volume.toFixed(3)}`;
+    output.textContent = `Size: ${result.size.x.toFixed(3)} x ${result.size.y.toFixed(3)} x ${result.size.z.toFixed(3)} | Diagonal: ${result.diagonal.toFixed(3)} | Total Area: ${result.totalArea.toFixed(3)} | Volume: ${result.volume.toFixed(3)}`;
 }
 
 function updateSectionPlane() {
@@ -341,6 +355,9 @@ function updateSectionPlane() {
     const axis = document.getElementById('cadSectionAxis').value.toLowerCase();
     const invert = document.getElementById('cadSectionInvert').checked ? -1 : 1;
     const offset = readNumber('cadSectionOffset', 0);
+    const signature = `${enabled}:${axis}:${invert}:${offset}:${state.loadedModels.map(model => model.uuid).join('|')}`;
+    if (signature === lastSectionSignature) return;
+    lastSectionSignature = signature;
     sectionPlane.normal.set(axis === 'x' ? invert : 0, axis === 'y' ? invert : 0, axis === 'z' ? invert : 0);
     sectionPlane.constant = offset;
     state.renderer.localClippingEnabled = enabled;

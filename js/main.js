@@ -3522,7 +3522,7 @@ import {
             // Only create new state.scene, state.renderer, state.camera, state.controls if they don't exist
             if (!state.scene) {
                 state.scene = new THREE.Scene();
-                state.scene.background = new THREE.Color(0x111b29);
+                state.scene.background = new THREE.Color(0xf4f7fb);
             }
             if (!state.renderer) {
                 state.renderer = new THREE.WebGLRenderer({ canvas: cadCanvas, antialias: true });
@@ -4891,7 +4891,7 @@ import {
             state.recognition.onresult = (event) => {
                 const command = event.results[0][0].transcript;
                 addMessageToLog('System', `You said: "${command}"`);
-                if (!handleIFCSelectionClarification(command) && !tryHandleIFCSelectionRequest(command)) {
+                if (!handleIFCSelectionClarification(command) && !tryHandleFastLocalCommand(command) && !tryHandleIFCSelectionRequest(command)) {
                     sendAICommand(command);
                 }
             };
@@ -4947,6 +4947,100 @@ import {
                 state.synth.speak(utterance);
             }
         }
+
+        function tryHandleFastLocalCommand(command) {
+            const text = command.trim().toLowerCase();
+            if (!text) return false;
+
+            if (/^(undo|go back|undo that)$/.test(text)) {
+                undo();
+                return true;
+            }
+            if (/^(redo|redo that)$/.test(text)) {
+                redo();
+                return true;
+            }
+            if (/^(fit|fit all|reset view|show everything)$/.test(text)) {
+                resetView();
+                return true;
+            }
+            if (/^(top|top view)$/.test(text)) {
+                setTopView();
+                return true;
+            }
+            if (/^(front|front view)$/.test(text)) {
+                setFrontView();
+                return true;
+            }
+            if (/^(right|right view)$/.test(text)) {
+                setRightView();
+                return true;
+            }
+            if (/^(iso|isometric|isometric view)$/.test(text)) {
+                resetView();
+                return true;
+            }
+            if (/^(show structure|structure view|select all|highlight everything)$/.test(text)) {
+                document.getElementById('structureHighlightButton').click();
+                return true;
+            }
+            if (/^(clear structure|clear highlights|unhighlight all)$/.test(text)) {
+                document.getElementById('clearStructureButton').click();
+                return true;
+            }
+            const shapeMatch = text.match(/^(?:create|add|make)(?:\s+(?:a|an|new))?\s+(box|cube|sphere|ball|cylinder|cone|pyramid|plane|torus|donut)$/);
+            if (shapeMatch) {
+                createPrimitive(shapeMatch[1]);
+                return true;
+            }
+            if (/^(duplicate|duplicate it|duplicate them|make a copy|copy selected)$/.test(text)) {
+                duplicateSelection();
+                return true;
+            }
+            if (/^(delete|delete it|delete them|remove it|remove them|erase selected)$/.test(text)) {
+                handleDeleteCommand();
+                return true;
+            }
+            if (/^(?:scale|resize|make)\b/.test(text)) {
+                const factor = /\bhalf\b/.test(text) ? 0.5
+                    : /\b(?:double|twice)\b/.test(text) ? 2
+                    : Number(text.match(/\d*\.?\d+/)?.[0]);
+                if (Number.isFinite(factor) && factor > 0) {
+                    scaleSelection(factor, factor, factor);
+                    return true;
+                }
+            }
+            if (/^(?:rotate|turn)\b/.test(text)) {
+                const degrees = Number(text.match(/-?\d*\.?\d+/)?.[0] || 90);
+                const radians = THREE.MathUtils.degToRad(degrees);
+                if (/\bx(?:\s*axis)?\b/.test(text)) rotateSelection(radians, 0, 0);
+                else if (/\bz(?:\s*axis)?\b/.test(text)) rotateSelection(0, 0, radians);
+                else rotateSelection(0, radians, 0);
+                return true;
+            }
+
+            if (/^(move|shift|translate)\b/.test(text)) {
+                const triple = text.match(/(-?\d*\.?\d+)\s*[, ]\s*(-?\d*\.?\d+)\s*[, ]\s*(-?\d*\.?\d+)/);
+                if (triple) {
+                    translateSelection(Number(triple[1]), Number(triple[2]), Number(triple[3]));
+                    return true;
+                }
+                const amount = Number(text.match(/-?\d*\.?\d+/)?.[0] || 1);
+                if (/\b(up|upward|upwards)\b/.test(text)) translateSelection(0, Math.abs(amount), 0);
+                else if (/\b(down|downward|downwards)\b/.test(text)) translateSelection(0, -Math.abs(amount), 0);
+                else if (/\bleft\b/.test(text)) translateSelection(-Math.abs(amount), 0, 0);
+                else if (/\bright\b/.test(text)) translateSelection(Math.abs(amount), 0, 0);
+                else if (/\b(forward|front)\b/.test(text)) translateSelection(0, 0, -Math.abs(amount));
+                else if (/\b(back|backward|backwards)\b/.test(text)) translateSelection(0, 0, Math.abs(amount));
+                else if (/\bx(?:\s*axis)?\b/.test(text)) translateSelection(amount, 0, 0);
+                else if (/\by(?:\s*axis)?\b/.test(text)) translateSelection(0, amount, 0);
+                else if (/\bz(?:\s*axis)?\b/.test(text)) translateSelection(0, 0, amount);
+                else return false;
+                return true;
+            }
+            return false;
+        }
+
         // Send text command via input field
         sendTextCommandBtn.addEventListener('click', () => {
             const command = textCommandInput.value.trim();
@@ -4958,6 +5052,8 @@ import {
                     // IFC selection clarification replies are handled locally.
                 } else if (state.pendingDisambiguation && /^\d+$/.test(command)) {
                     handleDisambiguationChoice(command);
+                } else if (tryHandleFastLocalCommand(command)) {
+                    // Common editor commands run immediately without waiting for the backend.
                 } else if (tryHandleIFCSelectionRequest(command)) {
                     // IFC selection requests bypass the backend so clarification cannot be skipped.
                 } else {
@@ -5117,7 +5213,7 @@ import {
             }
 
             // Set initial CSS for the CAD viewer background
-            cadViewer.style.backgroundColor = '#111b29';
+            cadViewer.style.backgroundColor = '#f4f7fb';
             cadViewer.style.backgroundImage = 'none';
 
             // RESTORED: Show upload page first (more professional)
