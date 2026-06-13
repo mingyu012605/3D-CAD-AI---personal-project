@@ -3644,9 +3644,10 @@ import {
 
             const rect = state.renderer.domElement.getBoundingClientRect();
             const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
-            const normalizedDelta = THREE.MathUtils.clamp(event.deltaY * deltaScale / 100, -2, 2);
+            const rawDelta = event.deltaY * deltaScale;
+            const normalizedDelta = Math.sign(rawDelta) * Math.min(1.25, Math.max(0.35, Math.abs(rawDelta) / 120));
             const viewDistance = Math.max(0.1, state.camera.position.distanceTo(state.controls.target));
-            const step = Math.max(0.02, viewDistance * 0.08) * -normalizedDelta;
+            const step = Math.max(0.02, viewDistance * 0.065) * -normalizedDelta;
             const direction = state.camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(step);
 
             state.camera.position.add(direction);

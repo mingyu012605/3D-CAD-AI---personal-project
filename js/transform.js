@@ -7,6 +7,15 @@ let _beginUndoGroup = () => {};
 let _endUndoGroup = () => {};
 let _addUndoAction = () => {};
 let transformDragState = null;
+let transformDragConstraint = null;
+
+function constrainDraggedPosition(object, before, axis) {
+    if (!axis || axis === 'XYZ' || state.transformControls?.mode !== 'translate') return;
+    const allowedAxes = new Set(axis.replace('E', '').split(''));
+    if (!allowedAxes.has('X')) object.position.x = before.position.x;
+    if (!allowedAxes.has('Y')) object.position.y = before.position.y;
+    if (!allowedAxes.has('Z')) object.position.z = before.position.z;
+}
 
 export function initTransformCallbacks(cbs) {
     _speakResponse = cbs.speakResponse;
@@ -213,6 +222,10 @@ export function initTransformControls() {
             if (event.value && state.transformControls.object) {
                 const controlObject = state.transformControls.object;
                 const targets = controlObject.userData.selectedModels || [controlObject];
+                transformDragConstraint = {
+                    object: controlObject,
+                    before: { position: controlObject.position.clone() }
+                };
                 transformDragState = targets.map(object => ({
                     object,
                     before: {
@@ -252,11 +265,19 @@ export function initTransformControls() {
                 });
                 _endUndoGroup();
                 transformDragState = null;
+                transformDragConstraint = null;
             }
         });
         state.transformControls.addEventListener('objectChange', function () {
             // Update the object's world matrix during transformation
             if (state.transformControls.object) {
+                if (transformDragConstraint) {
+                    constrainDraggedPosition(
+                        transformDragConstraint.object,
+                        transformDragConstraint.before,
+                        state.transformControls.axis
+                    );
+                }
                 state.transformControls.object.updateMatrixWorld(true);
             }
         });
