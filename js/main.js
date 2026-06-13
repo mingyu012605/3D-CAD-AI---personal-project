@@ -3638,26 +3638,16 @@ import {
         }
 
         function focusZoomOnPointer(event) {
-            if (!state.controls || !state.raycaster || !state.camera || !state.renderer) return;
+            if (!state.controls || !state.camera || !state.renderer) return;
             event.preventDefault();
             event.stopImmediatePropagation();
 
             const rect = state.renderer.domElement.getBoundingClientRect();
-            state.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            state.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-            state.raycaster.setFromCamera(state.mouse, state.camera);
-
-            const hit = state.raycaster.intersectObjects(state.loadedModels, true)
-                .find(intersection => intersection.object.isMesh
-                    && intersection.object.visible
-                    && !intersection.object.userData.isSelectionOutline);
-            const targetDistance = state.camera.position.distanceTo(state.controls.target);
-            const referenceDistance = hit?.distance || targetDistance || 1;
             const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
-            const wheelAmount = THREE.MathUtils.clamp(Math.abs(event.deltaY * deltaScale) / 100, 0.25, 4);
-            const minimumStep = Math.max(0.02, targetDistance * 0.01);
-            const step = Math.max(referenceDistance * 0.15, minimumStep) * wheelAmount;
-            const direction = state.raycaster.ray.direction.clone().multiplyScalar(event.deltaY < 0 ? step : -step);
+            const normalizedDelta = THREE.MathUtils.clamp(event.deltaY * deltaScale / 100, -2, 2);
+            const viewDistance = Math.max(0.1, state.camera.position.distanceTo(state.controls.target));
+            const step = Math.max(0.02, viewDistance * 0.08) * -normalizedDelta;
+            const direction = state.camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(step);
 
             state.camera.position.add(direction);
             state.controls.target.add(direction);
