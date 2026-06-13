@@ -3604,7 +3604,7 @@ import {
             cadCanvas.addEventListener('mousemove', onCanvasMouseMove, false);
             cadCanvas.removeEventListener('wheel', focusZoomOnPointer, false);
             cadCanvas.removeEventListener('wheel', focusZoomOnPointer, true);
-            cadCanvas.addEventListener('wheel', focusZoomOnPointer, { passive: true, capture: true });
+            cadCanvas.addEventListener('wheel', focusZoomOnPointer, { passive: false, capture: true });
 
             // Add extrude gizmo interaction handlers
             cadCanvas.removeEventListener('mousedown', onExtrudePointerDown, false);
@@ -3638,7 +3638,9 @@ import {
         }
 
         function focusZoomOnPointer(event) {
-            if (event.deltaY >= 0 || !state.controls || !state.raycaster || !state.camera) return;
+            if (!state.controls || !state.raycaster || !state.camera || !state.renderer) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
 
             const rect = state.renderer.domElement.getBoundingClientRect();
             state.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -3649,9 +3651,16 @@ import {
                 .find(intersection => intersection.object.isMesh
                     && intersection.object.visible
                     && !intersection.object.userData.isSelectionOutline);
-            if (!hit) return;
+            const targetDistance = state.camera.position.distanceTo(state.controls.target);
+            const referenceDistance = hit?.distance || targetDistance || 1;
+            const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
+            const wheelAmount = THREE.MathUtils.clamp(Math.abs(event.deltaY * deltaScale) / 100, 0.25, 4);
+            const minimumStep = Math.max(0.02, targetDistance * 0.01);
+            const step = Math.max(referenceDistance * 0.15, minimumStep) * wheelAmount;
+            const direction = state.raycaster.ray.direction.clone().multiplyScalar(event.deltaY < 0 ? step : -step);
 
-            state.controls.target.lerp(hit.point, 0.65);
+            state.camera.position.add(direction);
+            state.controls.target.add(direction);
             state.controls.update();
         }
 
