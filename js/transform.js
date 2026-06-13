@@ -6,14 +6,13 @@ let _speakResponse = () => {};
 let _beginUndoGroup = () => {};
 let _endUndoGroup = () => {};
 let _addUndoAction = () => {};
-let _saveSceneState = () => {};
+let transformDragState = null;
 
 export function initTransformCallbacks(cbs) {
     _speakResponse = cbs.speakResponse;
     _beginUndoGroup = cbs.beginUndoGroup;
     _endUndoGroup = cbs.endUndoGroup;
     _addUndoAction = cbs.addUndoAction;
-    _saveSceneState = cbs.saveSceneState;
 }
 
 export function setScaleMode() {
@@ -145,6 +144,11 @@ export function transformSelection(transformType, params) {
 
             // Update world matrix
             obj.updateMatrixWorld(true);
+            const appliedTransform = {
+                position: obj.position.clone(),
+                rotation: obj.rotation.clone(),
+                scale: obj.scale.clone()
+            };
 
             transformedObjects.push(obj);
 
@@ -157,6 +161,12 @@ export function transformSelection(transformType, params) {
                     obj.position.copy(originalTransform.position);
                     obj.rotation.copy(originalTransform.rotation);
                     obj.scale.copy(originalTransform.scale);
+                    obj.updateMatrixWorld(true);
+                },
+                apply: () => {
+                    obj.position.copy(appliedTransform.position);
+                    obj.rotation.copy(appliedTransform.rotation);
+                    obj.scale.copy(appliedTransform.scale);
                     obj.updateMatrixWorld(true);
                 }
             });
@@ -200,10 +210,48 @@ export function initTransformControls() {
         state.scene.add(state.transformControls);
         state.transformControls.addEventListener('dragging-changed', function (event) {
             state.controls.enabled = !event.value;
-            // Save state when transform operation STARTS
             if (event.value && state.transformControls.object) {
-                console.log("[state.transformControls] Transform operation started, saving state");
-                _saveSceneState(); // Save state before transform begins
+                const controlObject = state.transformControls.object;
+                const targets = controlObject.userData.selectedModels || [controlObject];
+                transformDragState = targets.map(object => ({
+                    object,
+                    before: {
+                        position: object.position.clone(),
+                        rotation: object.rotation.clone(),
+                        scale: object.scale.clone()
+                    }
+                }));
+            } else if (!event.value && transformDragState) {
+                _beginUndoGroup(`${state.transformControls.mode || 'transform'} ${transformDragState.length} object${transformDragState.length > 1 ? 's' : ''}`);
+                transformDragState.forEach(({ object, before }) => {
+                    const after = {
+                        position: object.position.clone(),
+                        rotation: object.rotation.clone(),
+                        scale: object.scale.clone()
+                    };
+                    const changed = !before.position.equals(after.position)
+                        || !before.rotation.equals(after.rotation)
+                        || !before.scale.equals(after.scale);
+                    if (!changed) return;
+                    _addUndoAction({
+                        type: `${state.transformControls.mode || 'transform'}_object`,
+                        object,
+                        revert: () => {
+                            object.position.copy(before.position);
+                            object.rotation.copy(before.rotation);
+                            object.scale.copy(before.scale);
+                            object.updateMatrixWorld(true);
+                        },
+                        apply: () => {
+                            object.position.copy(after.position);
+                            object.rotation.copy(after.rotation);
+                            object.scale.copy(after.scale);
+                            object.updateMatrixWorld(true);
+                        }
+                    });
+                });
+                _endUndoGroup();
+                transformDragState = null;
             }
         });
         state.transformControls.addEventListener('objectChange', function () {

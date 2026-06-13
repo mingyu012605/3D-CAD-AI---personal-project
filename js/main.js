@@ -1164,13 +1164,14 @@ import {
             uuids.forEach(uuid => {
                 const obj = state.scene.getObjectByProperty('uuid', uuid);
                 if (obj && obj.parent) {
+                    const parent = obj.parent;
                     removedObjects.push({
                         object: obj,
-                        parent: obj.parent,
+                        parent,
                         uuid: uuid
                     });
 
-                    obj.parent.remove(obj);
+                    parent.remove(obj);
 
                     // Remove from state.loadedModels
                     const modelIndex = state.loadedModels.indexOf(obj);
@@ -1182,12 +1183,19 @@ import {
                     addUndoAction({
                         type: 'delete_object',
                         object: obj,
-                        parent: obj.parent,
+                        parent,
                         modelIndex: modelIndex,
                         revert: () => {
-                            obj.parent.add(obj);
+                            parent.add(obj);
                             if (modelIndex !== -1) {
                                 state.loadedModels.splice(modelIndex, 0, obj);
+                            }
+                        },
+                        apply: () => {
+                            obj.parent?.remove(obj);
+                            const currentIndex = state.loadedModels.indexOf(obj);
+                            if (currentIndex !== -1) {
+                                state.loadedModels.splice(currentIndex, 1);
                             }
                         }
                     });
@@ -1221,7 +1229,7 @@ import {
                     position: obj.position.clone(),
                     rotation: obj.rotation.clone(),
                     scale: obj.scale.clone(),
-                    material: obj.material ? (Array.isArray(obj.material) ? obj.material.map(m => m.clone()) : obj.material.clone()) : null
+                    material: obj.material ? (Array.isArray(obj.material) ? [...obj.material] : obj.material) : null
                 };
 
                 // Apply the transformation
@@ -1273,6 +1281,12 @@ import {
 
                 obj.updateMatrixWorld(true);
                 transformedObjects.push(obj);
+                const appliedTransform = {
+                    position: obj.position.clone(),
+                    rotation: obj.rotation.clone(),
+                    scale: obj.scale.clone(),
+                    material: obj.material ? (Array.isArray(obj.material) ? [...obj.material] : obj.material) : null
+                };
 
                 // Add undo action
                 addUndoAction({
@@ -1285,6 +1299,15 @@ import {
                         obj.scale.copy(originalTransform.scale);
                         if (originalTransform.material) {
                             obj.material = originalTransform.material;
+                        }
+                        obj.updateMatrixWorld(true);
+                    },
+                    apply: () => {
+                        obj.position.copy(appliedTransform.position);
+                        obj.rotation.copy(appliedTransform.rotation);
+                        obj.scale.copy(appliedTransform.scale);
+                        if (appliedTransform.material) {
+                            obj.material = appliedTransform.material;
                         }
                         obj.updateMatrixWorld(true);
                     }
@@ -3577,16 +3600,21 @@ import {
             cadCanvas.removeEventListener('touchstart', onCanvasClick, false);
             cadCanvas.addEventListener('mousedown', onCanvasClick, false);
             cadCanvas.addEventListener('touchstart', onCanvasClick, false);
+            cadCanvas.removeEventListener('mousemove', onCanvasMouseMove, false);
             cadCanvas.addEventListener('mousemove', onCanvasMouseMove, false);
             cadCanvas.removeEventListener('wheel', focusZoomOnPointer, false);
             cadCanvas.addEventListener('wheel', focusZoomOnPointer, { passive: true });
 
             // Add extrude gizmo interaction handlers
+            cadCanvas.removeEventListener('mousedown', onExtrudePointerDown, false);
+            cadCanvas.removeEventListener('mousemove', onExtrudePointerMove, false);
+            cadCanvas.removeEventListener('mouseup', onExtrudePointerUp, false);
             cadCanvas.addEventListener('mousedown', onExtrudePointerDown, false);
             cadCanvas.addEventListener('mousemove', onExtrudePointerMove, false);
             cadCanvas.addEventListener('mouseup', onExtrudePointerUp, false);
 
             initViewAxesHelper(); // Initialize the static view axes helper
+            viewAxesContainer.removeEventListener('click', onViewAxesClick, false);
             viewAxesContainer.addEventListener('click', onViewAxesClick, false);
 
             // Initialize raycast debug sphere
@@ -4417,13 +4445,6 @@ import {
 
         // Function to change the color of the selected object
         function changeObjectColor(colorValue) {
-            // Only save state if we have objects (never save empty state)
-            if (state.loadedModels.length > 0) {
-                const currentState = getCurrentState();
-                state.undoStack.push(currentState);
-                state.redoStack = []; // Clear redo stack
-                console.log("[changeObjectColor] Saved state with", state.loadedModels.length, "objects");
-            }
             const newColor = new THREE.Color(colorValue);
             let objectsToModify = [];
 
@@ -4442,36 +4463,74 @@ import {
                 return;
             }
 
+            // Work on the saved object list, but remove temporary selection materials
+            // before capturing permanent color history.
+            clearAllHighlights();
+            beginUndoGroup(`Color ${objectsToModify.length} object${objectsToModify.length > 1 ? 's' : ''}`);
+            const changedMaterials = new Map();
+
             objectsToModify.forEach(obj => {
                 console.log(`[changeObjectColor] Modifying color for object: ${obj.name || obj.uuid}`); // Added log
                 // Traverse children to ensure all meshes within the object/model get the color change
                 obj.traverse((child) => {
                     if (child.isMesh && child.material) {
                         const materials = Array.isArray(child.material) ? child.material : [child.material];
-                        materials.forEach(material => {
+                        materials.forEach((material, index) => {
                             if (material && material.isMaterial) {
-                                if (material.map) {
-                                    material.map.dispose();
-                                    material.map = null;
+                                const initial = Array.isArray(child.userData.initialMaterial)
+                                    ? child.userData.initialMaterial[index]
+                                    : child.userData.initialMaterial;
+                                let change = changedMaterials.get(material);
+                                if (!change) {
+                                    change = {
+                                        material,
+                                        initials: new Set(),
+                                        originalColor: material.color?.clone(),
+                                        originalEmissive: material.emissive?.clone(),
+                                        originalEmissiveIntensity: material.emissiveIntensity
+                                    };
+                                    changedMaterials.set(material, change);
                                 }
-                                if (material.color) {
-                                    material.color.set(newColor);
-                                }
-                                if (material.emissive !== undefined) {
-                                    material.emissive.set(0x000000);
-                                    material.emissiveIntensity = 0;
-                                }
-                                material.needsUpdate = true;
+                                if (initial) change.initials.add(initial);
                             }
                         });
-                        // Update initialMaterial for this child mesh to reflect the new permanent color
-                        if (Array.isArray(child.material)) {
-                            child.userData.initialMaterial = child.material.map(mat => mat.clone());
-                        } else {
-                            child.userData.initialMaterial = child.material.clone();
-                        }
                     }
                 });
+            });
+
+            changedMaterials.forEach(change => {
+                const applyColor = color => {
+                    const { material, initials } = change;
+                    if (material.color) material.color.copy(color);
+                    if (material.emissive) material.emissive.set(0x000000);
+                    if (material.emissiveIntensity !== undefined) material.emissiveIntensity = 0;
+                    material.needsUpdate = true;
+                    initials.forEach(initial => {
+                        if (initial?.color) initial.color.copy(color);
+                        if (initial?.emissive) initial.emissive.set(0x000000);
+                        if (initial?.emissiveIntensity !== undefined) initial.emissiveIntensity = 0;
+                    });
+                };
+                applyColor(newColor);
+                addUndoAction({
+                    type: 'color_material',
+                    apply: () => applyColor(newColor),
+                    revert: () => {
+                        const { material, initials, originalColor, originalEmissive, originalEmissiveIntensity } = change;
+                        if (originalColor && material.color) material.color.copy(originalColor);
+                        if (originalEmissive && material.emissive) material.emissive.copy(originalEmissive);
+                        if (material.emissiveIntensity !== undefined) material.emissiveIntensity = originalEmissiveIntensity;
+                        material.needsUpdate = true;
+                        initials.forEach(initial => {
+                            if (originalColor && initial?.color) initial.color.copy(originalColor);
+                            if (originalEmissive && initial?.emissive) initial.emissive.copy(originalEmissive);
+                            if (initial?.emissiveIntensity !== undefined) initial.emissiveIntensity = originalEmissiveIntensity;
+                        });
+                    }
+                });
+            });
+
+            objectsToModify.forEach(obj => {
                 // After changing color, update state.originalMaterialProperties for the current selection cycle
                 // This ensures that if this object is later individually selected, its highlight reverts correctly.
                 const updatedOriginalMaterials = [];
@@ -4481,15 +4540,16 @@ import {
                         updatedOriginalMaterials.push(mat.clone());
                     }
                 });
+                state.originalMaterialProperties.get(obj.uuid)?.forEach(material => material.dispose());
                 state.originalMaterialProperties.set(obj.uuid, updatedOriginalMaterials);
                 obj.updateMatrixWorld(true); // Ensure world matrix is updated after material change
             });
+            endUndoGroup();
 
             addMessageToLog('AI', `Changed color of ${objectsToModify.length} object(s) to ${colorValue}.`);
             speakResponse(`Changed color of ${objectsToModify.length} object(s).`);
             console.log(`[changeObjectColor] Changed color of ${objectsToModify.length} object(s) to ${colorValue}.`);
 
-            clearAllHighlights(); // This will now revert to the updated initialMaterial
             updateUndoRedoButtons(); // Update buttons after action
         }
 

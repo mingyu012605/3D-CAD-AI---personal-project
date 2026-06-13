@@ -7,6 +7,45 @@ let history = [];
 let historyPointer = -1;
 let saveStateTimeout = null;
 
+function disposeObjectResources(object) {
+    const resourcesInUse = new Set();
+    state.loadedModels.forEach(model => model.traverse(child => {
+        if (!child.isMesh) return;
+        if (child.geometry) resourcesInUse.add(child.geometry);
+        if (Array.isArray(child.material)) child.material.forEach(material => resourcesInUse.add(material));
+        else if (child.material) resourcesInUse.add(child.material);
+    }));
+
+    object?.traverse(child => {
+        if (!child.isMesh) return;
+        if (child.geometry && !resourcesInUse.has(child.geometry)) child.geometry.dispose();
+        if (Array.isArray(child.material)) {
+            child.material.forEach(material => {
+                if (material && !resourcesInUse.has(material)) material.dispose();
+            });
+        } else if (child.material && !resourcesInUse.has(child.material)) {
+            child.material.dispose();
+        }
+    });
+}
+
+function disposeHistoryItem(item) {
+    if (Array.isArray(item)) {
+        item.forEach(modelState => disposeObjectResources(modelState.objectSnapshot));
+        return;
+    }
+    item?.actions?.forEach(action => {
+        if (action.type === 'delete_object' && !action.object?.parent) {
+            disposeObjectResources(action.object);
+        }
+    });
+}
+
+function clearRedoStack() {
+    state.redoStack.forEach(disposeHistoryItem);
+    state.redoStack = [];
+}
+
 let _speakResponse = () => {};
 let _resetView = () => {};
 
@@ -31,7 +70,6 @@ export function beginUndoGroup(actionName) {
     state.currentUndoGroup = {
         name: actionName,
         actions: [],
-        beforeState: getCurrentState()
     };
     console.log(`[beginUndoGroup] Started group: ${actionName}`);
 }
@@ -53,20 +91,20 @@ export function endUndoGroup() {
 
     if (state.currentUndoGroup.actions.length > 0) {
         // Save the grouped action to undo stack
+        const canRedoDirectly = state.currentUndoGroup.actions.every(action => typeof action.apply === 'function');
         state.undoStack.push({
             name: state.currentUndoGroup.name,
-            beforeState: state.currentUndoGroup.beforeState,
-            afterState: getCurrentState(),
+            afterState: canRedoDirectly ? null : getCurrentState(),
             actions: state.currentUndoGroup.actions
         });
 
         // Limit stack size
         if (state.undoStack.length > MAX_HISTORY_SIZE) {
-            state.undoStack.shift();
+            disposeHistoryItem(state.undoStack.shift());
         }
 
         // Clear redo stack
-        state.redoStack = [];
+        clearRedoStack();
 
         console.log(`[endUndoGroup] Completed group: ${state.currentUndoGroup.name} with ${state.currentUndoGroup.actions.length} actions`);
     }
@@ -151,9 +189,9 @@ export function saveSceneState() {
 
     state.undoStack.push(getCurrentState());
     if (state.undoStack.length > MAX_HISTORY_SIZE) {
-        state.undoStack.shift();
+        disposeHistoryItem(state.undoStack.shift());
     }
-    state.redoStack = [];
+    clearRedoStack();
 
     // Trim history if it exceeds max size
     if (history.length > MAX_HISTORY_SIZE) {
@@ -394,9 +432,10 @@ export function redo() {
             // New grouped action system - re-execute the actions
             console.log(`[Redo] Redoing grouped action: ${redoItem.name} with ${redoItem.actions.length} sub-actions`);
 
-            // For redo, we need to re-apply the changes
-            // Since we stored the afterState, we can restore to that state
-            if (redoItem.afterState) {
+            const canRedoDirectly = redoItem.actions.every(action => typeof action.apply === 'function');
+            if (canRedoDirectly) {
+                redoItem.actions.forEach(action => action.apply());
+            } else if (redoItem.afterState) {
                 restoreState(redoItem.afterState);
             } else {
                 console.warn(`[Redo] No afterState found for grouped action: ${redoItem.name}`);
@@ -489,6 +528,8 @@ function cloneObjectForHistory(object) {
     const clone = object.clone(true);
     clone.traverse(child => {
         if (!child.isMesh) return;
+        // Legacy snapshots must own their resources because delete/reload paths may
+        // dispose the live object's geometry before a snapshot is restored.
         if (child.geometry) child.geometry = child.geometry.clone();
         if (Array.isArray(child.material)) child.material = child.material.map(material => material.clone());
         else if (child.material) child.material = child.material.clone();

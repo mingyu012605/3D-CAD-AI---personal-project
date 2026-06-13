@@ -25,6 +25,19 @@ function isObjectLocked(object) {
     return false;
 }
 
+function isMaterialUsedByAnotherMesh(material, owner) {
+    let isUsed = false;
+    state.loadedModels.some(model => {
+        model.traverse(child => {
+            if (isUsed || child === owner || !child.isMesh) return;
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            if (materials.includes(material)) isUsed = true;
+        });
+        return isUsed;
+    });
+    return isUsed;
+}
+
 function findObjectIntersections(clientX, clientY, objectsToIntersect) {
     const rect = state.renderer.domElement.getBoundingClientRect();
     const offsets = [
@@ -559,7 +572,7 @@ export function clearSelection() {
 
         currentMaterials.forEach((mat, index) => {
             if (mat && mat.isMaterial && originalMaterials[index]) { // Defensive check
-                mat.dispose(); // Dispose current material before replacing to avoid memory leaks
+                if (!isMaterialUsedByAnotherMesh(mat, state.selectedObject)) mat.dispose();
                 // Assign the original material instance back
                 // Use the initialMaterial if available, otherwise fallback to the one stored for temporary highlight
                 if (state.selectedObject.userData.initialMaterial && (Array.isArray(state.selectedObject.userData.initialMaterial) ? state.selectedObject.userData.initialMaterial[index] : state.selectedObject.userData.initialMaterial)) {
@@ -788,7 +801,7 @@ export function clearAllHighlights() {
             const currentMaterials = Array.isArray(object.material) ? object.material : [object.material];
             currentMaterials.forEach((mat, index) => {
                 if (mat && mat.isMaterial && originalMaterials[index]) {
-                    mat.dispose(); // Dispose current material before replacing
+                    if (!isMaterialUsedByAnotherMesh(mat, object)) mat.dispose();
                     // Restore the material as it was immediately before Structure view.
                     if (Array.isArray(object.material)) {
                         object.material[index] = originalMaterials[index];
@@ -809,50 +822,53 @@ export function clearAllHighlights() {
 }
 
 export function removeObject() {
-    // Only save state if we have objects (never save empty state)
-    if (state.loadedModels.length > 0) {
-        const currentState = _getCurrentState();
-        state.undoStack.push(currentState);
-        state.redoStack = []; // Clear redo stack
-        console.log("[removeObject] Saved state with", state.loadedModels.length, "objects");
-    }
     if (state.selectedObject) {
-        const objectToRemoveName = state.selectedObject.name || "Unnamed Part";
-        const objectToRemoveUUID = state.selectedObject.uuid;
+        const object = state.selectedObject;
+        const objectToRemoveName = object.name || "Unnamed Part";
+        const objectToRemoveUUID = object.uuid;
+        const parent = object.parent;
+        const modelIndex = state.loadedModels.indexOf(object);
 
-        state.transformControls.detach();
-
-        let parent = state.selectedObject.parent;
         if (parent) {
-            parent.remove(state.selectedObject);
-            if (state.selectedObject.geometry) state.selectedObject.geometry.dispose();
-            if (state.selectedObject.material) {
-                if (Array.isArray(state.selectedObject.material)) {
-                    state.selectedObject.material.forEach(material => material.dispose());
-                } else {
-                    state.selectedObject.material.dispose();
-                }
-            }
+            clearSelection();
+            parent.remove(object);
+            if (modelIndex > -1) state.loadedModels.splice(modelIndex, 1);
 
-            const index = state.loadedModels.indexOf(state.selectedObject);
-            if (index > -1) {
-                state.loadedModels.splice(index, 1);
+            _beginUndoGroup(`Delete ${objectToRemoveName}`);
+            _addUndoAction({
+                type: 'delete_object',
+                object,
+                parent,
+                modelIndex,
+                revert: () => {
+                    parent.add(object);
+                    if (modelIndex > -1 && !state.loadedModels.includes(object)) {
+                        state.loadedModels.splice(modelIndex, 0, object);
+                    }
+                },
+                apply: () => {
+                    object.parent?.remove(object);
+                    const currentIndex = state.loadedModels.indexOf(object);
+                    if (currentIndex > -1) state.loadedModels.splice(currentIndex, 1);
+                }
+            });
+            _endUndoGroup();
+
+            if (modelIndex > -1) {
                 console.log(`[Remove Object] Removed top-level model: ${objectToRemoveName}. Remaining models: ${state.loadedModels.length}`);
             } else {
                 console.log(`[Remove Object] Removed object: ${objectToRemoveName} (UUID: ${objectToRemoveUUID})`);
             }
 
-            if (state.originalMaterialProperties.has(state.selectedObject.uuid)) {
-                state.originalMaterialProperties.delete(state.selectedObject.uuid);
+            if (state.originalMaterialProperties.has(object.uuid)) {
+                state.originalMaterialProperties.delete(object.uuid);
             }
-            if (state.allHighlightsOriginalMaterials.has(state.selectedObject.uuid)) {
-                state.allHighlightsOriginalMaterials.delete(state.selectedObject.uuid);
+            if (state.allHighlightsOriginalMaterials.has(object.uuid)) {
+                state.allHighlightsOriginalMaterials.delete(object.uuid);
             }
 
             addMessageToLog('AI', `Removed ${objectToRemoveName}.`);
             _speakResponse(`Removed ${objectToRemoveName}.`);
-            state.selectedObject = null;
-            state.currentlySelectedObjectsForEditing = [];
             _resetView();
         } else {
             console.warn(`[Remove Object] Selected object ${objectToRemoveName} has no parent to remove from.`);
