@@ -3562,8 +3562,8 @@ import {
                 state.controls = new THREE.OrbitControls(state.camera, state.renderer.domElement);
                 state.controls.enableDamping = true;
                 state.controls.dampingFactor = 0.25;
-                state.controls.zoomSpeed = 1.35;
-                state.controls.minDistance = 0.01;
+                state.controls.zoomSpeed = 1.8;
+                state.controls.minDistance = 0.001;
                 state.controls.target.set(0, 0, 0); // Ensure state.controls target the origin
             }
             initTransformControls();
@@ -3603,7 +3603,8 @@ import {
             cadCanvas.removeEventListener('mousemove', onCanvasMouseMove, false);
             cadCanvas.addEventListener('mousemove', onCanvasMouseMove, false);
             cadCanvas.removeEventListener('wheel', focusZoomOnPointer, false);
-            cadCanvas.addEventListener('wheel', focusZoomOnPointer, { passive: true });
+            cadCanvas.removeEventListener('wheel', focusZoomOnPointer, true);
+            cadCanvas.addEventListener('wheel', focusZoomOnPointer, { passive: true, capture: true });
 
             // Add extrude gizmo interaction handlers
             cadCanvas.removeEventListener('mousedown', onExtrudePointerDown, false);
@@ -3644,16 +3645,13 @@ import {
             state.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
             state.raycaster.setFromCamera(state.mouse, state.camera);
 
-            const meshes = [];
-            state.loadedModels.forEach(model => {
-                model.traverse(obj => {
-                    if (obj.isMesh && obj.visible && !obj.userData.isSelectionOutline) meshes.push(obj);
-                });
-            });
-            const hit = state.raycaster.intersectObjects(meshes, false)[0];
+            const hit = state.raycaster.intersectObjects(state.loadedModels, true)
+                .find(intersection => intersection.object.isMesh
+                    && intersection.object.visible
+                    && !intersection.object.userData.isSelectionOutline);
             if (!hit) return;
 
-            state.controls.target.lerp(hit.point, 0.3);
+            state.controls.target.lerp(hit.point, 0.65);
             state.controls.update();
         }
 

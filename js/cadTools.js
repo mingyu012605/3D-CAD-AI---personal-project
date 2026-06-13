@@ -23,6 +23,8 @@ let decorativeMeshes = [];
 let lastDecorModelSignature = '';
 let lastMeasurementSignature = '';
 let lastSectionSignature = '';
+let cadToolsInitialized = false;
+let refreshInProgress = false;
 
 function setCADMode(mode) {
     document.querySelectorAll('.cad-mode-tab').forEach(button => {
@@ -56,9 +58,10 @@ function clearStructureHighlight() {
 
 function selectedTopModels() {
     const found = new Set();
+    const loadedModels = new Set(state.loadedModels);
     getSelectedObjects().forEach(object => {
         let current = object;
-        while (current && !state.loadedModels.includes(current)) current = current.parent;
+        while (current && !loadedModels.has(current)) current = current.parent;
         if (current) found.add(current);
     });
     return [...found];
@@ -265,6 +268,23 @@ function refreshObjectInspector() {
         return;
     }
 
+    const name = objects.length === 1 ? objects[0].name || 'Unnamed Object' : `${objects.length} objects selected`;
+    document.getElementById('cadInspectorName').textContent = name;
+    if (objects.length > 1) {
+        const signature = `multiple:${objects.length}`;
+        if (signature === lastStatsSignature) return;
+        lastStatsSignature = signature;
+        document.getElementById('cadInspectorType').textContent = 'Multiple Selection';
+        document.getElementById('cadInspectorDimensions').textContent = 'Available for one object';
+        document.getElementById('cadInspectorPrimaryLabel').textContent = 'Volume';
+        document.getElementById('cadInspectorPrimary').textContent = '-';
+        document.getElementById('cadInspectorSecondaryLabel').textContent = 'Total Area';
+        document.getElementById('cadInspectorSecondary').textContent = '-';
+        document.getElementById('cadInspectorVolumeFormula').textContent = 'Select one object to calculate volume.';
+        document.getElementById('cadInspectorAreaFormula').textContent = 'Select one object to calculate total area.';
+        return;
+    }
+
     objects.forEach(object => object.updateMatrixWorld(true));
     const statsSignature = objects.map(object =>
         `${object.uuid}:${object.matrixWorld.elements.map(value => value.toFixed(4)).join(',')}`
@@ -286,10 +306,7 @@ function refreshObjectInspector() {
     const size = bounds.getSize(new THREE.Vector3());
     const planarAxis = [size.x, size.y, size.z].findIndex(value => value < Math.max(size.x, size.y, size.z) * 0.001);
     const is2D = planarAxis !== -1;
-    const name = objects.length === 1 ? objects[0].name || 'Unnamed Object' : `${objects.length} objects selected`;
-    const type = objects.length === 1
-        ? (is2D ? '2D Shape' : objects[0].userData?.isIFCElement ? 'IFC Element' : '3D Mesh')
-        : 'Multiple Selection';
+    const type = is2D ? '2D Shape' : objects[0].userData?.isIFCElement ? 'IFC Element' : '3D Mesh';
 
     document.getElementById('cadInspectorName').textContent = name;
     document.getElementById('cadInspectorType').textContent = type;
@@ -325,26 +342,29 @@ function refreshMeasurement() {
         output.textContent = 'Select an object to measure it.';
         return;
     }
+    if (objects.length > 1) {
+        const signature = `${objects.length}:${objects.slice(0, 3).map(object => object.uuid).join('|')}`;
+        if (signature === lastMeasurementSignature) return;
+        lastMeasurementSignature = signature;
+        if (objects.length >= 3) {
+            const a = new THREE.Box3().setFromObject(objects[0]).getCenter(new THREE.Vector3());
+            const vertex = new THREE.Box3().setFromObject(objects[1]).getCenter(new THREE.Vector3());
+            const c = new THREE.Box3().setFromObject(objects[2]).getCenter(new THREE.Vector3());
+            const angle = THREE.MathUtils.radToDeg(a.sub(vertex).angleTo(c.sub(vertex)));
+            output.textContent = `Angle through selection centers: ${angle.toFixed(2)} degrees. Area and volume require one object.`;
+            return;
+        }
+        const a = new THREE.Box3().setFromObject(objects[0]).getCenter(new THREE.Vector3());
+        const b = new THREE.Box3().setFromObject(objects[1]).getCenter(new THREE.Vector3());
+        output.textContent = `Center distance: ${a.distanceTo(b).toFixed(3)} units. Area and volume require one object.`;
+        return;
+    }
     objects.forEach(object => object.updateMatrixWorld(true));
     const signature = objects.map(object =>
         `${object.uuid}:${object.matrixWorld.elements.map(value => value.toFixed(4)).join(',')}`
     ).join('|');
     if (signature === lastMeasurementSignature) return;
     lastMeasurementSignature = signature;
-    if (objects.length >= 3) {
-        const a = new THREE.Box3().setFromObject(objects[0]).getCenter(new THREE.Vector3());
-        const vertex = new THREE.Box3().setFromObject(objects[1]).getCenter(new THREE.Vector3());
-        const c = new THREE.Box3().setFromObject(objects[2]).getCenter(new THREE.Vector3());
-        const angle = THREE.MathUtils.radToDeg(a.sub(vertex).angleTo(c.sub(vertex)));
-        output.textContent = `Angle through selection centers: ${angle.toFixed(2)} degrees`;
-        return;
-    }
-    if (objects.length === 2) {
-        const a = new THREE.Box3().setFromObject(objects[0]).getCenter(new THREE.Vector3());
-        const b = new THREE.Box3().setFromObject(objects[1]).getCenter(new THREE.Vector3());
-        output.textContent = `Center distance: ${a.distanceTo(b).toFixed(3)} units`;
-        return;
-    }
     const result = measureObject(objects[0]);
     output.textContent = `Size: ${result.size.x.toFixed(3)} x ${result.size.y.toFixed(3)} x ${result.size.z.toFixed(3)} | Diagonal: ${result.diagonal.toFixed(3)} | Total Area: ${result.totalArea.toFixed(3)} | Volume: ${result.volume.toFixed(3)}`;
 }
@@ -470,18 +490,29 @@ function wireProjectControls() {
 }
 
 export function refreshAllTools() {
-    refreshObjectTree();
-    refreshObjectInspector();
-    refreshTransformInputs();
-    refreshMeasurement();
-    updateSectionPlane();
-    refreshStructureButton();
-    refreshDecorStatus();
-    const recover = document.getElementById('cadRecoverProject');
-    if (recover) recover.disabled = !hasAutosave();
+    if (refreshInProgress || document.hidden) return;
+    refreshInProgress = true;
+    try {
+        refreshObjectTree();
+        refreshObjectInspector();
+        refreshTransformInputs();
+        refreshMeasurement();
+        updateSectionPlane();
+        refreshStructureButton();
+        refreshDecorStatus();
+        const recover = document.getElementById('cadRecoverProject');
+        if (recover) recover.disabled = !hasAutosave();
+    } finally {
+        refreshInProgress = false;
+    }
 }
 
 export function initCADTools() {
+    if (cadToolsInitialized) {
+        refreshAllTools();
+        return;
+    }
+    cadToolsInitialized = true;
     document.querySelectorAll('.cad-mode-tab').forEach(button => {
         button.addEventListener('click', () => setCADMode(button.dataset.cadMode));
     });
@@ -502,6 +533,6 @@ export function initCADTools() {
         button.addEventListener('click', () => applyBoolean(button.dataset.cadBoolean));
     });
     wireProjectControls();
-    setInterval(refreshAllTools, 750);
+    setInterval(refreshAllTools, 1500);
     refreshAllTools();
 }

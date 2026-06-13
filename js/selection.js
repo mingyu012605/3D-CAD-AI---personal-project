@@ -660,8 +660,6 @@ export function highlightAllModels() {
                         highlightedCount++;
                     }
                 });
-                addSelectionOutline(obj);
-
                 state.allHighlightsOriginalMaterials.set(obj.uuid, objOriginalMaterials);
                 state.currentlySelectedObjectsForEditing.push(obj);
             }
