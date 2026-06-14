@@ -99,6 +99,30 @@ function clearTransientEditingState() {
     if (extrudePanel) extrudePanel.style.display = 'none';
 }
 
+function keepLoadedProjectAtReadableDistance() {
+    if (!state.camera || !state.controls || state.loadedModels.length === 0) return;
+
+    const bounds = new THREE.Box3();
+    state.loadedModels.forEach(model => bounds.expandByObject(model));
+    if (bounds.isEmpty()) return;
+
+    const center = bounds.getCenter(new THREE.Vector3());
+    const maxDimension = Math.max(...bounds.getSize(new THREE.Vector3()).toArray(), 0.01);
+    const minimumDistance = maxDimension * 1.4;
+    const currentDistance = state.camera.position.distanceTo(state.controls.target);
+    if (currentDistance >= minimumDistance) return;
+
+    const direction = state.camera.position.clone().sub(center);
+    if (direction.lengthSq() < 1e-8) direction.set(1, 1, 1);
+    direction.normalize();
+    state.controls.target.copy(center);
+    state.camera.position.copy(center).addScaledVector(direction, minimumDistance);
+    state.camera.near = Math.max(0.01, maxDimension / 100000);
+    state.camera.far = Math.max(1000, maxDimension * 200);
+    state.camera.updateProjectionMatrix();
+    state.controls.update();
+}
+
 export function loadProjectData(project) {
     if (project?.format !== 'ai-vr-cad-project' || !project.models) {
         throw new Error('This is not a valid AI VR CAD project file.');
@@ -136,6 +160,7 @@ export function loadProjectData(project) {
         state.controls?.target.fromArray(project.camera.target);
         state.controls?.update();
     }
+    keepLoadedProjectAtReadableDistance();
 
     if (project.editor) {
         const values = {

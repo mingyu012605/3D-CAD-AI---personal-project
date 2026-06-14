@@ -12,9 +12,13 @@ let transformDragConstraint = null;
 function constrainDraggedPosition(object, before, axis) {
     if (!axis || axis === 'XYZ' || state.transformControls?.mode !== 'translate') return;
     const allowedAxes = new Set(axis.replace('E', '').split(''));
-    if (!allowedAxes.has('X')) object.position.x = before.position.x;
-    if (!allowedAxes.has('Y')) object.position.y = before.position.y;
-    if (!allowedAxes.has('Z')) object.position.z = before.position.z;
+    const worldPosition = object.getWorldPosition(new THREE.Vector3());
+    if (!allowedAxes.has('X')) worldPosition.x = before.worldPosition.x;
+    if (!allowedAxes.has('Y')) worldPosition.y = before.worldPosition.y;
+    if (!allowedAxes.has('Z')) worldPosition.z = before.worldPosition.z;
+
+    object.position.copy(worldPosition);
+    object.parent?.worldToLocal(object.position);
 }
 
 export function initTransformCallbacks(cbs) {
@@ -224,7 +228,10 @@ export function initTransformControls() {
                 const targets = controlObject.userData.selectedModels || [controlObject];
                 transformDragConstraint = {
                     object: controlObject,
-                    before: { position: controlObject.position.clone() }
+                    axis: state.transformControls.axis,
+                    before: {
+                        worldPosition: controlObject.getWorldPosition(new THREE.Vector3())
+                    }
                 };
                 transformDragState = targets.map(object => ({
                     object,
@@ -275,7 +282,7 @@ export function initTransformControls() {
                     constrainDraggedPosition(
                         transformDragConstraint.object,
                         transformDragConstraint.before,
-                        state.transformControls.axis
+                        transformDragConstraint.axis
                     );
                 }
                 state.transformControls.object.updateMatrixWorld(true);
