@@ -2,6 +2,7 @@ import { state } from './state.js';
 import { addMessageToLog } from './utils.js';
 import { saveSceneState } from './history.js';
 import { loadIFCFile } from './ifcLoader.js';
+import { loadNativeProjectFile } from './project.js';
 
 const RANDOM_MODEL_URLS = [
     'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF-Binary/Box.glb',
@@ -29,7 +30,7 @@ export function initLoaderCallbacks(cbs) {
 export function initLoaderEventHandlers() {
     dropZone.addEventListener('dragover', e => {
         e.preventDefault();
-        dropZone.textContent = 'Release to drop your .gltf, .glb, or .ifc file';
+        dropZone.textContent = 'Release to drop your .cadproject, .gltf, .glb, or .ifc file';
         dropZone.style.borderColor = '#007bff';
         dropZone.style.display = 'flex'; // Show dropZone on dragover
         dropZone.style.pointerEvents = 'auto'; // Enable pointer events
@@ -68,7 +69,7 @@ export function initLoaderEventHandlers() {
                 const fullPath = path ? `${path}/${path}/${file.name}` : file.name; // FIX: Corrected path concatenation
                 state.droppedFileBlobs.set(fullPath, file);
                 console.log(`[Drop Handler] Stored file: ${fullPath}, Type: ${file.type}, Size: ${file.size} bytes`);
-                if (!mainModelFile && (file.name.toLowerCase().endsWith('.gltf') || file.name.toLowerCase().endsWith('.glb'))) {
+                if (!mainModelFile && validateFileExtension(file.name)) {
                     mainModelFile = file;
                 }
             } else if (entry.isDirectory) {
@@ -96,7 +97,7 @@ export function initLoaderEventHandlers() {
                 const file = e.dataTransfer.files[i];
                 state.droppedFileBlobs.set(file.name, file);
                 console.log(`[Drop Handler] Stored file (flat): ${file.name}, Type: ${file.type}, Size: ${file.size} bytes`);
-                if (!mainModelFile && (file.name.toLowerCase().endsWith('.gltf') || file.name.toLowerCase().endsWith('.glb'))) {
+                if (!mainModelFile && validateFileExtension(file.name)) {
                     mainModelFile = file;
                 }
             }
@@ -118,7 +119,7 @@ export function initLoaderEventHandlers() {
             }
             console.log("[Drop Handler] All dropped files (keys in map):", Array.from(state.droppedFileBlobs.keys()));
         } else {
-            loadingMsg.textContent = '❌ No .gltf or .glb file found among dropped items!';
+            loadingMsg.textContent = 'No supported project or model file found.';
             loadingMsg.style.color = 'red';
             setTimeout(() => { // Hide message after a delay
                 loadingMsg.style.display = 'none';
@@ -184,16 +185,24 @@ export function initLoaderEventHandlers() {
 export function validateFile(file) {
     console.log("[Validation] Validating file:", file ? file.name : "null");
     const name = file?.name.toLowerCase() ?? '';
-    if (name.endsWith('.gltf') || name.endsWith('.glb') || name.endsWith('.ifc')) {
-        console.log("[Validation] File is a valid GLTF/GLB/IFC.");
+    if (validateFileExtension(name)) {
+        console.log("[Validation] File is a valid CAD project or model.");
         return true;
     } else {
-        console.error("[Validation] Unsupported file type! Please upload a .gltf, .glb, or .ifc file.");
-        loadingMsg.textContent = '❌ Unsupported file type! Please upload a .gltf, .glb, or .ifc file.';
+        console.error("[Validation] Unsupported file type.");
+        loadingMsg.textContent = 'Unsupported file type. Choose .cadproject, .gltf, .glb, or .ifc.';
         loadingMsg.style.color = 'red';
         state.uploadedFile = null;
         return false;
     }
+}
+
+function validateFileExtension(name = '') {
+    const lowerName = name.toLowerCase();
+    return lowerName.endsWith('.cadproject')
+        || lowerName.endsWith('.gltf')
+        || lowerName.endsWith('.glb')
+        || lowerName.endsWith('.ifc');
 }
 
 export function loadRandomModel() {
@@ -266,6 +275,20 @@ async function _loadIFCModel(file) {
 }
 
 export function loadModel(file) {
+    if (file.name.toLowerCase().endsWith('.cadproject')) {
+        loadNativeProjectFile(file)
+            .then(() => {
+                loadingMsg.style.display = 'none';
+                saveSceneState();
+            })
+            .catch(error => {
+                console.error('[loader] Native project load error:', error);
+                loadingMsg.textContent = `Could not open project: ${error.message}`;
+                loadingMsg.style.color = 'red';
+                addMessageToLog('System', `Could not open project: ${error.message}`);
+            });
+        return;
+    }
     if (file.name.toLowerCase().endsWith('.ifc')) {
         _loadIFCModel(file);
         return;

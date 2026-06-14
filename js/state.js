@@ -55,7 +55,16 @@ export const state = {
     arrow: null,
     previewMeshes: [],
     depth: 0,
-    drag: { on: false, startPt: null, plane: null },
+    drag: {
+      on: false,
+      axisOrigin: null,
+      axisDirection: null,
+      startClientX: 0,
+      startClientY: 0,
+      screenDirection: null,
+      pixelsPerUnit: 1,
+      startDepth: 0,
+    },
   },
 
   // Voice / AI

@@ -2,6 +2,7 @@ import { state } from './state.js';
 import { addMessageToLog } from './utils.js';
 import { clearSelection, clearAllHighlights } from './selection.js';
 import { createSerializableModelClones } from './exporter.js';
+import { updateUndoRedoButtons } from './history.js';
 
 const AUTOSAVE_KEY = 'ai-vr-cad-editor-autosave-v1';
 let refreshTools = () => {};
@@ -51,11 +52,59 @@ function disposeModel(model) {
     });
 }
 
+function clearTransientEditingState() {
+    state.faceEditState.groups.forEach(group => {
+        if (group.overlay) state.scene.remove(group.overlay);
+        if (group.outline) state.scene.remove(group.outline);
+        group.overlay?.geometry?.dispose?.();
+        group.overlay?.material?.dispose?.();
+        group.outline?.geometry?.dispose?.();
+        group.outline?.material?.dispose?.();
+    });
+    state.extrudeUI.previewMeshes.forEach(mesh => {
+        state.scene.remove(mesh);
+        mesh.geometry?.dispose?.();
+        mesh.material?.dispose?.();
+    });
+    if (state.extrudeUI.arrow) state.scene.remove(state.extrudeUI.arrow);
+    state.faceEditState = {
+        targetMesh: null,
+        groups: [],
+        selectedGroupId: null,
+        isActive: false,
+        multiSelect: false,
+        selectedFaceIds: new Set(),
+    };
+    state.extrudeUI = {
+        active: false,
+        faceIds: [],
+        targetMesh: null,
+        arrow: null,
+        previewMeshes: [],
+        depth: 0,
+        drag: {
+            on: false,
+            axisOrigin: null,
+            axisDirection: null,
+            startClientX: 0,
+            startClientY: 0,
+            screenDirection: null,
+            pixelsPerUnit: 1,
+            startDepth: 0,
+        },
+    };
+    if (state.controls) state.controls.enabled = true;
+    state.transformControls?.detach();
+    const extrudePanel = document.getElementById('extrudePanel');
+    if (extrudePanel) extrudePanel.style.display = 'none';
+}
+
 export function loadProjectData(project) {
     if (project?.format !== 'ai-vr-cad-project' || !project.models) {
         throw new Error('This is not a valid AI VR CAD project file.');
     }
 
+    clearTransientEditingState();
     clearSelection();
     clearAllHighlights();
     state.loadedModels.forEach(model => {
@@ -63,6 +112,10 @@ export function loadProjectData(project) {
         disposeModel(model);
     });
     state.loadedModels = [];
+    state.undoStack = [];
+    state.redoStack = [];
+    state.currentUndoGroup = null;
+    updateUndoRedoButtons();
 
     const parsedRoot = new THREE.ObjectLoader().parse(project.models);
     parsedRoot.children.slice().forEach(model => {

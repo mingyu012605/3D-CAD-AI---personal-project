@@ -118,7 +118,7 @@
                 </div>
                 <p id="loadingMsg">Loading model, please wait...</p>
                 <!-- The file input is kept here, hidden, as it's triggered programmatically -->
-                <input type="file" id="fileInput" accept=".gltf,.glb,.ifc" style="display: none;" />
+                <input type="file" id="fileInput" accept=".cadproject,.gltf,.glb,.ifc" style="display: none;" />
             </div>
         </section>
 
@@ -273,6 +273,7 @@
                         <div class="cad-tool-row">
                             <button id="cadSaveProject">Save Project</button>
                             <button id="cadOpenProject">Open Project</button>
+                            <button id="cadExportGLB">Export GLB</button>
                             <button id="cadRecoverProject">Recover Autosave</button>
                         </div>
                         <div id="cadAutosaveStatus" class="cad-tool-output">Autosave ready.</div>

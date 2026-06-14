@@ -12,6 +12,7 @@ import {
     hasAutosave,
     initProjectPersistence,
 } from './project.js';
+import { saveSceneAsGLB } from './exporter.js';
 
 const sectionPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
 let isolateModel = null;
@@ -473,6 +474,14 @@ function wireProjectControls() {
     const input = document.getElementById('cadProjectFileInput');
     document.getElementById('cadSaveProject').addEventListener('click', () => {
         try { saveNativeProject(); } catch (error) { addMessageToLog('System', error.message); }
+    });
+    document.getElementById('cadExportGLB').addEventListener('click', async () => {
+        try {
+            const filename = await saveSceneAsGLB();
+            addMessageToLog('System', `Exported scene as "${filename}".`);
+        } catch (error) {
+            addMessageToLog('System', `Could not export GLB: ${error.message}`);
+        }
     });
     document.getElementById('cadOpenProject').addEventListener('click', () => input.click());
     input.addEventListener('change', async () => {

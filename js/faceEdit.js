@@ -117,6 +117,31 @@ export function initFaceEditCallbacks(cbs) {
             return { o, u, v, n };
         }
 
+        function getScreenAxisDrag(axisOrigin, axisDirection, rect) {
+            const sampleDistance = Math.max(0.1, state.camera.position.distanceTo(axisOrigin) * 0.15);
+            const start = axisOrigin.clone().project(state.camera);
+            const end = axisOrigin.clone()
+                .addScaledVector(axisDirection, sampleDistance)
+                .project(state.camera);
+            const dx = (end.x - start.x) * rect.width * 0.5;
+            const dy = -(end.y - start.y) * rect.height * 0.5;
+            const pixelDistance = Math.hypot(dx, dy);
+
+            if (pixelDistance >= 1) {
+                return {
+                    screenDirection: new THREE.Vector2(dx, dy).normalize(),
+                    pixelsPerUnit: Math.max(50, pixelDistance / sampleDistance),
+                };
+            }
+
+            const distance = Math.max(0.1, state.camera.position.distanceTo(axisOrigin));
+            const visibleHeight = 2 * distance * Math.tan(THREE.MathUtils.degToRad(state.camera.fov) / 2);
+            return {
+                screenDirection: new THREE.Vector2(0, -1),
+                pixelsPerUnit: Math.max(50, rect.height / visibleHeight),
+            };
+        }
+
         export function enableMultiFaceSelection(enable) {
             if (state.faceEditState.isActive) {
                 state.faceEditState.multiSelect = !!enable;
@@ -1395,9 +1420,16 @@ export function initFaceEditCallbacks(cbs) {
 
             console.log('[showExtrudeGizmo] ✅ Fusion 360 extrude UI ready!');
 
-            // 3) Drag plane orthogonal to normal (goes through centroid)
-            state.extrudeUI.drag.plane = new THREE.Plane().setFromNormalAndCoplanarPoint(F.n, F.o);
-            state.extrudeUI.drag.startPt = F.o.clone();
+            state.extrudeUI.drag = {
+                on: false,
+                axisOrigin: F.o.clone(),
+                axisDirection: F.n.clone(),
+                startClientX: 0,
+                startClientY: 0,
+                screenDirection: null,
+                pixelsPerUnit: 1,
+                startDepth: 0,
+            };
 
             console.log('[showExtrudeGizmo] 2D Fusion-style arrow created at:', F.o);
             addMessageToLog('System', 'Drag arrow to set depth (perpendicular). Click background/Enter to confirm, Esc to cancel.');
@@ -1548,6 +1580,7 @@ export function initFaceEditCallbacks(cbs) {
 
         function exitExtrudeMode() {
             clearExtrudePreview();
+            if (state.controls) state.controls.enabled = true;
 
             if (state.extrudeUI.arrow) {
                 state.scene.remove(state.extrudeUI.arrow);
@@ -1558,7 +1591,16 @@ export function initFaceEditCallbacks(cbs) {
             state.extrudeUI.faceIds = [];
             state.extrudeUI.targetMesh = null;
             state.extrudeUI.depth = 0;
-            state.extrudeUI.drag = { on: false, startPt: null, plane: null };
+            state.extrudeUI.drag = {
+                on: false,
+                axisOrigin: null,
+                axisDirection: null,
+                startClientX: 0,
+                startClientY: 0,
+                screenDirection: null,
+                pixelsPerUnit: 1,
+                startDepth: 0,
+            };
 
             // Hide the Fusion 360-style panel
             const panel = document.getElementById('extrudePanel');
@@ -1610,13 +1652,21 @@ export function initFaceEditCallbacks(cbs) {
                     if (boundaryResult) {
                         const { F } = boundaryResult;
 
-                        // Set up drag state with face-aligned plane
-                        state.extrudeUI.drag.on = true;
-                        state.extrudeUI.drag.startPt = F.o.clone();
-                        state.extrudeUI.drag.plane = new THREE.Plane(F.n, -F.o.dot(F.n));
+                        const axisDirection = F.n.clone().normalize();
+                        const screenDrag = getScreenAxisDrag(F.o, axisDirection, rect);
+                        state.extrudeUI.drag = {
+                            on: true,
+                            axisOrigin: F.o.clone(),
+                            axisDirection,
+                            startClientX: event.clientX,
+                            startClientY: event.clientY,
+                            screenDirection: screenDrag.screenDirection,
+                            pixelsPerUnit: screenDrag.pixelsPerUnit,
+                            startDepth: state.extrudeUI.depth,
+                        };
+                        if (state.controls) state.controls.enabled = false;
 
                         console.log('   Drag setup complete - face normal:', F.n.toArray());
-                        console.log('   Start point:', state.extrudeUI.drag.startPt.toArray());
                     }
                 }
 
@@ -1654,36 +1704,16 @@ export function initFaceEditCallbacks(cbs) {
             state.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
             state.raycaster.setFromCamera(state.mouse, state.camera);
 
-            // Get face info for movement calculation
-            const firstGroup = state.faceEditState.groups.find(g => g.id === state.extrudeUI.faceIds[0]);
-            if (!firstGroup) {
-                console.log('[onExtrudePointerMove] No first group found');
-                return;
-            }
-
-            const boundaryResult = buildFaceBoundaryPolygon(state.extrudeUI.targetMesh, firstGroup);
-            if (!boundaryResult) {
-                console.log('[onExtrudePointerMove] No boundary result');
-                return;
-            }
-
-            const { F } = boundaryResult;
-
-            // Create a plane perpendicular to the state.camera for better state.mouse tracking
-            const cameraDirection = new THREE.Vector3();
-            state.camera.getWorldDirection(cameraDirection);
-            const dragPlane = new THREE.Plane(cameraDirection, -F.o.dot(cameraDirection));
-
-            // Get current state.mouse position on the drag plane
-            const currentPoint = new THREE.Vector3();
-            if (!state.raycaster.ray.intersectPlane(dragPlane, currentPoint)) {
-                console.log('[onExtrudePointerMove] No plane intersection');
-                return;
-            }
-
-            // Calculate movement from face center and project onto face normal
-            const delta = new THREE.Vector3().subVectors(currentPoint, F.o);
-            const depth = THREE.MathUtils.clamp(delta.dot(F.n), -2.0, 2.0); // Signed depth along normal
+            const drag = state.extrudeUI.drag;
+            const pointerDelta = new THREE.Vector2(
+                event.clientX - drag.startClientX,
+                event.clientY - drag.startClientY
+            );
+            const depth = THREE.MathUtils.clamp(
+                drag.startDepth + pointerDelta.dot(drag.screenDirection) / drag.pixelsPerUnit,
+                -1000,
+                1000
+            );
 
             state.extrudeUI.depth = depth;
 
@@ -1694,7 +1724,8 @@ export function initFaceEditCallbacks(cbs) {
             }
 
             // Update 2D arrow position along normal (keep same orientation)
-            const newPosition = F.o.clone().add(F.n.clone().multiplyScalar(depth + 0.1)); // +0.1 for visibility offset
+            const newPosition = drag.axisOrigin.clone()
+                .add(drag.axisDirection.clone().multiplyScalar(depth + 0.1));
             state.extrudeUI.arrow.position.copy(newPosition);
 
             // Live preview for each selected face
@@ -1709,6 +1740,7 @@ export function initFaceEditCallbacks(cbs) {
             if (state.extrudeUI.drag.on) {
                 console.log('[onExtrudePointerUp] Drag ended');
                 state.extrudeUI.drag.on = false;
+                if (state.controls) state.controls.enabled = true;
             }
         }
 

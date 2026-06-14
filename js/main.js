@@ -26,7 +26,7 @@ import {
 } from './loader.js';
 import { initDocLink, onObjectSelected as docLinkOnSelected } from './docLink.js';
 import { getIFCElementProperties } from './ifcLoader.js';
-import { saveSceneAsGLB } from './exporter.js';
+import { saveNativeProject } from './project.js';
 import { initCADTools } from './cadTools.js';
 import {
     initFaceEditCallbacks,
@@ -3311,19 +3311,19 @@ import {
 
             saveButton.disabled = true;
             saveButton.textContent = 'Saving...';
-            addMessageToLog('System', 'Saving the current scene as a GLB file...');
+            addMessageToLog('System', 'Saving an editable project file...');
 
             try {
-                const filename = await saveSceneAsGLB();
-                addMessageToLog('System', `Scene saved successfully as "${filename}".`);
-                speakResponse('Scene saved successfully.');
+                const filename = saveNativeProject();
+                addMessageToLog('System', `Editable project saved successfully as "${filename}".`);
+                speakResponse('Editable project saved successfully.');
             } catch (error) {
-                console.error('[Save] Could not export scene:', error);
-                addMessageToLog('System', `Could not save scene: ${error.message}`);
-                speakResponse('Could not save the scene.');
+                console.error('[Save] Could not save project:', error);
+                addMessageToLog('System', `Could not save project: ${error.message}`);
+                speakResponse('Could not save the project.');
             } finally {
                 saveButton.disabled = false;
-                saveButton.textContent = 'Save Scene';
+                saveButton.textContent = 'Save';
             }
         }
 
@@ -3646,19 +3646,23 @@ import {
 
             const rect = state.renderer.domElement.getBoundingClientRect();
             const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
-            const rawDelta = event.deltaY * deltaScale;
-            const normalizedDelta = Math.sign(rawDelta) * Math.min(1.25, Math.max(0.35, Math.abs(rawDelta) / 120));
-            const viewDistance = Math.max(0.1, state.camera.position.distanceTo(state.controls.target));
-            // Touchpads usually emit small, high-resolution pixel deltas. Give them
-            // a stronger step without making traditional mouse-wheel ticks jumpy.
-            const isLikelyTouchpad = event.deltaMode === 0
-                && (Math.abs(event.deltaY) < 50 || !Number.isInteger(event.deltaY));
-            const zoomSensitivity = isLikelyTouchpad ? 0.105 : 0.072;
-            const step = Math.max(0.02, viewDistance * zoomSensitivity) * -normalizedDelta;
-            const direction = state.camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(step);
+            const pixelDelta = THREE.MathUtils.clamp(event.deltaY * deltaScale, -120, 120);
+            const currentOffset = state.camera.position.clone().sub(state.controls.target);
+            const currentDistance = currentOffset.length();
+            const minDistance = Math.max(0.01, state.controls.minDistance || 0.01);
+            const maxDistance = Number.isFinite(state.controls.maxDistance)
+                ? state.controls.maxDistance
+                : 500000;
+            const nextDistance = THREE.MathUtils.clamp(
+                currentDistance * Math.exp(pixelDelta * 0.0022),
+                minDistance,
+                maxDistance
+            );
 
-            state.camera.position.add(direction);
-            state.controls.target.add(direction);
+            // A real zoom changes the camera-to-target distance. Moving both the
+            // camera and target together causes the view to fly through the model.
+            currentOffset.setLength(nextDistance);
+            state.camera.position.copy(state.controls.target).add(currentOffset);
             state.controls.update();
         }
 
