@@ -3378,6 +3378,7 @@ import {
                     });
                 });
                 state.loadedModels = []; // Clear the array of loaded models
+                state.navigationModelSize = null;
 
                 // Remove grid helper and labels specifically if they exist
                 if (state.currentGridHelper) {
@@ -3647,21 +3648,27 @@ import {
             const rect = state.renderer.domElement.getBoundingClientRect();
             const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
             const pixelDelta = THREE.MathUtils.clamp(event.deltaY * deltaScale, -120, 120);
-            const responsiveDelta = Math.sign(pixelDelta) * Math.max(4, Math.abs(pixelDelta));
             const currentOffset = state.camera.position.clone().sub(state.controls.target);
             const currentDistance = currentOffset.length();
-            const minDistance = Math.max(0.01, state.controls.minDistance || 0.01);
+            if (!Number.isFinite(state.navigationModelSize)) {
+                const bounds = new THREE.Box3();
+                state.loadedModels.forEach(model => bounds.expandByObject(model));
+                state.navigationModelSize = bounds.isEmpty()
+                    ? 10
+                    : Math.max(...bounds.getSize(new THREE.Vector3()).toArray(), 0.01);
+            }
+            const worldUnitsPerPixel = Math.max(0.0001, state.navigationModelSize * 0.0005);
+            const minDistance = Math.max(0.001, state.navigationModelSize * 0.0001);
             const maxDistance = Number.isFinite(state.controls.maxDistance)
                 ? state.controls.maxDistance
                 : 500000;
             const nextDistance = THREE.MathUtils.clamp(
-                currentDistance * Math.exp(responsiveDelta * 0.0015),
+                currentDistance + pixelDelta * worldUnitsPerPixel,
                 minDistance,
                 maxDistance
             );
 
-            // A real zoom changes the camera-to-target distance. Moving both the
-            // camera and target together causes the view to fly through the model.
+            // Keep the world-space movement constant at every camera distance.
             currentOffset.setLength(nextDistance);
             state.camera.position.copy(state.controls.target).add(currentOffset);
             state.controls.update();

@@ -233,6 +233,7 @@ export function loadRandomModel() {
             }
         });
         state.loadedModels.push(randomModel);
+        state.navigationModelSize = null;
         _resetView();
         addMessageToLog('System', `Random model "${randomModel.name}" loaded successfully.`);
         _speakResponse(`Random model loaded.`);
@@ -261,6 +262,7 @@ async function _loadIFCModel(file) {
         if (!bbox.isEmpty()) group.position.y -= bbox.min.y;
 
         state.loadedModels.push(group);
+        state.navigationModelSize = null;
         _resetView();
         loadingMsg.style.display = 'none';
         const count = group.children.length;
@@ -360,6 +362,7 @@ export function loadModel(file) {
             }
 
             state.loadedModels.push(newModel); // Store the new model in our array
+            state.navigationModelSize = null;
 
             console.log(`[loadModel] Model '${file.name}' added to state.scene. Total models: ${state.loadedModels.length}`);
             console.log("[loadModel] New model bounding box:", new THREE.Box3().setFromObject(newModel));

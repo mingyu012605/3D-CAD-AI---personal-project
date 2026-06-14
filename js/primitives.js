@@ -133,6 +133,7 @@ export function createPrimitive(type) {
     // Add to state.scene and track it
     state.scene.add(mesh);
     state.loadedModels.push(mesh);
+    state.navigationModelSize = null;
 
     console.log(`[createPrimitive] Added ${type} to state.scene. Total objects: ${state.loadedModels.length}`);
 

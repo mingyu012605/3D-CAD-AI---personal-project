@@ -8,6 +8,7 @@ export const state = {
 
   // Scene content
   loadedModels: [],
+  navigationModelSize: null,
 
   // Selection
   selectedObject: null,

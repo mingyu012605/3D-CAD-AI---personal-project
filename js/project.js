@@ -108,7 +108,7 @@ function fitLoadedProjectView() {
 
     const center = bounds.getCenter(new THREE.Vector3());
     const maxDimension = Math.max(...bounds.getSize(new THREE.Vector3()).toArray(), 0.01);
-    const fitDistance = maxDimension * 1.8;
+    const fitDistance = maxDimension * 2.5;
     const direction = state.camera.position.clone().sub(state.controls.target);
     if (direction.lengthSq() < 1e-8) direction.set(1, 1, 1);
     direction.normalize();
@@ -118,6 +118,7 @@ function fitLoadedProjectView() {
     state.camera.far = Math.max(1000, maxDimension * 200);
     state.camera.updateProjectionMatrix();
     state.controls.update();
+    state.navigationModelSize = maxDimension;
 }
 
 export function loadProjectData(project) {
