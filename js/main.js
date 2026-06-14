@@ -3647,6 +3647,7 @@ import {
             const rect = state.renderer.domElement.getBoundingClientRect();
             const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
             const pixelDelta = THREE.MathUtils.clamp(event.deltaY * deltaScale, -120, 120);
+            const responsiveDelta = Math.sign(pixelDelta) * Math.max(4, Math.abs(pixelDelta));
             const currentOffset = state.camera.position.clone().sub(state.controls.target);
             const currentDistance = currentOffset.length();
             const minDistance = Math.max(0.01, state.controls.minDistance || 0.01);
@@ -3654,7 +3655,7 @@ import {
                 ? state.controls.maxDistance
                 : 500000;
             const nextDistance = THREE.MathUtils.clamp(
-                currentDistance * Math.exp(pixelDelta * 0.001),
+                currentDistance * Math.exp(responsiveDelta * 0.0015),
                 minDistance,
                 maxDistance
             );
