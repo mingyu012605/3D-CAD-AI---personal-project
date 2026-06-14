@@ -9,6 +9,21 @@ let _addUndoAction = () => {};
 let transformDragState = null;
 let transformDragConstraint = null;
 
+function captureTransformDragConstraint() {
+    const object = state.transformControls?.object;
+    if (!object || state.transformControls.mode !== 'translate') {
+        transformDragConstraint = null;
+        return;
+    }
+    transformDragConstraint = {
+        object,
+        axis: state.transformControls.axis,
+        before: {
+            worldPosition: object.getWorldPosition(new THREE.Vector3())
+        }
+    };
+}
+
 function constrainDraggedPosition(object, before, axis) {
     if (!axis || axis === 'XYZ' || state.transformControls?.mode !== 'translate') return;
     const allowedAxes = new Set(axis.replace('E', '').split(''));
@@ -220,19 +235,15 @@ export function scaleSelection(sx, sy, sz) {
 export function initTransformControls() {
     if (!state.transformControls) {
         state.transformControls = new THREE.TransformControls(state.camera, state.renderer.domElement);
+        state.transformControls.setSpace('world');
         state.scene.add(state.transformControls);
+        state.transformControls.addEventListener('mouseDown', captureTransformDragConstraint);
         state.transformControls.addEventListener('dragging-changed', function (event) {
             state.controls.enabled = !event.value;
             if (event.value && state.transformControls.object) {
                 const controlObject = state.transformControls.object;
                 const targets = controlObject.userData.selectedModels || [controlObject];
-                transformDragConstraint = {
-                    object: controlObject,
-                    axis: state.transformControls.axis,
-                    before: {
-                        worldPosition: controlObject.getWorldPosition(new THREE.Vector3())
-                    }
-                };
+                if (!transformDragConstraint) captureTransformDragConstraint();
                 transformDragState = targets.map(object => ({
                     object,
                     before: {
@@ -296,6 +307,7 @@ export function setTransformMode(mode) {
     if (state.transformControls) {
         // Don't save state for mode changes - save when actual transform happens
         state.transformControls.setMode(mode);
+        state.transformControls.setSpace('world');
         addMessageToLog('AI', `Transform mode set to ${mode}.`);
         _speakResponse(`Transform mode set to ${mode}.`);
     } else {

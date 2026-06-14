@@ -99,7 +99,7 @@ function clearTransientEditingState() {
     if (extrudePanel) extrudePanel.style.display = 'none';
 }
 
-function keepLoadedProjectAtReadableDistance() {
+function fitLoadedProjectView() {
     if (!state.camera || !state.controls || state.loadedModels.length === 0) return;
 
     const bounds = new THREE.Box3();
@@ -108,15 +108,12 @@ function keepLoadedProjectAtReadableDistance() {
 
     const center = bounds.getCenter(new THREE.Vector3());
     const maxDimension = Math.max(...bounds.getSize(new THREE.Vector3()).toArray(), 0.01);
-    const minimumDistance = maxDimension * 1.4;
-    const currentDistance = state.camera.position.distanceTo(state.controls.target);
-    if (currentDistance >= minimumDistance) return;
-
-    const direction = state.camera.position.clone().sub(center);
+    const fitDistance = maxDimension * 1.8;
+    const direction = state.camera.position.clone().sub(state.controls.target);
     if (direction.lengthSq() < 1e-8) direction.set(1, 1, 1);
     direction.normalize();
     state.controls.target.copy(center);
-    state.camera.position.copy(center).addScaledVector(direction, minimumDistance);
+    state.camera.position.copy(center).addScaledVector(direction, fitDistance);
     state.camera.near = Math.max(0.01, maxDimension / 100000);
     state.camera.far = Math.max(1000, maxDimension * 200);
     state.camera.updateProjectionMatrix();
@@ -160,7 +157,7 @@ export function loadProjectData(project) {
         state.controls?.target.fromArray(project.camera.target);
         state.controls?.update();
     }
-    keepLoadedProjectAtReadableDistance();
+    fitLoadedProjectView();
 
     if (project.editor) {
         const values = {

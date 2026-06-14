@@ -3564,7 +3564,7 @@ import {
                 state.controls.dampingFactor = 0.25;
                 // OrbitControls handles touchscreen pinch zoom. Keep it gentler than
                 // the separately handled wheel/touchpad zoom below.
-                state.controls.zoomSpeed = 0.5;
+                state.controls.zoomSpeed = 0.4;
                 state.controls.minDistance = 0.001;
                 state.controls.target.set(0, 0, 0); // Ensure state.controls target the origin
             }
@@ -3654,7 +3654,7 @@ import {
                 ? state.controls.maxDistance
                 : 500000;
             const nextDistance = THREE.MathUtils.clamp(
-                currentDistance * Math.exp(pixelDelta * 0.0015),
+                currentDistance * Math.exp(pixelDelta * 0.001),
                 minDistance,
                 maxDistance
             );
