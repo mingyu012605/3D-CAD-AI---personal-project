@@ -3562,7 +3562,9 @@ import {
                 state.controls = new THREE.OrbitControls(state.camera, state.renderer.domElement);
                 state.controls.enableDamping = true;
                 state.controls.dampingFactor = 0.25;
-                state.controls.zoomSpeed = 1.8;
+                // OrbitControls handles touchscreen pinch zoom. Keep it gentler than
+                // the separately handled wheel/touchpad zoom below.
+                state.controls.zoomSpeed = 0.65;
                 state.controls.minDistance = 0.001;
                 state.controls.target.set(0, 0, 0); // Ensure state.controls target the origin
             }
@@ -3647,7 +3649,12 @@ import {
             const rawDelta = event.deltaY * deltaScale;
             const normalizedDelta = Math.sign(rawDelta) * Math.min(1.25, Math.max(0.35, Math.abs(rawDelta) / 120));
             const viewDistance = Math.max(0.1, state.camera.position.distanceTo(state.controls.target));
-            const step = Math.max(0.02, viewDistance * 0.065) * -normalizedDelta;
+            // Touchpads usually emit small, high-resolution pixel deltas. Give them
+            // a stronger step without making traditional mouse-wheel ticks jumpy.
+            const isLikelyTouchpad = event.deltaMode === 0
+                && (Math.abs(event.deltaY) < 50 || !Number.isInteger(event.deltaY));
+            const zoomSensitivity = isLikelyTouchpad ? 0.105 : 0.072;
+            const step = Math.max(0.02, viewDistance * zoomSensitivity) * -normalizedDelta;
             const direction = state.camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(step);
 
             state.camera.position.add(direction);
