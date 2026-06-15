@@ -83,6 +83,23 @@ function renderMeta(metaDisplay, tags) {
     metaDisplay.style.display = tags.filter(Boolean).length ? 'block' : 'none';
 }
 
+function readIFCProps(obj) {
+    const cached = obj?.userData?.ifcProperties || {};
+    const live = getIFCElementProperties(obj.userData.modelID, obj.userData.expressID) || {};
+    const typeName = live.typeName && live.typeName !== 'IFC Element'
+        ? live.typeName
+        : cached.typeName || live.typeName || 'IFC Element';
+
+    return {
+        expressID: live.expressID ?? cached.expressID ?? obj.userData.expressID,
+        typeName,
+        globalId: live.globalId || cached.globalId || obj.userData.IfcGUID || obj.userData.ifcGUID || null,
+        name: live.name || cached.name || obj.name || null,
+        objectType: live.objectType || cached.objectType || null,
+        level: live.level || cached.level || null,
+    };
+}
+
 export async function initDocLink() {
     // Load element_links.json (non-blocking; matching works even before it loads)
     try {
@@ -133,13 +150,18 @@ export async function onObjectSelected(obj) {
 
     // --- IFC element path ---
     if (obj.userData?.isIFCElement) {
-        const ifcProps = getIFCElementProperties(obj.userData.modelID, obj.userData.expressID);
+        const ifcProps = readIFCProps(obj);
         const linked   = ifcProps?.globalId ? elementLinks[ifcProps.globalId] : null;
 
         if (linked) {
             // Full match in element_links.json via IfcGUID
             nameDisplay.textContent = linked.familyAndType || ifcProps?.name || 'IFC Element';
-            renderMeta(metaDisplay, [linked.category, linked.familyAndType, ifcProps?.level || linked.level]);
+            renderMeta(metaDisplay, [
+                linked.category,
+                linked.familyAndType,
+                ifcProps?.level || linked.level,
+                ifcProps.globalId ? `GUID: ${ifcProps.globalId}` : null,
+            ]);
             if (linked.doc_url) {
                 obj.userData.docUrl  = linked.doc_url;
                 urlInput.value       = linked.doc_url;
