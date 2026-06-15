@@ -26,6 +26,7 @@ import {
 } from './loader.js';
 import { initDocLink, onObjectSelected as docLinkOnSelected } from './docLink.js';
 import { getIFCElementProperties } from './ifcLoader.js';
+import { initDigitalTwinLayers, onDigitalTwinObjectSelected } from './digitalTwinLayers.js';
 import { saveNativeProject } from './project.js';
 import { initCADTools } from './cadTools.js';
 import {
@@ -167,7 +168,10 @@ import {
             handleFaceClick,
             clearFaceSelection,
             updateFaceHover,
-            onObjectSelected: docLinkOnSelected
+            onObjectSelected: object => {
+                docLinkOnSelected(object);
+                onDigitalTwinObjectSelected(object);
+            }
         });
 
         initHistoryCallbacks({
@@ -190,6 +194,7 @@ import {
         });
         initLoaderEventHandlers();
         initDocLink();
+        initDigitalTwinLayers();
         initCADTools();
 
         initFaceEditCallbacks({

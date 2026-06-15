@@ -117,6 +117,19 @@
         #cssCodeEditor { min-height: 110px !important; flex: 0 0 110px !important; margin: 0 !important; resize: none !important; }
         .appearance-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         #applyCssButton { color: #073239; background: var(--accent) !important; }
+        .digital-twin-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 10px 0; }
+        .digital-twin-actions button { min-height: 38px; border: 1px solid var(--line); border-radius: 7px; color: #dcecf4; background: #294b5e; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .digital-twin-actions button:hover, .digital-twin-actions button.active { color: #073239; border-color: var(--accent); background: var(--accent); }
+        .digital-twin-actions .reset-layer { color: #ffd8dc; background: #70434c; }
+        .digital-twin-values { display: grid; grid-template-columns: 1fr auto; gap: 7px; padding: 11px; border: 1px solid var(--line); border-radius: 9px; color: #9bb6c8; background: var(--panel-soft); font-size: 11px; }
+        .digital-twin-values b { color: #f0f8fc; text-align: right; }
+        .digital-twin-legend { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding: 10px; border-radius: 9px; background: rgba(8, 27, 39, .42); }
+        .digital-twin-legend span { display: flex; align-items: center; gap: 7px; color: #b8ceda; font-size: 10px; }
+        .digital-twin-legend i { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+        .digital-twin-selected { display: flex; flex-direction: column; gap: 5px; padding: 10px; border: 1px solid rgba(57, 214, 197, .25); border-radius: 8px; background: rgba(32, 76, 88, .45); }
+        .digital-twin-selected strong { color: #75e5d8; font-size: 11px; }
+        .digital-twin-selected b { color: #f0f8fc; font-size: 13px; }
+        .digital-twin-selected span { color: #a8bfcd; font-size: 10px; line-height: 1.45; }
         @media (max-width: 900px) {
             .project-path, .live-pill { display: none; }
             .right-panel { width: 330px; min-width: 300px; }
@@ -205,6 +218,7 @@
                     <button class="cad-mode-tab active" data-cad-mode="object" title="Object" aria-label="Object"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 7v10L12 21l7.5-4V7L12 3Z"/><path d="m4.5 7 7.5 4 7.5-4M12 11v10"/></svg></button>
                     <button class="cad-mode-tab" data-cad-mode="scene" title="Scene" aria-label="Scene"><svg viewBox="0 0 24 24"><path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="m4 12 8 4 8-4M4 17l8 4 8-4"/></svg></button>
                     <button class="cad-mode-tab" data-cad-mode="tools" title="Tools" aria-label="Tools"><svg viewBox="0 0 24 24"><path d="m14 6 4-3 3 3-3 4"/><path d="m16 8-9 9"/><path d="m8 16-4 1-1 4 4-1 9-9"/></svg></button>
+                    <button class="cad-mode-tab" data-cad-mode="layers" title="Digital Twin Data Layers" aria-label="Digital Twin Data Layers"><svg viewBox="0 0 24 24"><path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="m6 11-2 1 8 4 8-4-2-1M6 16l-2 1 8 4 8-4-2-1"/></svg></button>
                     <button class="cad-mode-tab" data-cad-mode="project" title="Project" aria-label="Project"><svg viewBox="0 0 24 24"><path d="M4 5h6l2 2h8v12H4V5Z"/><path d="M4 10h16"/></svg></button>
                 </div>
 
@@ -267,6 +281,13 @@
                                     <button id="cadApplyTransform">Apply Transform</button>
                                 </div>
                             </div>
+                            <div class="cad-inspector-section">
+                                <h4>Active Digital Twin Layer</h4>
+                                <div id="digitalTwinSelectedResult" class="digital-twin-selected">
+                                    <strong>No active layer result</strong>
+                                    <span>Select a layer and an IFC element.</span>
+                                </div>
+                            </div>
                         </div>
                     </section>
 
@@ -313,6 +334,27 @@
                                 <button data-cad-boolean="intersect">Intersect</button>
                             </div>
                         </details>
+                        </div>
+                    </section>
+
+                    <section id="cadModeLayers" class="cad-mode-panel">
+                        <h3 class="cad-panel-heading">Digital Twin Data Layers</h3>
+                        <div class="cad-panel-subtitle">Live weather when configured, with clearly labelled operational simulations.</div>
+                        <div class="digital-twin-actions">
+                            <button data-digital-twin-layer="energy">Energy Usage</button>
+                            <button data-digital-twin-layer="occupancy">Occupancy</button>
+                            <button data-digital-twin-layer="maintenance">Maintenance</button>
+                            <button id="digitalTwinResetColours" class="reset-layer">Reset Colours</button>
+                        </div>
+                        <div class="digital-twin-values">
+                            <span>Weather temperature</span><b id="digitalTwinWeatherValue">Loading...</b>
+                            <span>Energy load</span><b id="digitalTwinEnergyValue">Inactive</b>
+                            <span>Occupancy</span><b id="digitalTwinOccupancyValue">Inactive</b>
+                            <span>Selected maintenance</span><b id="digitalTwinMaintenanceValue">No element selected</b>
+                            <span>Layer status</span><b id="digitalTwinLayerStatus">Ready</b>
+                        </div>
+                        <div id="digitalTwinLegend" class="digital-twin-legend">
+                            <span><i style="background:#91a9bd"></i>Choose a layer to view its legend</span>
                         </div>
                     </section>
 
@@ -374,6 +416,7 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/VRButton.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
 
+    <script src="js/config.js"></script>
     <script type="module" src="js/main.js"></script>
 
     <!-- Fusion 360-style compact extrude panel (top-right) -->

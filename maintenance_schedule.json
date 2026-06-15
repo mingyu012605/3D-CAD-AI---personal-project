@@ -1,0 +1,16 @@
+[
+  {
+    "ifcGuid": "2iYv$69FzCEwJ60ry0czg1",
+    "equipmentName": "Horizontal Heat Pump",
+    "lastServiceDate": "2026-05-20",
+    "serviceIntervalDays": 120,
+    "notes": "Inspect filters, condensate drain, and fan assembly."
+  },
+  {
+    "ifcGuid": "0_aOXMG45DCReBUZexWi$$",
+    "equipmentName": "Supply Diffuser",
+    "lastServiceDate": "2025-11-15",
+    "serviceIntervalDays": 180,
+    "notes": "Clean diffuser face and verify airflow."
+  }
+]
