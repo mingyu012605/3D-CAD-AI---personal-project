@@ -3648,8 +3648,6 @@ import {
             const rect = state.renderer.domElement.getBoundingClientRect();
             const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
             const pixelDelta = THREE.MathUtils.clamp(event.deltaY * deltaScale, -120, 120);
-            const currentOffset = state.camera.position.clone().sub(state.controls.target);
-            const currentDistance = currentOffset.length();
             if (!Number.isFinite(state.navigationModelSize)) {
                 const bounds = new THREE.Box3();
                 state.loadedModels.forEach(model => bounds.expandByObject(model));
@@ -3658,19 +3656,19 @@ import {
                     : Math.max(...bounds.getSize(new THREE.Vector3()).toArray(), 0.01);
             }
             const worldUnitsPerPixel = Math.max(0.0001, state.navigationModelSize * 0.0005);
-            const minDistance = Math.max(0.001, state.navigationModelSize * 0.0001);
-            const maxDistance = Number.isFinite(state.controls.maxDistance)
-                ? state.controls.maxDistance
-                : 500000;
-            const nextDistance = THREE.MathUtils.clamp(
-                currentDistance + pixelDelta * worldUnitsPerPixel,
-                minDistance,
-                maxDistance
+            const pointer = new THREE.Vector3(
+                ((event.clientX - rect.left) / rect.width) * 2 - 1,
+                -((event.clientY - rect.top) / rect.height) * 2 + 1,
+                0.5
             );
+            const zoomDirection = pointer.unproject(state.camera).sub(state.camera.position).normalize();
+            const movement = -pixelDelta * worldUnitsPerPixel;
 
-            // Keep the world-space movement constant at every camera distance.
-            currentOffset.setLength(nextDistance);
-            state.camera.position.copy(state.controls.target).add(currentOffset);
+            // Move both camera and orbit target toward the cursor. Unlike changing
+            // camera-to-target distance, this never stalls when the camera reaches
+            // the old target and keeps close-range navigation constant.
+            state.camera.position.addScaledVector(zoomDirection, movement);
+            state.controls.target.addScaledVector(zoomDirection, movement);
             state.controls.update();
         }
 
