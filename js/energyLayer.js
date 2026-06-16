@@ -12,7 +12,8 @@ export function calculateEnergyLoad(temperatureC, date = new Date()) {
 }
 
 export function energyStatus(load) {
-    if (load >= 70) return { label: 'High load', color: 0xef4444 };
-    if (load >= 40) return { label: 'Medium load', color: 0xf59e0b };
-    return { label: 'Low load', color: 0x34d399 };
+    if (load >= 85) return { label: 'Critical load', color: 0xdc2626 };
+    if (load >= 65) return { label: 'High load', color: 0xf97316 };
+    if (load >= 40) return { label: 'Moderate load', color: 0xeab308 };
+    return { label: 'Low load', color: 0x22c55e };
 }

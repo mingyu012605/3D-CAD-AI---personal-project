@@ -12,5 +12,33 @@
     "lastServiceDate": "2025-11-15",
     "serviceIntervalDays": 180,
     "notes": "Clean diffuser face and verify airflow."
+  },
+  {
+    "ifcGuid": "1UneDb1cLEKQbrcK14azMA",
+    "equipmentName": "Horizontal Heat Pump - West Wing",
+    "lastServiceDate": "2026-02-18",
+    "serviceIntervalDays": 150,
+    "notes": "Check compressor current, return air sensor, and condensate pan."
+  },
+  {
+    "ifcGuid": "3SXc9zpn99$hsjI8fXdJvh",
+    "equipmentName": "Horizontal Heat Pump - 7 kW",
+    "lastServiceDate": "2025-09-01",
+    "serviceIntervalDays": 180,
+    "notes": "Priority inspection. Unit has exceeded planned service interval."
+  },
+  {
+    "ifcGuid": "25d8vNFRj878F8EetlLCj1",
+    "equipmentName": "Sidewall Supply Diffuser",
+    "lastServiceDate": "2025-12-20",
+    "serviceIntervalDays": 180,
+    "notes": "Verify airflow balance and clean grille."
+  },
+  {
+    "ifcGuid": "1qXS5vasH8rxQBPpPnXUxF",
+    "equipmentName": "Rectangular Duct Elbow",
+    "lastServiceDate": "2026-04-15",
+    "serviceIntervalDays": 120,
+    "notes": "Inspect duct sealant and vibration at fitting."
   }
 ]

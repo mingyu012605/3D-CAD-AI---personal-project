@@ -14,11 +14,14 @@ export function calculateMaintenanceStatus(record, now = new Date()) {
     }
 
     const daysUntilDue = interval - daysSinceService;
+    if (daysUntilDue < -Math.max(14, interval * 0.15)) {
+        return { label: 'Critical overdue', color: 0xdc2626, daysSinceService, daysUntilDue };
+    }
     if (daysUntilDue < 0) {
-        return { label: 'Overdue', color: 0xef4444, daysSinceService, daysUntilDue };
+        return { label: 'Overdue', color: 0xf97316, daysSinceService, daysUntilDue };
     }
     if (daysUntilDue <= Math.max(14, interval * 0.2)) {
-        return { label: 'Service due soon', color: 0xf59e0b, daysSinceService, daysUntilDue };
+        return { label: 'Service due soon', color: 0xeab308, daysSinceService, daysUntilDue };
     }
-    return { label: 'Recently serviced', color: 0x34d399, daysSinceService, daysUntilDue };
+    return { label: 'Recently serviced', color: 0x22c55e, daysSinceService, daysUntilDue };
 }

@@ -3560,18 +3560,19 @@ import {
             }
             if (!state.camera) {
                 const viewerDiv = cadCanvas.parentElement;
-                state.camera = new THREE.PerspectiveCamera(75, viewerDiv.clientWidth / viewerDiv.clientHeight, 0.01, 500000);
+                state.camera = new THREE.PerspectiveCamera(75, viewerDiv.clientWidth / viewerDiv.clientHeight, 0.001, 500000);
                 // Adjusted initial state.camera position for a more "twisted" or perspective view
                 state.camera.position.set(30, 30, 30); // Set state.camera at an angle
             }
             if (!state.controls) {
                 state.controls = new THREE.OrbitControls(state.camera, state.renderer.domElement);
                 state.controls.enableDamping = true;
-                state.controls.dampingFactor = 0.25;
+                state.controls.dampingFactor = 0.14;
                 // OrbitControls handles touchscreen pinch zoom. Keep it gentler than
                 // the separately handled wheel/touchpad zoom below.
-                state.controls.zoomSpeed = 0.4;
-                state.controls.minDistance = 0.001;
+                state.controls.zoomSpeed = 0.65;
+                state.controls.minDistance = 0;
+                state.controls.screenSpacePanning = true;
                 state.controls.target.set(0, 0, 0); // Ensure state.controls target the origin
             }
             initTransformControls();
@@ -3652,7 +3653,7 @@ import {
 
             const rect = state.renderer.domElement.getBoundingClientRect();
             const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
-            const pixelDelta = THREE.MathUtils.clamp(event.deltaY * deltaScale, -120, 120);
+            const pixelDelta = THREE.MathUtils.clamp(event.deltaY * deltaScale, -90, 90);
             if (!Number.isFinite(state.navigationModelSize)) {
                 const bounds = new THREE.Box3();
                 state.loadedModels.forEach(model => bounds.expandByObject(model));
@@ -3660,20 +3661,41 @@ import {
                     ? 10
                     : Math.max(...bounds.getSize(new THREE.Vector3()).toArray(), 0.01);
             }
-            const worldUnitsPerPixel = Math.max(0.0001, state.navigationModelSize * 0.0005);
+            const worldUnitsPerPixel = Math.max(0.0005, state.navigationModelSize * 0.00035);
             const pointer = new THREE.Vector3(
                 ((event.clientX - rect.left) / rect.width) * 2 - 1,
                 -((event.clientY - rect.top) / rect.height) * 2 + 1,
                 0.5
             );
+            const pointer2D = new THREE.Vector2(pointer.x, pointer.y);
             const zoomDirection = pointer.unproject(state.camera).sub(state.camera.position).normalize();
-            const movement = -pixelDelta * worldUnitsPerPixel;
+            let movement = -pixelDelta * worldUnitsPerPixel;
+
+            if (pixelDelta < 0 && state.raycaster) {
+                const targets = [];
+                state.loadedModels.forEach(model => model.traverse(object => {
+                    if (object.isMesh && object.visible && !object.userData?.isGridLabel && !object.userData?.isSelectionOutline) {
+                        targets.push(object);
+                    }
+                }));
+                state.raycaster.setFromCamera(pointer2D, state.camera);
+                const hit = state.raycaster.intersectObjects(targets, false)[0];
+                if (hit) {
+                    const distanceToSurface = state.camera.position.distanceTo(hit.point);
+                    const minimumUsefulStep = Math.max(movement, distanceToSurface * 0.18);
+                    const maximumSafeStep = Math.max(worldUnitsPerPixel, distanceToSurface * 0.85);
+                    movement = Math.min(minimumUsefulStep, maximumSafeStep);
+                    state.controls.target.lerp(hit.point, 0.28);
+                }
+            }
 
             // Move both camera and orbit target toward the cursor. Unlike changing
             // camera-to-target distance, this never stalls when the camera reaches
             // the old target and keeps close-range navigation constant.
             state.camera.position.addScaledVector(zoomDirection, movement);
             state.controls.target.addScaledVector(zoomDirection, movement);
+            state.camera.near = Math.max(0.0001, state.navigationModelSize / 1000000);
+            state.camera.updateProjectionMatrix();
             state.controls.update();
         }
 
@@ -3743,7 +3765,7 @@ import {
             const d = size * 1.5;
 
             // Scale clipping planes to the model so nothing gets clipped
-            state.camera.near = Math.max(0.01, size / 100000);
+            state.camera.near = Math.max(0.0001, size / 1000000);
             state.camera.far  = Math.max(1000, size * 200);
             state.camera.updateProjectionMatrix();
 
@@ -3788,7 +3810,7 @@ import {
                 console.log("[resetView] Max Dimension:", maxDim);
 
                 // Scale clipping planes so the entire model is visible at any distance
-                state.camera.near = Math.max(0.01, maxDim / 100000);
+                state.camera.near = Math.max(0.0001, maxDim / 1000000);
                 state.camera.far  = Math.max(1000, maxDim * 200);
                 state.camera.updateProjectionMatrix();
 
