@@ -3789,7 +3789,11 @@ import {
             if (state.controls && state.camera && state.loadedModels.length > 0) {
                 const overallBbox = new THREE.Box3();
                 state.loadedModels.forEach(model => {
-                    overallBbox.union(new THREE.Box3().setFromObject(model));
+                    model.traverse(child => {
+                        if (child.isMesh && child.visible && !child.userData.cadDecorHidden) {
+                            overallBbox.expandByObject(child);
+                        }
+                    });
                 });
 
                 if (overallBbox.isEmpty()) {
