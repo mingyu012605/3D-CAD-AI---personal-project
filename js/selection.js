@@ -7,9 +7,9 @@ let mouseDownY = 0;
 const CLICK_TOLERANCE = 15;
 const SELECTION_ASSIST_RADIUS_PX = 9;
 const highlightMaterial = new THREE.MeshBasicMaterial({
-    color: 0xc2540a,
+    color: 0x3b82c4,
     transparent: true,
-    opacity: 0.38,
+    opacity: 0.22,
     depthTest: false,
     depthWrite: false
 });
@@ -87,7 +87,7 @@ function addSelectionOutline(object) {
         const outline = new THREE.LineSegments(
             new THREE.EdgesGeometry(mesh.geometry, 20),
             new THREE.LineBasicMaterial({
-                color: 0xe8811a,
+                color: 0x4f8cc9,
                 transparent: true,
                 opacity: 0.9,
                 depthTest: false,
@@ -375,7 +375,7 @@ export function onCanvasClick(event) {
         console.log(`[onCanvasClick] state.mouse/Touch Up: Final(${currentX}, ${currentY}). DeltaX=${deltaX}, DeltaY=${deltaY}. Tolerance=${CLICK_TOLERANCE}`);
 
         // Visual feedback for any click registered
-        cadViewer.style.backgroundColor = '#f5ede0';
+        cadViewer.style.backgroundColor = 'rgba(59,130,196,0.06)';
         setTimeout(() => {
             cadViewer.style.backgroundColor = '';
         }, 100);

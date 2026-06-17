@@ -380,7 +380,7 @@ function updateSectionPlane() {
     if (signature === lastSectionSignature) return;
     lastSectionSignature = signature;
     sectionPlane.normal.set(axis === 'x' ? invert : 0, axis === 'y' ? invert : 0, axis === 'z' ? invert : 0);
-    sectionPlane.constant = offset;
+    sectionPlane.constant = offset * invert;
     state.renderer.localClippingEnabled = enabled;
     state.loadedModels.forEach(model => model.traverse(object => {
         if (!object.isMesh || !object.material) return;
