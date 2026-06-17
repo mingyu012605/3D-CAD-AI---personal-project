@@ -137,6 +137,11 @@
         .digital-twin-records button { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; width: 100%; padding: 7px 8px; border: 1px solid rgba(194, 84, 10, .18); border-radius: 7px; color: #e8c090; background: #2e1205; text-align: left; cursor: pointer; }
         .digital-twin-records button:hover { border-color: rgba(194, 84, 10, .55); background: #4a1e08; }
         .digital-twin-records small { color: #c8905a; font-size: 9px; }
+        .digital-twin-provenance { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(40, 15, 2, .28); font-size: 10px; }
+        .digital-twin-provenance .dt-prov-title { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 2px; }
+        .digital-twin-provenance > span { color: #d4a070; line-height: 1.55; }
+        .digital-twin-provenance b { color: #fff4eb; }
+        .digital-twin-selected small { color: #a07840; font-size: 9px; line-height: 1.4; font-style: italic; margin-top: 2px; }
         @media (max-width: 900px) {
             .project-path, .live-pill { display: none; }
             .right-panel { width: 330px; min-width: 300px; }
@@ -364,6 +369,14 @@
                             <span><i style="background:#91a9bd"></i>Choose a layer to view its legend</span>
                         </div>
                         <div id="digitalTwinMaintenanceRecords" class="digital-twin-records"></div>
+                        <div class="digital-twin-provenance">
+                            <span class="dt-prov-title">Data provenance</span>
+                            <span><b>IFC metadata</b> — Real, from loaded IFC file</span>
+                            <span><b>Weather</b> — <span id="digitalTwinWeatherSource">checking…</span></span>
+                            <span><b>Energy load</b> — Derived estimate (weather × time of day)</span>
+                            <span><b>Occupancy</b> — Simulated schedule (time-of-day model)</span>
+                            <span><b>Maintenance</b> — Demo JSON records (maintenance_schedule.json)</span>
+                        </div>
                     </section>
 
                     <section id="cadModeProject" class="cad-mode-panel">

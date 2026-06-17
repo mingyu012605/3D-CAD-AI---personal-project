@@ -152,6 +152,25 @@ function smallVariation(text = '') {
     return [...text].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 15 - 7;
 }
 
+function weatherLabel(w) {
+    if (!w) return 'Unavailable';
+    if (w.source === 'open-meteo') return `${w.temperatureC.toFixed(1)} °C — Live, Open-Meteo`;
+    if (w.source === 'openweathermap') return `${w.temperatureC.toFixed(1)} °C — Live, OpenWeatherMap`;
+    return `${w.temperatureC.toFixed(1)} °C — Simulated fallback`;
+}
+
+function focusObject(object) {
+    if (!object || !state.controls) return;
+    try {
+        const box = new THREE.Box3().setFromObject(object);
+        if (box.isEmpty()) return;
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        state.controls.target.copy(center);
+        state.controls.update();
+    } catch (_) {}
+}
+
 function setLegend(items) {
     const legend = document.getElementById('digitalTwinLegend');
     if (!legend) return;
@@ -218,7 +237,10 @@ function renderMaintenanceRecords() {
     panel.querySelectorAll('[data-maintenance-guid]').forEach(button => {
         button.addEventListener('click', () => {
             const object = objectByGuid.get(button.dataset.maintenanceGuid);
-            if (object?.parent) selectObject(object);
+            if (object?.parent) {
+                selectObject(object);
+                focusObject(object);
+            }
         });
     });
 }
@@ -235,10 +257,11 @@ function applyEnergy(meshes) {
             title: 'Energy Usage',
             value: `${load}% simulated HVAC load`,
             detail: `${status.label} / ${meta.category || 'Mechanical target'}${meta.level ? ` / ${meta.level}` : ''}`,
+            rule: 'Matched mechanical/HVAC equipment category in IFC metadata',
         });
         count++;
     });
-    setValue('digitalTwinWeatherValue', `${weather.temperatureC.toFixed(1)} C${weather.simulated ? ' (simulated)' : ' (live)'}`);
+    setValue('digitalTwinWeatherValue', weatherLabel(weather));
     setValue('digitalTwinEnergyValue', `${baseLoad}% simulated`);
     setValue('digitalTwinOccupancyValue', 'Inactive');
     setLegend([
@@ -251,29 +274,40 @@ function applyEnergy(meshes) {
 }
 
 function applyOccupancy(meshes) {
-    let targets = meshes.filter(isPrimaryOccupancyTarget);
-    let subtleFallback = false;
-    if (targets.length === 0) targets = meshes.filter(isOccupancyTarget);
-    if (targets.length === 0) {
-        targets = meshes.filter(isLevelFallbackTarget);
-        subtleFallback = true;
+    let primaryTargets = meshes.filter(isPrimaryOccupancyTarget);
+    let secondaryTargets = [];
+    let fallbackTargets = [];
+    if (primaryTargets.length === 0) {
+        secondaryTargets = meshes.filter(isOccupancyTarget);
     }
+    if (primaryTargets.length === 0 && secondaryTargets.length === 0) {
+        fallbackTargets = meshes.filter(isLevelFallbackTarget);
+    }
+    const targets = [...primaryTargets, ...secondaryTargets, ...fallbackTargets];
     let total = 0;
     targets.forEach(mesh => {
         const meta = getMetadata(mesh);
         const zone = meta.level || meta.name || meta.category || 'Building';
         const occupancy = calculateOccupancy(zone);
         const status = occupancyStatus(occupancy.value);
-        colorMesh(mesh, status.color, subtleFallback ? { mix: 0.16, opacity: 0.32 } : { mix: 0.24, opacity: 0.42 });
+        const isPrimary = primaryTargets.includes(mesh);
+        const isFallback = fallbackTargets.includes(mesh);
+        const mixOpts = isFallback ? { mix: 0.08, opacity: 0.18 }
+            : isPrimary ? { mix: 0.24, opacity: 0.42 }
+            : { mix: 0.12, opacity: 0.25 };
+        colorMesh(mesh, status.color, mixOpts);
         resultByObject.set(mesh.uuid, {
             title: 'Space Occupancy',
             value: `${occupancy.value}% simulated occupancy`,
             detail: `${occupancy.mode} / ${zone}`,
+            rule: isPrimary ? 'Matched space/room/zone element (simulated schedule)'
+                : isFallback ? 'Level-based fallback — no space elements found in IFC'
+                : 'Structural surface (floor/slab/ceiling/roof) — muted overlay',
         });
         total += occupancy.value;
     });
     const current = calculateOccupancy('building');
-    setValue('digitalTwinWeatherValue', weather ? `${weather.temperatureC.toFixed(1)} C${weather.simulated ? ' (simulated)' : ' (live)'}` : 'Unavailable');
+    setValue('digitalTwinWeatherValue', weatherLabel(weather));
     setValue('digitalTwinEnergyValue', 'Inactive');
     setValue('digitalTwinOccupancyValue', `${current.mode} / ${targets.length ? Math.round(total / targets.length) : current.value}% simulated`);
     setLegend([
@@ -312,6 +346,9 @@ function applyMaintenance(meshes) {
             title: 'Maintenance Schedule',
             value: status.label,
             detail: formatMaintenanceDetail(record, status),
+            rule: record
+                ? `Matched IfcGUID in maintenance_schedule.json (demo data) — GUID: ${meta.guid || 'unknown'}`
+                : 'No matching IfcGUID in demo maintenance records',
         });
         if (status.color != null) {
             colorMesh(mesh, status.color, { mix: 0.55, opacity: 0.82 });
@@ -354,7 +391,8 @@ function renderSelectedResult(object) {
         panel.innerHTML = `<strong>${escapeHTML(fallback)}</strong>${metadataHTML}${extra}`;
         return;
     }
-    panel.innerHTML = `<strong>${escapeHTML(result.title)}</strong>${metadataHTML}<b>${escapeHTML(result.value)}</b><span>${escapeHTML(result.detail)}</span>`;
+    const ruleHTML = result.rule ? `<small>${escapeHTML(result.rule)}</small>` : '';
+    panel.innerHTML = `<strong>${escapeHTML(result.title)}</strong>${metadataHTML}<b>${escapeHTML(result.value)}</b><span>${escapeHTML(result.detail)}</span>${ruleHTML}`;
 }
 
 function updateSelectedMaintenanceValue(object) {
@@ -431,7 +469,10 @@ export async function initDigitalTwinLayers() {
     const maintenance = await loadJSON('maintenance_schedule.json', []);
     maintenanceByGuid = new Map(maintenance.map(record => [record.ifcGuid, record]));
 
-    setValue('digitalTwinWeatherValue', `${weather.temperatureC.toFixed(1)} C${weather.simulated ? ' (simulated)' : ' (live)'}`);
+    setValue('digitalTwinWeatherValue', weatherLabel(weather));
+    setValue('digitalTwinWeatherSource', weather.source === 'open-meteo' ? 'Live from Open-Meteo (no key)'
+        : weather.source === 'openweathermap' ? 'Live from OpenWeatherMap'
+        : 'Simulated fallback');
     setValue('digitalTwinMaintenanceValue', 'No element selected');
     document.querySelectorAll('[data-digital-twin-layer]').forEach(button => {
         button.addEventListener('click', () => applyDigitalTwinLayer(button.dataset.digitalTwinLayer));
@@ -442,4 +483,15 @@ export async function initDigitalTwinLayers() {
         const signature = state.loadedModels.map(model => model.uuid).join('|');
         if (activeLayer && signature !== lastModelSignature) applyDigitalTwinLayer(activeLayer);
     }, 2000);
+
+    // Refresh live weather every 10 minutes
+    setInterval(async () => {
+        const refreshed = await getWeather();
+        weather = refreshed;
+        setValue('digitalTwinWeatherValue', weatherLabel(weather));
+        setValue('digitalTwinWeatherSource', weather.source === 'open-meteo' ? 'Live from Open-Meteo (no key)'
+            : weather.source === 'openweathermap' ? 'Live from OpenWeatherMap'
+            : 'Simulated fallback');
+        if (activeLayer === 'energy') applyDigitalTwinLayer('energy');
+    }, 10 * 60 * 1000);
 }

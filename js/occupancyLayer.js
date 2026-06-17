@@ -32,5 +32,5 @@ export function occupancyStatus(value) {
     if (value >= 85) return { label: 'High occupancy', color: 0xdc2626 };
     if (value >= 65) return { label: 'Busy', color: 0xeab308 };
     if (value >= 35) return { label: 'Normal occupancy', color: 0x22c55e };
-    return { label: 'Low occupancy', color: 0x2563eb };
+    return { label: 'Low occupancy', color: 0x64748b };
 }

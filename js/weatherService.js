@@ -1,4 +1,6 @@
-const DEFAULT_LOCATION = 'Vancouver';
+const DEFAULT_LAT = 49.2827;
+const DEFAULT_LON = -123.1207;
+const DEFAULT_LOCATION = 'Vancouver, BC';
 
 function simulatedTemperature(now = new Date()) {
     const month = now.getMonth();
@@ -8,13 +10,39 @@ function simulatedTemperature(now = new Date()) {
     return Number((seasonalBase + daytimeSwing).toFixed(1));
 }
 
+async function fetchOpenMeteo(lat, lon, location) {
+    const url = new URL('https://api.open-meteo.com/v1/forecast');
+    url.searchParams.set('latitude', String(lat));
+    url.searchParams.set('longitude', String(lon));
+    url.searchParams.set('current', 'temperature_2m');
+    url.searchParams.set('forecast_days', '1');
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Open-Meteo returned ${response.status}`);
+    const data = await response.json();
+    return {
+        temperatureC: Number(data.current.temperature_2m),
+        description: 'current conditions',
+        location,
+        simulated: false,
+        source: 'open-meteo',
+    };
+}
+
 export async function getWeather() {
-    // Static deployments can define this before js/main.js loads:
-    // window.DIGITAL_TWIN_CONFIG = { openWeatherMapApiKey: '...', weatherLocation: 'Vancouver' };
     const config = window.DIGITAL_TWIN_CONFIG || {};
     const apiKey = config.openWeatherMapApiKey?.trim();
     const location = config.weatherLocation?.trim() || DEFAULT_LOCATION;
+    const lat = config.latitude ?? DEFAULT_LAT;
+    const lon = config.longitude ?? DEFAULT_LON;
 
+    // Try Open-Meteo first — no API key required
+    try {
+        return await fetchOpenMeteo(lat, lon, location);
+    } catch (e) {
+        console.warn('[weatherService] Open-Meteo unavailable:', e.message);
+    }
+
+    // Fall back to OpenWeatherMap if a key is configured
     if (apiKey) {
         try {
             const url = new URL('https://api.openweathermap.org/data/2.5/weather');
@@ -29,16 +57,18 @@ export async function getWeather() {
                 description: data.weather?.[0]?.description || 'live weather',
                 location: data.name || location,
                 simulated: false,
+                source: 'openweathermap',
             };
         } catch (error) {
-            console.warn('[weatherService] Live weather unavailable; using simulated fallback:', error.message);
+            console.warn('[weatherService] OpenWeatherMap unavailable:', error.message);
         }
     }
 
     return {
         temperatureC: simulatedTemperature(),
-        description: 'seasonal fallback',
+        description: 'seasonal estimate',
         location,
         simulated: true,
+        source: 'simulated',
     };
 }
