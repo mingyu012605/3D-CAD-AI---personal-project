@@ -7,12 +7,14 @@ import { calculateMaintenanceStatus } from './maintenanceLayer.js';
 
 const baselineMaterials = new Map();
 const resultByObject = new Map();
+const objectByGuid = new Map();
 let elementLinks = {};
 let maintenanceByGuid = new Map();
 let activeLayer = null;
 let weather = null;
 let initialized = false;
 let lastModelSignature = '';
+let maintenanceMatches = [];
 
 function cloneMaterials(material) {
     if (!material) return null;
@@ -163,6 +165,14 @@ function setValue(id, value) {
     if (element) element.textContent = value;
 }
 
+function updateObjectGuidIndex(meshes = getIFCMeshes()) {
+    objectByGuid.clear();
+    meshes.forEach(mesh => {
+        const guid = getMetadata(mesh).guid;
+        if (guid && !objectByGuid.has(guid)) objectByGuid.set(guid, mesh);
+    });
+}
+
 function escapeHTML(value = '') {
     return String(value).replace(/[&<>"']/g, char => ({
         '&': '&amp;',
@@ -179,6 +189,40 @@ function updateLayerButtons() {
     });
 }
 
+function renderMaintenanceRecords() {
+    const panel = document.getElementById('digitalTwinMaintenanceRecords');
+    if (!panel) return;
+    if (activeLayer !== 'maintenance') {
+        panel.classList.remove('visible');
+        panel.innerHTML = '';
+        return;
+    }
+
+    const matches = maintenanceMatches.slice(0, 6);
+    panel.classList.add('visible');
+    if (matches.length === 0) {
+        panel.innerHTML = '<strong>Maintenance records in model</strong><small>No matching maintenance records found in the loaded IFC.</small>';
+        return;
+    }
+
+    panel.innerHTML = [
+        `<strong>Maintenance records in model (${maintenanceMatches.length})</strong>`,
+        ...matches.map(item => `
+            <button type="button" data-maintenance-guid="${escapeHTML(item.guid)}">
+                <span>${escapeHTML(item.record.equipmentName || 'Equipment')}</span>
+                <small>${escapeHTML(item.status.label)}</small>
+            </button>
+        `),
+    ].join('');
+
+    panel.querySelectorAll('[data-maintenance-guid]').forEach(button => {
+        button.addEventListener('click', () => {
+            const object = objectByGuid.get(button.dataset.maintenanceGuid);
+            if (object?.parent) selectObject(object);
+        });
+    });
+}
+
 function applyEnergy(meshes) {
     const baseLoad = calculateEnergyLoad(weather.temperatureC);
     let count = 0;
@@ -186,7 +230,7 @@ function applyEnergy(meshes) {
         const load = Math.max(0, Math.min(100, baseLoad + smallVariation(getMetadata(mesh).guid || mesh.uuid)));
         const status = energyStatus(load);
         const meta = getMetadata(mesh);
-        colorMesh(mesh, status.color, { mix: 0.78 });
+        colorMesh(mesh, status.color, { mix: 0.52, opacity: 0.82 });
         resultByObject.set(mesh.uuid, {
             title: 'Energy Usage',
             value: `${load}% simulated HVAC load`,
@@ -220,7 +264,7 @@ function applyOccupancy(meshes) {
         const zone = meta.level || meta.name || meta.category || 'Building';
         const occupancy = calculateOccupancy(zone);
         const status = occupancyStatus(occupancy.value);
-        colorMesh(mesh, status.color, subtleFallback ? { mix: 0.22, opacity: 0.38 } : { mix: 0.36, opacity: 0.55 });
+        colorMesh(mesh, status.color, subtleFallback ? { mix: 0.16, opacity: 0.32 } : { mix: 0.24, opacity: 0.42 });
         resultByObject.set(mesh.uuid, {
             title: 'Space Occupancy',
             value: `${occupancy.value}% simulated occupancy`,
@@ -256,20 +300,25 @@ function formatMaintenanceDetail(record, status) {
 
 function applyMaintenance(meshes) {
     let count = 0;
+    const matchesByGuid = new Map();
     meshes.forEach(mesh => {
         const meta = getMetadata(mesh);
         const record = meta.guid ? maintenanceByGuid.get(meta.guid) : null;
         const status = calculateMaintenanceStatus(record);
+        if (record && !matchesByGuid.has(meta.guid)) {
+            matchesByGuid.set(meta.guid, { guid: meta.guid, record, status });
+        }
         resultByObject.set(mesh.uuid, {
             title: 'Maintenance Schedule',
             value: status.label,
             detail: formatMaintenanceDetail(record, status),
         });
         if (status.color != null) {
-            colorMesh(mesh, status.color, { mix: 0.78 });
+            colorMesh(mesh, status.color, { mix: 0.55, opacity: 0.82 });
             count++;
         }
     });
+    maintenanceMatches = [...matchesByGuid.values()];
     setValue('digitalTwinEnergyValue', 'Inactive');
     setValue('digitalTwinOccupancyValue', 'Inactive');
     setLegend([
@@ -278,6 +327,7 @@ function applyMaintenance(meshes) {
         { color: '#f97316', label: 'Overdue' },
         { color: '#dc2626', label: 'Critical overdue' },
     ]);
+    renderMaintenanceRecords();
     return count;
 }
 
@@ -298,7 +348,10 @@ function renderSelectedResult(object) {
     `;
     if (!result) {
         const fallback = activeLayer === 'maintenance' ? 'No maintenance record' : 'This element is not targeted by the active layer.';
-        panel.innerHTML = `<strong>${escapeHTML(fallback)}</strong>${metadataHTML}<span>Existing linked documents remain available above.</span>`;
+        const extra = activeLayer === 'maintenance'
+            ? `<span>${maintenanceMatches.length} maintenance record${maintenanceMatches.length === 1 ? '' : 's'} matched in the loaded model.</span>`
+            : '<span>Existing linked documents remain available above.</span>';
+        panel.innerHTML = `<strong>${escapeHTML(fallback)}</strong>${metadataHTML}${extra}`;
         return;
     }
     panel.innerHTML = `<strong>${escapeHTML(result.title)}</strong>${metadataHTML}<b>${escapeHTML(result.value)}</b><span>${escapeHTML(result.detail)}</span>`;
@@ -318,7 +371,9 @@ function updateSelectedMaintenanceValue(object) {
 export async function applyDigitalTwinLayer(layer) {
     if (!initialized) return;
     const meshes = getIFCMeshes();
+    updateObjectGuidIndex(meshes);
     resultByObject.clear();
+    maintenanceMatches = [];
     activeLayer = layer;
 
     if (!weather) weather = await getWeather();
@@ -332,6 +387,7 @@ export async function applyDigitalTwinLayer(layer) {
         setValue('digitalTwinLayerStatus', `${affected} IFC fragment${affected === 1 ? '' : 's'} coloured`);
     });
     updateLayerButtons();
+    if (layer !== 'maintenance') renderMaintenanceRecords();
     renderSelectedResult(state.selectedObject);
     lastModelSignature = state.loadedModels.map(model => model.uuid).join('|');
 }
@@ -340,7 +396,9 @@ export function resetDigitalTwinColours() {
     withSelectionPreserved(() => restoreBaseline(true));
     activeLayer = null;
     resultByObject.clear();
+    maintenanceMatches = [];
     updateLayerButtons();
+    renderMaintenanceRecords();
     setLegend([{ color: '#91a9bd', label: 'Choose a layer to view its legend' }]);
     setValue('digitalTwinLayerStatus', 'Original IFC colours restored');
     setValue('digitalTwinEnergyValue', 'Inactive');

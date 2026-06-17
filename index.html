@@ -9,127 +9,134 @@
     <link rel="stylesheet" href="css/styles.css" />
     <style>
         :root {
-            --ink: #e9f4ff;
-            --muted: #91a9bd;
-            --panel: rgba(20, 39, 55, 0.94);
-            --panel-soft: rgba(29, 51, 68, 0.82);
-            --line: rgba(135, 186, 211, 0.2);
-            --accent: #39d6c5;
-            --accent-blue: #58a9ff;
-            --danger: #ff6b76;
+            --ink: #f0ebff;
+            --muted: #a78bfa;
+            --panel: rgba(18, 8, 36, 0.96);
+            --panel-soft: rgba(32, 14, 58, 0.86);
+            --line: rgba(167, 139, 250, 0.24);
+            --accent: #7c3aed;
+            --accent-blue: #6d28d9;
+            --success: #45c28a;
+            --danger: #b95b64;
         }
         [hidden] { display: none !important; }
-        html, body { background: #dfeaf1; background-image: none; color: var(--ink); }
-        #editorPage { display: block; background: #dce9f0; overflow: hidden; }
+        html, body { background: #ede8f5; background-image: none; color: var(--ink); }
+        #editorPage { display: block; background: #e8e0f5; overflow: hidden; }
         .product-bar {
             position: absolute; inset: 0 0 auto 0; width: 100%; height: 58px; box-sizing: border-box; padding: 0 18px; display: flex;
-            align-items: center; gap: 18px; z-index: 30; color: var(--ink); background: #132b3b;
-            border-bottom: 1px solid rgba(135, 186, 211, 0.22); box-shadow: 0 8px 28px rgba(20, 44, 60, 0.16);
+            align-items: center; gap: 18px; z-index: 30; color: var(--ink); background: #1a0b2e;
+            border-bottom: 1px solid rgba(167, 139, 250, 0.22); box-shadow: 0 8px 28px rgba(30, 10, 60, 0.16);
         }
         .product-mark { display: flex; align-items: center; gap: 10px; min-width: 210px; font-weight: 700; letter-spacing: -0.02em; }
-        .product-logo { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; color: #0c3440; background: linear-gradient(145deg, #65ead9, #4aa9ff); box-shadow: 0 0 20px rgba(57, 214, 197, 0.28); }
+        .product-logo { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; color: #f0ebff; background: linear-gradient(145deg, #7c3aed, #a855f7); box-shadow: 0 0 18px rgba(124, 58, 237, 0.24); }
         .product-logo svg { width: 18px; fill: currentColor; }
         .product-mark small, .project-path small { color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .11em; text-transform: uppercase; }
         .project-path { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-        .project-path strong { overflow: hidden; color: #d8e8f4; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+        .project-path strong { overflow: hidden; color: #e8d8f8; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
         .product-search { position: relative; margin-left: auto; width: min(360px, 29vw); }
-        .product-search svg { position: absolute; top: 50%; left: 12px; width: 15px; fill: none; stroke: #8ea8bb; transform: translateY(-50%); }
-        .product-search input { width: 100%; box-sizing: border-box; padding: 10px 14px 10px 36px; border: 1px solid var(--line); border-radius: 10px; outline: none; color: #dcebf5; background: rgba(8, 27, 39, .48); font: 12px Inter, sans-serif; }
-        .product-search input:focus { border-color: rgba(57, 214, 197, .7); box-shadow: 0 0 0 3px rgba(57, 214, 197, .1); }
-        .live-pill { display: flex; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px; color: #bad1df; font-size: 10px; font-weight: 700; letter-spacing: .08em; white-space: nowrap; }
-        .live-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #46e7a6; box-shadow: 0 0 10px #46e7a6; }
-        #cadViewer { position: absolute; inset: 58px 372px 0 0; min-width: 0; background: radial-gradient(circle at 55% 40%, #f8fcff 0, #eaf3f7 48%, #d9e7ee 100%); background-image: none; }
-        #cadViewer::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 80px rgba(46, 82, 102, .08); }
+        .product-search svg { position: absolute; top: 50%; left: 12px; width: 15px; fill: none; stroke: #b8a0d8; transform: translateY(-50%); }
+        .product-search input { width: 100%; box-sizing: border-box; padding: 10px 14px 10px 36px; border: 1px solid var(--line); border-radius: 10px; outline: none; color: #e0d5f5; background: rgba(20, 8, 40, .48); font: 12px Inter, sans-serif; }
+        .product-search input:focus { border-color: rgba(124, 58, 237, .72); box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
+        .live-pill { display: flex; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px; color: #c4b0e8; font-size: 10px; font-weight: 700; letter-spacing: .08em; white-space: nowrap; }
+        .live-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px rgba(69, 194, 138, .55); }
+        #cadViewer { position: absolute; inset: 58px 372px 0 0; min-width: 0; background: radial-gradient(circle at 55% 40%, #faf7ff 0, #f0ebff 48%, #e2d9f3 100%); background-image: none; }
+        #cadViewer::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 80px rgba(60, 20, 90, .08); }
         .viewer-context { position: absolute; z-index: 9; pointer-events: none; }
         .viewer-context.top-left { top: 18px; left: 84px; }
         .viewer-context.bottom-left { left: 18px; bottom: 18px; }
-        .context-card { padding: 11px 13px; border: 1px solid rgba(73, 125, 151, .2); border-radius: 11px; color: #426278; background: rgba(248, 253, 255, .82); box-shadow: 0 10px 28px rgba(43, 78, 98, .12); backdrop-filter: blur(14px); }
-        .context-card strong { display: block; margin-bottom: 3px; color: #183d53; font-size: 12px; }
+        .context-card { padding: 11px 13px; border: 1px solid rgba(124, 58, 237, .2); border-radius: 11px; color: #5b3b7a; background: rgba(252, 248, 255, .82); box-shadow: 0 10px 28px rgba(60, 20, 90, .12); backdrop-filter: blur(14px); }
+        .context-card strong { display: block; margin-bottom: 3px; color: #2d1654; font-size: 12px; }
         .context-card span { font-size: 10px; font-weight: 600; letter-spacing: .05em; }
-        .viewer-hint { display: flex; gap: 12px; padding: 8px 11px; border-radius: 9px; color: #59788c; background: rgba(248, 253, 255, .75); border: 1px solid rgba(73, 125, 151, .16); font-size: 10px; backdrop-filter: blur(12px); }
-        .right-panel { position: absolute; inset: 58px 0 0 auto; width: 372px; height: auto; overflow: hidden; min-width: 330px; padding: 14px 15px; background: var(--panel); border-left: 1px solid var(--line); box-shadow: -14px 0 38px rgba(30, 61, 80, .14); }
+        .viewer-hint { display: flex; gap: 12px; padding: 8px 11px; border-radius: 9px; color: #7a5fa0; background: rgba(252, 248, 255, .75); border: 1px solid rgba(124, 58, 237, .16); font-size: 10px; backdrop-filter: blur(12px); }
+        .right-panel { position: absolute; inset: 58px 0 0 auto; width: 372px; height: auto; overflow: hidden; min-width: 330px; padding: 14px 15px; background: var(--panel); border-left: 1px solid var(--line); box-shadow: -14px 0 38px rgba(50, 20, 90, .14); }
         .editor-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-        .editor-actions button { min-width: 0; height: 34px; padding: 5px; overflow: hidden; border: 1px solid transparent; border-radius: 7px; color: #b9ccda; background: #213e52; font-size: 10px; font-weight: 700; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; transition: .18s ease; }
-        .editor-actions button:hover:not(:disabled) { color: #fff; border-color: rgba(82, 206, 198, .35); background: #2a5065; transform: translateY(-1px); }
-        .editor-actions button.active, .editor-actions .primary-action { color: #092e35; background: var(--accent); }
+        .editor-actions button { min-width: 0; height: 34px; padding: 5px; overflow: hidden; border: 1px solid transparent; border-radius: 7px; color: #c4aee8; background: #2a1250; font-size: 10px; font-weight: 700; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; transition: .18s ease; }
+        .editor-actions button:hover:not(:disabled) { color: #fff; border-color: rgba(124, 58, 237, .45); background: #3b1d7a; transform: translateY(-1px); }
+        .editor-actions button.active, .editor-actions .primary-action { color: #f0ebff; background: var(--accent-blue); }
         .editor-actions button:disabled { opacity: .35; cursor: not-allowed; }
-        #backToUploadCircleButton { width: auto; height: 34px; border-radius: 7px; color: #b9ccda; background: #213e52; box-shadow: none; }
-        .editor-actions .structure-action { grid-column: span 2; color: #eaf7ff; background: #377fc2; }
+        #backToUploadCircleButton { width: auto; height: 34px; border-radius: 7px; color: #c4aee8; background: #2a1250; box-shadow: none; }
+        .editor-actions .structure-action { grid-column: span 2; color: #f0ebff; background: #7c3aed; }
         .editor-actions .clear-action:not(:disabled) { color: #fff; background: #a94e59; }
-        .cad-mode-tabs { position: fixed; top: 76px; left: 16px; z-index: 24; display: flex; flex-direction: column; gap: 7px; margin: 0; padding: 7px; border: 1px solid rgba(73, 125, 151, .18); border-radius: 13px; background: rgba(247, 252, 255, .84); box-shadow: 0 14px 30px rgba(38, 77, 99, .15); backdrop-filter: blur(15px); }
-        .cad-mode-tab { width: 40px; height: 40px; padding: 9px; border: 1px solid transparent; border-radius: 9px; color: #547489; background: transparent; cursor: pointer; font-size: 0; transition: .18s ease; }
-        .cad-mode-tab:hover { color: #246778; background: #e4f3f5; transform: translateY(-1px); }
+        .cad-mode-tabs { position: fixed; top: 76px; left: 16px; z-index: 24; display: flex; flex-direction: column; gap: 7px; margin: 0; padding: 7px; border: 1px solid rgba(124, 58, 237, .18); border-radius: 13px; background: rgba(250, 247, 255, .84); box-shadow: 0 14px 30px rgba(60, 20, 90, .15); backdrop-filter: blur(15px); }
+        .cad-mode-tab { width: 40px; height: 40px; padding: 9px; border: 1px solid transparent; border-radius: 9px; color: #7a5a9a; background: transparent; cursor: pointer; font-size: 0; transition: .18s ease; }
+        .cad-mode-tab:hover { color: #5b1fa8; background: #ece0f8; transform: translateY(-1px); }
         .cad-mode-tab svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-        .cad-mode-tab.active { color: #0c3d45; border-color: rgba(57, 214, 197, .35); background: #75e5d8; box-shadow: 0 6px 14px rgba(57, 214, 197, .24); }
-        .sidebar-workspace { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 3px 10px 0; scrollbar-color: #3b6075 transparent; scrollbar-width: thin; }
+        .cad-mode-tab.active { color: #f0ebff; border-color: rgba(124, 58, 237, .5); background: #7c3aed; box-shadow: 0 6px 14px rgba(124, 58, 237, .24); }
+        .sidebar-workspace { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 3px 10px 0; scrollbar-color: #6d28d9 transparent; scrollbar-width: thin; }
         .cad-mode-panel { display: none; }
         .cad-mode-panel.active { display: block; }
-        .cad-panel-heading { margin: 6px 0 4px; color: #f0f8fc; font-size: 18px; letter-spacing: -.02em; }
+        .cad-panel-heading { margin: 6px 0 4px; color: #f0ebff; font-size: 18px; letter-spacing: -.02em; }
         .cad-panel-subtitle { color: var(--muted); font-size: 11px; line-height: 1.5; margin-bottom: 10px; }
-        .cad-empty-state { padding: 16px; color: #aac1d0; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; line-height: 1.55; }
-        .cad-empty-state strong { color: #eef8fc; }
+        .cad-empty-state { padding: 16px; color: #c4aee0; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; line-height: 1.55; }
+        .cad-empty-state strong { color: #f0ebff; }
         .cad-inspector-section { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); }
-        .cad-inspector-section h4 { margin: 0 0 8px; color: #9bb6c8; font-size: 10px; letter-spacing: .13em; text-transform: uppercase; }
+        .cad-inspector-section h4 { margin: 0 0 8px; color: #b09fd0; font-size: 10px; letter-spacing: .13em; text-transform: uppercase; }
         .cad-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
-        .cad-stat-grid span { padding: 8px; border-radius: 7px; background: rgba(9, 29, 41, .36); }
-        .cad-stat-grid span:nth-child(odd) { color: #87a5b8; font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
-        .cad-stat-grid span:nth-child(even) { color: #f2f9fc; font-size: 13px; font-weight: 700; text-align: right; }
+        .cad-stat-grid span { padding: 8px; border-radius: 7px; background: rgba(20, 8, 40, .36); }
+        .cad-stat-grid span:nth-child(odd) { color: #a08acf; font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
+        .cad-stat-grid span:nth-child(even) { color: #f5f0ff; font-size: 13px; font-weight: 700; text-align: right; }
         .cad-stat-formulas { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
-        .cad-stat-formula { padding: 7px 8px; overflow-wrap: anywhere; border-left: 2px solid var(--accent); border-radius: 4px; color: #a9c0ce; background: rgba(8, 27, 39, .48); font: 10px/1.4 Consolas, monospace; }
+        .cad-stat-formula { padding: 7px 8px; overflow-wrap: anywhere; border-left: 2px solid var(--accent); border-radius: 4px; color: #c0a9d8; background: rgba(20, 8, 40, .48); font: 10px/1.4 Consolas, monospace; }
         .cad-tools-panel { display: flex; flex-direction: column; gap: 8px; }
         .cad-tools-panel details, .doc-link-group { padding: 10px; border: 1px solid var(--line) !important; border-radius: 9px; background: var(--panel-soft); }
-        .cad-tools-panel summary { cursor: pointer; color: #e9f5fa; font-size: 12px; font-weight: 600; }
+        .cad-tools-panel summary { cursor: pointer; color: #f0ebff; font-size: 12px; font-weight: 600; }
         .cad-tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
-        .cad-tool-grid label { color: #94afc0; font-size: 10px; }
-        .cad-tool-grid input, .cad-tool-row input, .cad-tool-row select, .doc-url-input { width: 100%; box-sizing: border-box; margin-top: 3px; padding: 6px; color: #e9f5fa; background: rgba(7, 25, 36, .48) !important; border: 1px solid rgba(133, 178, 201, .24) !important; border-radius: 6px; }
+        .cad-tool-grid label { color: #b09fd0; font-size: 10px; }
+        .cad-tool-grid input, .cad-tool-row input, .cad-tool-row select, .doc-url-input { width: 100%; box-sizing: border-box; margin-top: 3px; padding: 6px; color: #f0ebff; background: rgba(20, 8, 40, .48) !important; border: 1px solid rgba(167, 139, 250, .24) !important; border-radius: 6px; }
         .cad-tool-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-        .cad-tool-row button, .cad-tools-panel > details > button, .view-control-button { padding: 7px 9px; border: 1px solid rgba(135, 186, 211, .18); border-radius: 6px; color: #e8f4f9; background: #2a5065; cursor: pointer; transition: .18s ease; }
-        .cad-tool-row button:hover, .cad-tools-panel > details > button:hover, .view-control-button:hover { color: #073239; background: var(--accent); }
-        .cad-tool-output { margin-top: 8px; color: #aac1d0; font-size: 11px; line-height: 1.45; }
+        .cad-tool-row button, .cad-tools-panel > details > button, .view-control-button { padding: 7px 9px; border: 1px solid rgba(167, 139, 250, .18); border-radius: 6px; color: #f0ebff; background: #3b1d7a; cursor: pointer; transition: .18s ease; }
+        .cad-tool-row button:hover, .cad-tools-panel > details > button:hover, .view-control-button:hover { color: #f0ebff; background: var(--accent-blue); }
+        .cad-tool-output { margin-top: 8px; color: #c0a9d8; font-size: 11px; line-height: 1.45; }
         .cad-object-tree { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; max-height: 220px; overflow-y: auto; }
-        .cad-tree-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 4px; align-items: center; padding: 6px; border-radius: 6px; background: rgba(8, 27, 39, .48); }
-        .cad-tree-row.selected { outline: 1px solid var(--accent); }
-        .cad-tree-name { overflow: hidden; color: #dcebf3; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-        .cad-tree-row button { padding: 3px 6px; border: 0; border-radius: 4px; color: #c8dce7; background: #2a4a5d; cursor: pointer; }
+        .cad-tree-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 4px; align-items: center; padding: 6px; border-radius: 6px; background: rgba(20, 8, 40, .48); }
+        .cad-tree-row.selected { outline: 1px solid rgba(124, 58, 237, .75); }
+        .cad-tree-name { overflow: hidden; color: #e8d8f8; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+        .cad-tree-row button { padding: 3px 6px; border: 0; border-radius: 4px; color: #d8c0f0; background: #2a1060; cursor: pointer; }
         .cad-object-selected .object-properties-controls { margin-top: 0; padding-top: 0; border-top: 0; }
         .cad-object-selected .object-properties-controls h3 { display: none; }
         .doc-link-group { width: 100%; box-sizing: border-box; margin-top: 12px; padding: 11px !important; }
-        .doc-link-group > label, .doc-object-name { color: #eaf6fb !important; font-size: 12px !important; font-style: normal !important; font-weight: 700; }
-        .doc-object-meta { color: #75e5d8 !important; }
-        .meta-tag { background: #294b5e !important; border-color: #41677b !important; color: #c1d7e2 !important; }
-        #viewToolbar { top: auto; left: auto; right: 18px; bottom: 18px; flex-direction: row; padding: 5px; border: 1px solid rgba(73, 125, 151, .2); border-radius: 10px; background: rgba(248, 253, 255, .86); box-shadow: 0 12px 28px rgba(39, 75, 96, .15); backdrop-filter: blur(14px); }
-        #viewToolbar .view-btn { min-width: 42px; padding: 7px 9px; color: #31596f; background: transparent; border-color: transparent; font-weight: 700; }
-        #viewToolbar .view-btn:hover { color: #0a3d45; border-color: rgba(57, 214, 197, .35); background: #83e8dc; }
+        .doc-link-group > label, .doc-object-name { color: #f0ebff !important; font-size: 12px !important; font-style: normal !important; font-weight: 700; }
+        .doc-object-meta { color: #c4aee8 !important; }
+        .meta-tag { background: #2d1460 !important; border-color: #5b3494 !important; color: #d0c0e8 !important; }
+        #viewToolbar { top: auto; left: auto; right: 18px; bottom: 18px; flex-direction: row; padding: 5px; border: 1px solid rgba(124, 58, 237, .2); border-radius: 10px; background: rgba(252, 248, 255, .86); box-shadow: 0 12px 28px rgba(60, 20, 90, .15); backdrop-filter: blur(14px); }
+        #viewToolbar .view-btn { min-width: 42px; padding: 7px 9px; color: #5b3b7a; background: transparent; border-color: transparent; font-weight: 700; }
+        #viewToolbar .view-btn:hover { color: #f0ebff; border-color: rgba(124, 58, 237, .45); background: #7c3aed; }
         #viewAxesContainer { display: none !important; }
         .sidebar-chat { flex: 0 0 214px !important; min-height: 170px; border-top: 1px solid var(--line); padding-top: 10px; }
-        .sidebar-chat #aiLog { min-height: 55px; background: rgba(8, 27, 39, .42); }
+        .sidebar-chat #aiLog { min-height: 55px; background: rgba(20, 8, 40, .42); }
         .sidebar-chat .ai-input-group { flex-shrink: 0; }
         .ai-input-group { min-width: 0; }
-        .ai-input-group input { min-width: 0; width: 0; background: rgba(8, 27, 39, .55); border-color: var(--line); }
-        .ai-input-group button { flex-shrink: 0; background: #347ba5; }
-        #sendTextCommandBtn { color: #073239; background: var(--accent); }
+        .ai-input-group input { min-width: 0; width: 0; background: rgba(20, 8, 40, .55); border-color: var(--line); }
+        .ai-input-group button { flex-shrink: 0; background: #6d28d9; }
+        #sendTextCommandBtn { color: #f0ebff; background: var(--accent-blue); }
         .appearance-panel { display: flex; flex-direction: column; gap: 12px; }
         .appearance-panel h3, .appearance-panel p { margin: 0; }
-        .appearance-panel p { color: #a8bfcd; font-size: 11px; line-height: 1.5; }
+        .appearance-panel p { color: #c0a8e8; font-size: 11px; line-height: 1.5; }
         .appearance-presets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-        .appearance-presets button, #resetCssButton, #applyCssButton { min-height: 40px; border: 1px solid var(--line); border-radius: 7px; color: #e6f3f8; background: #294b5e; font-weight: 700; cursor: pointer; }
-        .appearance-presets button:hover, #resetCssButton:hover, #applyCssButton:hover { border-color: var(--accent); background: #35657a; }
+        .appearance-presets button, #resetCssButton, #applyCssButton { min-height: 40px; border: 1px solid var(--line); border-radius: 7px; color: #f0ebff; background: #2d1460; font-weight: 700; cursor: pointer; }
+        .appearance-presets button:hover, #resetCssButton:hover, #applyCssButton:hover { border-color: var(--accent); background: #4c1d95; }
         #cssCodeEditor { min-height: 110px !important; flex: 0 0 110px !important; margin: 0 !important; resize: none !important; }
         .appearance-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        #applyCssButton { color: #073239; background: var(--accent) !important; }
+        #applyCssButton { color: #f0ebff; background: var(--accent-blue) !important; }
         .digital-twin-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 10px 0; }
-        .digital-twin-actions button { min-height: 38px; border: 1px solid var(--line); border-radius: 7px; color: #dcecf4; background: #294b5e; font-size: 11px; font-weight: 700; cursor: pointer; }
-        .digital-twin-actions button:hover, .digital-twin-actions button.active { color: #073239; border-color: var(--accent); background: var(--accent); }
-        .digital-twin-actions .reset-layer { color: #ffd8dc; background: #70434c; }
-        .digital-twin-values { display: grid; grid-template-columns: 1fr auto; gap: 7px; padding: 11px; border: 1px solid var(--line); border-radius: 9px; color: #9bb6c8; background: var(--panel-soft); font-size: 11px; }
-        .digital-twin-values b { color: #f0f8fc; text-align: right; }
-        .digital-twin-legend { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding: 10px; border-radius: 9px; background: rgba(8, 27, 39, .42); }
-        .digital-twin-legend span { display: flex; align-items: center; gap: 7px; color: #b8ceda; font-size: 10px; }
-        .digital-twin-legend i { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
-        .digital-twin-selected { display: flex; flex-direction: column; gap: 5px; padding: 10px; border: 1px solid rgba(57, 214, 197, .25); border-radius: 8px; background: rgba(32, 76, 88, .45); }
-        .digital-twin-selected strong { color: #75e5d8; font-size: 11px; }
-        .digital-twin-selected b { color: #f0f8fc; font-size: 13px; }
-        .digital-twin-selected span { color: #a8bfcd; font-size: 10px; line-height: 1.45; }
+        .digital-twin-actions button { min-height: 38px; border: 1px solid var(--line); border-radius: 7px; color: #f0ebff; background: #2d1460; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .digital-twin-actions button:hover, .digital-twin-actions button.active { color: #f0ebff; border-color: rgba(124, 58, 237, .65); background: var(--accent-blue); }
+        .digital-twin-actions .reset-layer { color: #ffe1e4; background: #6f3f48; }
+        .digital-twin-values { display: grid; grid-template-columns: 1fr auto; gap: 7px; padding: 11px; border: 1px solid var(--line); border-radius: 9px; color: #b09fd0; background: var(--panel-soft); font-size: 11px; }
+        .digital-twin-values b { color: #f5f0ff; text-align: right; }
+        .digital-twin-legend { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding: 10px; border-radius: 9px; background: rgba(20, 8, 40, .42); }
+        .digital-twin-legend span { display: flex; align-items: center; gap: 7px; color: #c8b8e8; font-size: 10px; }
+        .digital-twin-legend i { width: 9px; height: 9px; border-radius: 50%; box-shadow: none; }
+        .digital-twin-selected { display: flex; flex-direction: column; gap: 5px; padding: 10px; border: 1px solid rgba(124, 58, 237, .3); border-radius: 8px; background: rgba(40, 20, 70, .62); }
+        .digital-twin-selected strong { color: #c4aee8; font-size: 11px; }
+        .digital-twin-selected b { color: #f5f0ff; font-size: 13px; }
+        .digital-twin-selected span { color: #c0a8d8; font-size: 10px; line-height: 1.45; }
+        .digital-twin-records { display: none; flex-direction: column; gap: 6px; margin-top: 10px; padding: 10px; border: 1px solid rgba(124, 58, 237, .22); border-radius: 9px; background: rgba(20, 8, 40, .42); }
+        .digital-twin-records.visible { display: flex; }
+        .digital-twin-records strong { color: #e8d8f8; font-size: 11px; }
+        .digital-twin-records button { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; width: 100%; padding: 7px 8px; border: 1px solid rgba(124, 58, 237, .18); border-radius: 7px; color: #d8c0f0; background: #2a1250; text-align: left; cursor: pointer; }
+        .digital-twin-records button:hover { border-color: rgba(124, 58, 237, .55); background: #3b1d7a; }
+        .digital-twin-records small { color: #b09fd0; font-size: 9px; }
         @media (max-width: 900px) {
             .project-path, .live-pill { display: none; }
             .right-panel { width: 330px; min-width: 300px; }
@@ -356,6 +363,7 @@
                         <div id="digitalTwinLegend" class="digital-twin-legend">
                             <span><i style="background:#91a9bd"></i>Choose a layer to view its legend</span>
                         </div>
+                        <div id="digitalTwinMaintenanceRecords" class="digital-twin-records"></div>
                     </section>
 
                     <section id="cadModeProject" class="cad-mode-panel">
