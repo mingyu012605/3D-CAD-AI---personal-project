@@ -54,8 +54,8 @@ function fitCameraToBounds(bounds, preset = 'iso') {
             };
             const direction = (directions[preset] || directions.iso).normalize();
 
-            state.camera.near = Math.max(0.0001, maxDim / 1000000);
-            state.camera.far = Math.max(1000, distance + maxDim * 20);
+            state.camera.near = Math.max(0.01, maxDim / 10000);
+            state.camera.far = Math.max(1000, distance + maxDim * 8);
             state.camera.position.copy(center).addScaledVector(direction, distance);
             state.controls.target.copy(center);
             state.camera.updateProjectionMatrix();
@@ -97,7 +97,7 @@ function updateDynamicGrid() {
             newGridHelper.material.opacity = 0.40;
             newGridHelper.material.transparent = true;
             newGridHelper.name = 'gridHelper';
-            newGridHelper.position.set(center.x, -0.01, center.z);
+            newGridHelper.position.set(center.x, -0.05, center.z);
             state.scene.add(newGridHelper);
             state.currentGridHelper = newGridHelper;
         }

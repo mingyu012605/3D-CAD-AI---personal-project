@@ -90,6 +90,10 @@ function isLevelFallbackTarget(mesh) {
     return /(floor|slab|ceiling|roof|storey|zone|room|area)/i.test(descriptiveText(mesh));
 }
 
+function isLargeArchitecturalSurface(mesh) {
+    return /(floor|slab|ceiling|roof)/i.test(descriptiveText(mesh));
+}
+
 function ensureBaseline(mesh) {
     if (baselineMaterials.has(mesh.uuid)) return;
     baselineMaterials.set(mesh.uuid, {
@@ -115,9 +119,13 @@ function colorMesh(mesh, color, options = {}) {
     forEachMaterial(mesh.material, material => {
         if (material.color) material.color.lerp(new THREE.Color(color), mix);
         if (opacity != null) {
-            material.transparent = true;
+            material.transparent = opacity < 0.98;
             material.opacity = Math.min(material.opacity ?? 1, opacity);
-            material.depthWrite = opacity >= 0.95;
+            material.depthTest = true;
+            material.depthWrite = opacity >= 0.98;
+            material.polygonOffset = true;
+            material.polygonOffsetFactor = -1;
+            material.polygonOffsetUnits = -1;
         }
         if (material.emissive) material.emissive.setHex(0x000000);
         if (material.emissiveIntensity !== undefined) material.emissiveIntensity = 0;
@@ -126,9 +134,13 @@ function colorMesh(mesh, color, options = {}) {
     forEachMaterial(mesh.userData.initialMaterial, material => {
         if (material.color) material.color.lerp(new THREE.Color(color), mix);
         if (opacity != null) {
-            material.transparent = true;
+            material.transparent = opacity < 0.98;
             material.opacity = Math.min(material.opacity ?? 1, opacity);
-            material.depthWrite = opacity >= 0.95;
+            material.depthTest = true;
+            material.depthWrite = opacity >= 0.98;
+            material.polygonOffset = true;
+            material.polygonOffsetFactor = -1;
+            material.polygonOffsetUnits = -1;
         }
         if (material.emissive) material.emissive.setHex(0x000000);
         if (material.emissiveIntensity !== undefined) material.emissiveIntensity = 0;
@@ -284,7 +296,7 @@ function applyOccupancy(meshes) {
         const occupancy = calculateOccupancy(zone);
         const status = occupancyStatus(occupancy.value);
         const isFallback = fallbackTargets.includes(mesh);
-        colorMesh(mesh, status.color, isFallback ? { mix: 0.05, opacity: 0.10 } : { mix: 0.22, opacity: 0.38 });
+        colorMesh(mesh, status.color, isFallback || isLargeArchitecturalSurface(mesh) ? { mix: 0.025, opacity: 0.06 } : { mix: 0.16, opacity: 0.28 });
         resultByObject.set(mesh.uuid, {
             title: 'Space Occupancy',
             value: `${occupancy.value}% simulated occupancy`,

@@ -3692,7 +3692,7 @@ import {
             // the old target and keeps close-range navigation constant.
             state.camera.position.addScaledVector(zoomDirection, movement);
             state.controls.target.addScaledVector(zoomDirection, movement);
-            state.camera.near = Math.max(0.0001, state.navigationModelSize / 1000000);
+            state.camera.near = Math.max(0.01, state.navigationModelSize / 10000);
             state.camera.updateProjectionMatrix();
             state.controls.update();
         }

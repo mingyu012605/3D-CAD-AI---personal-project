@@ -101,6 +101,19 @@ function addSelectionOutline(object) {
     });
 }
 
+function isLargeArchitecturalSurface(object) {
+    const data = object?.userData || {};
+    const props = data.ifcProperties || {};
+    const text = [
+        object?.name,
+        data.ifcTypeKey,
+        props.typeName,
+        props.objectType,
+        props.name,
+    ].filter(Boolean).join(' ').toLowerCase();
+    return /(roof|slab|floor|ceiling)/i.test(text);
+}
+
 function removeSelectionOutline(object) {
     if (!object) return;
 
@@ -506,6 +519,7 @@ export function selectObject(object) {
 
         const materials = Array.isArray(state.selectedObject.material) ? state.selectedObject.material : [state.selectedObject.material];
         const objectOriginalMaterials = []; // Array to store original material instances
+        const outlineOnly = isLargeArchitecturalSurface(object);
 
         materials.forEach((mat, index) => {
             if (mat && mat.isMaterial) { // Defensive check for valid material
@@ -514,8 +528,10 @@ export function selectObject(object) {
                 // Store the original material instance itself
                 objectOriginalMaterials.push(mat.clone()); // Store a clone of the current material for highlight reversion
 
-                // Apply highlight
-                if (mat.emissive !== undefined) {
+                // Apply highlight. Large roof/slab/floor surfaces use outline only to avoid bright wash/flicker.
+                if (outlineOnly) {
+                    console.log(`[selectObject] Large architectural surface selected; using outline-only highlight.`);
+                } else if (mat.emissive !== undefined) {
                     mat.emissive.copy(highlightMaterial.color);
                     mat.emissiveIntensity = 1;
                     console.log(`[selectObject] Applied emissive highlight to material for ${state.selectedObject.name || 'Unnamed Object'} (material index ${index}).`);
