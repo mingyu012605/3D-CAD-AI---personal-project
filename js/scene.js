@@ -37,18 +37,69 @@ function getModelDisplayBounds(models = state.loadedModels) {
             return ifcBounds.isEmpty() ? expandBoundsFromModels(models, false) : ifcBounds;
         }
 
+function moveRootByWorldDelta(root, worldDelta) {
+            const parent = root.parent;
+            if (!parent) {
+                root.position.add(worldDelta);
+                root.updateMatrixWorld(true);
+                return;
+            }
+
+            parent.updateMatrixWorld(true);
+
+            const originWorld = new THREE.Vector3();
+            root.getWorldPosition(originWorld);
+            const targetWorld = originWorld.clone().add(worldDelta);
+            const originLocal = parent.worldToLocal(originWorld.clone());
+            const targetLocal = parent.worldToLocal(targetWorld.clone());
+
+            root.position.add(targetLocal.sub(originLocal));
+            root.updateMatrixWorld(true);
+        }
+
 function normalizeModelsToGround(models) {
             const roots = (models || []).filter(Boolean);
             if (roots.length === 0) return new THREE.Box3();
-            roots.forEach(model => model.updateMatrixWorld(true));
-            const bounds = getModelDisplayBounds(roots);
-            if (bounds.isEmpty()) return bounds;
+            roots.forEach(root => {
+                root.updateMatrixWorld(true);
+                const rawBox = getModelDisplayBounds([root]);
+                if (rawBox.isEmpty()) return;
+                const rawCenter = rawBox.getCenter(new THREE.Vector3());
+                const worldDelta = new THREE.Vector3(-rawCenter.x, -rawBox.min.y, -rawCenter.z);
 
-            const center = bounds.getCenter(new THREE.Vector3());
-            const offset = new THREE.Vector3(-center.x, -bounds.min.y, -center.z);
-            roots.forEach(model => model.position.add(offset));
-            roots.forEach(model => model.updateMatrixWorld(true));
+                moveRootByWorldDelta(root, worldDelta);
+
+                const finalBox = getModelDisplayBounds([root]);
+                const finalCenter = finalBox.getCenter(new THREE.Vector3());
+                root.userData.placementDebug = {
+                    rawMin: rawBox.min.toArray(),
+                    rawMax: rawBox.max.toArray(),
+                    rawCenter: rawCenter.toArray(),
+                    worldDelta: worldDelta.toArray(),
+                    finalMin: finalBox.min.toArray(),
+                    finalMax: finalBox.max.toArray(),
+                    finalCenter: finalCenter.toArray(),
+                };
+            });
             return getModelDisplayBounds(roots);
+        }
+
+function getPlacementCheck(root) {
+            if (!root) return null;
+            root.updateMatrixWorld(true);
+            const finalBox = getModelDisplayBounds([root]);
+            if (finalBox.isEmpty()) return null;
+            const finalCenter = finalBox.getCenter(new THREE.Vector3());
+            const grid = state.currentGridHelper;
+            const gridPosition = grid?.position?.clone?.() || new THREE.Vector3();
+            return {
+                finalMinY: finalBox.min.y,
+                gridY: grid ? grid.position.y : null,
+                gap: grid ? finalBox.min.y - grid.position.y : null,
+                finalCenter,
+                gridPosition,
+                raw: root.userData.placementDebug || null,
+            };
         }
 
 function fitCameraToBounds(bounds, preset = 'iso') {
@@ -247,4 +298,4 @@ function onWindowResize() {
 
 export { onWindowResize };
 
-export { updateDynamicGrid, getModelDisplayBounds, normalizeModelsToGround, fitCameraToBounds };
+export { updateDynamicGrid, getModelDisplayBounds, normalizeModelsToGround, fitCameraToBounds, getPlacementCheck };

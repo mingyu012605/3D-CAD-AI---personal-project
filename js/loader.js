@@ -3,7 +3,7 @@ import { addMessageToLog } from './utils.js';
 import { saveSceneState } from './history.js';
 import { loadIFCFile } from './ifcLoader.js';
 import { loadNativeProjectFile } from './project.js';
-import { normalizeModelsToGround } from './scene.js';
+import { normalizeModelsToGround, getPlacementCheck } from './scene.js';
 
 const RANDOM_MODEL_URLS = [
     'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF-Binary/Box.glb',
@@ -263,6 +263,8 @@ async function _loadIFCModel(file) {
         state.loadedModels.push(group);
         state.navigationModelSize = null;
         _resetView();
+        const placementCheck = getPlacementCheck(group);
+        if (placementCheck) console.log('[placement-check]', placementCheck);
         loadingMsg.style.display = 'none';
         const count = group.children.length;
         addMessageToLog('System', `✅ IFC model '${file.name}' loaded — ${count} element${count !== 1 ? 's' : ''}. Click any element to see its properties.`);
