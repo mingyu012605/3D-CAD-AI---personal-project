@@ -151,8 +151,8 @@ function updateDynamicGrid() {
             const size = bounds.isEmpty() ? new THREE.Vector3(20, 0, 20) : bounds.getSize(new THREE.Vector3());
             const center = bounds.isEmpty() ? new THREE.Vector3() : bounds.getCenter(new THREE.Vector3());
             const maxXZ = Math.max(size.x, size.z, 0.01);
-            const gridSize = Math.max(maxXZ * 3, 50);
-            const divisions = Math.min(200, Math.max(20, Math.round(gridSize / 2)));
+            const gridSize = Math.max(maxXZ * 6, 120);
+            const divisions = Math.min(240, Math.max(40, Math.round(gridSize / 2)));
 
             // Create new GridHelper centered beneath the loaded model.
             const newGridHelper = new THREE.GridHelper(gridSize, divisions, 0x526981, 0x33465c);
