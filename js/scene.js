@@ -8,8 +8,20 @@ function isDisplayBoundsMesh(child, preferIFC) {
             if (!child.isMesh || !child.visible || child.userData?.cadDecorHidden || child.userData?.isGridLabel || child.name === 'gridHelper') {
                 return false;
             }
+            if (isDecorativeBoundsMesh(child)) return false;
             if (!preferIFC) return true;
             return child.userData?.isIFCElement || child.userData?.ifcProperties || child.userData?.IfcGUID || child.userData?.ifcGUID;
+        }
+
+function isDecorativeBoundsMesh(mesh) {
+            if (!mesh?.material) return false;
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            return materials.some(material => {
+                if (!material?.transparent || material.opacity >= 0.9 || !material.color) return false;
+                const hsl = {};
+                material.color.getHSL(hsl);
+                return hsl.s > 0.18 && hsl.l > 0.35 && (hsl.h > 0.70 || hsl.h < 0.05);
+            });
         }
 
 function expandBoundsFromModels(models, preferIFC = true) {
@@ -97,7 +109,7 @@ function updateDynamicGrid() {
             newGridHelper.material.opacity = 0.40;
             newGridHelper.material.transparent = true;
             newGridHelper.name = 'gridHelper';
-            newGridHelper.position.set(center.x, -0.05, center.z);
+            newGridHelper.position.set(center.x, -0.01, center.z);
             state.scene.add(newGridHelper);
             state.currentGridHelper = newGridHelper;
         }
