@@ -25,7 +25,9 @@ function updateDynamicGrid() {
 
             // Keep the grid stable in world space. Its size follows the model, not camera zoom.
             const bounds = new THREE.Box3();
-            state.loadedModels.forEach(model => bounds.expandByObject(model));
+            state.loadedModels.forEach(model => model.traverse(child => {
+                if (child.isMesh && child.visible && !child.userData.cadDecorHidden) bounds.expandByObject(child);
+            }));
             const size = bounds.isEmpty() ? new THREE.Vector3(20, 0, 20) : bounds.getSize(new THREE.Vector3());
             const center = bounds.isEmpty() ? new THREE.Vector3() : bounds.getCenter(new THREE.Vector3());
             const rawSize  = Math.max(20, size.x * 1.5, size.z * 1.5);
@@ -35,8 +37,8 @@ function updateDynamicGrid() {
             const divisions = 40;
 
             // Create new GridHelper centered beneath the loaded model.
-            const newGridHelper = new THREE.GridHelper(gridSize, divisions, 0x9eb2c5, 0xc8d4df);
-            newGridHelper.material.opacity = 0.22;
+            const newGridHelper = new THREE.GridHelper(gridSize, divisions, 0x4a6080, 0x2d4060);
+            newGridHelper.material.opacity = 0.40;
             newGridHelper.material.transparent = true;
             newGridHelper.name = 'gridHelper';
             newGridHelper.position.set(center.x, 0, center.z);

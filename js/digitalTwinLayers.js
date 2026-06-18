@@ -76,7 +76,7 @@ function isEnergyTarget(mesh) {
 }
 
 function isOccupancyTarget(mesh) {
-    return /(space|room|area|zone|classroom|office|storey|floor|slab|ceiling|roof)/i.test(descriptiveText(mesh));
+    return /(space|room|area|zone|classroom|office|storey)/i.test(descriptiveText(mesh));
 }
 
 function isPrimaryOccupancyTarget(mesh) {
@@ -274,35 +274,23 @@ function applyEnergy(meshes) {
 }
 
 function applyOccupancy(meshes) {
-    let primaryTargets = meshes.filter(isPrimaryOccupancyTarget);
-    let secondaryTargets = [];
-    let fallbackTargets = [];
-    if (primaryTargets.length === 0) {
-        secondaryTargets = meshes.filter(isOccupancyTarget);
-    }
-    if (primaryTargets.length === 0 && secondaryTargets.length === 0) {
-        fallbackTargets = meshes.filter(isLevelFallbackTarget);
-    }
-    const targets = [...primaryTargets, ...secondaryTargets, ...fallbackTargets];
+    const spaceTargets = meshes.filter(isOccupancyTarget);
+    const fallbackTargets = spaceTargets.length === 0 ? meshes.filter(isLevelFallbackTarget) : [];
+    const targets = [...spaceTargets, ...fallbackTargets];
     let total = 0;
     targets.forEach(mesh => {
         const meta = getMetadata(mesh);
         const zone = meta.level || meta.name || meta.category || 'Building';
         const occupancy = calculateOccupancy(zone);
         const status = occupancyStatus(occupancy.value);
-        const isPrimary = primaryTargets.includes(mesh);
         const isFallback = fallbackTargets.includes(mesh);
-        const mixOpts = isFallback ? { mix: 0.08, opacity: 0.18 }
-            : isPrimary ? { mix: 0.24, opacity: 0.42 }
-            : { mix: 0.12, opacity: 0.25 };
-        colorMesh(mesh, status.color, mixOpts);
+        colorMesh(mesh, status.color, isFallback ? { mix: 0.05, opacity: 0.10 } : { mix: 0.22, opacity: 0.38 });
         resultByObject.set(mesh.uuid, {
             title: 'Space Occupancy',
             value: `${occupancy.value}% simulated occupancy`,
             detail: `${occupancy.mode} / ${zone}`,
-            rule: isPrimary ? 'Matched space/room/zone element (simulated schedule)'
-                : isFallback ? 'Level-based fallback — no space elements found in IFC'
-                : 'Structural surface (floor/slab/ceiling/roof) — muted overlay',
+            rule: isFallback ? 'Level-based fallback — no space elements found in IFC'
+                : 'Matched space/room/zone element (simulated schedule)',
         });
         total += occupancy.value;
     });
@@ -311,7 +299,7 @@ function applyOccupancy(meshes) {
     setValue('digitalTwinEnergyValue', 'Inactive');
     setValue('digitalTwinOccupancyValue', `${current.mode} / ${targets.length ? Math.round(total / targets.length) : current.value}% simulated`);
     setLegend([
-        { color: '#2563eb', label: 'Low occupancy' },
+        { color: '#64748b', label: 'Low occupancy' },
         { color: '#22c55e', label: 'Normal' },
         { color: '#eab308', label: 'Busy' },
         { color: '#dc2626', label: 'High occupancy' },

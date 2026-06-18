@@ -257,9 +257,12 @@ async function _loadIFCModel(file) {
 
         state.scene.add(group);
 
-        // Snap bottom of model to ground plane (Y=0)
+        // Center model XZ at origin and snap bottom to ground plane (Y=0)
         const bbox = new THREE.Box3().setFromObject(group);
-        if (!bbox.isEmpty()) group.position.y -= bbox.min.y;
+        if (!bbox.isEmpty()) {
+            const c = bbox.getCenter(new THREE.Vector3());
+            group.position.set(-c.x, -bbox.min.y, -c.z);
+        }
 
         state.loadedModels.push(group);
         state.navigationModelSize = null;

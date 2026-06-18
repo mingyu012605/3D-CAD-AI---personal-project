@@ -3551,7 +3551,7 @@ import {
             // Only create new state.scene, state.renderer, state.camera, state.controls if they don't exist
             if (!state.scene) {
                 state.scene = new THREE.Scene();
-                state.scene.background = new THREE.Color(0xf4f7fb);
+                state.scene.background = new THREE.Color(0x1a2540);
             }
             if (!state.renderer) {
                 state.renderer = new THREE.WebGLRenderer({ canvas: cadCanvas, antialias: true });
@@ -3591,14 +3591,13 @@ import {
             // Remove existing lights before adding new ones to prevent duplicates on re-init
             state.scene.children.filter(c => c.isLight).forEach(light => state.scene.remove(light));
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
             state.scene.add(ambientLight);
-            // FIX: Corrected typo from DirectionionalLight to DirectionalLight
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // Full intensity directional light
-            directionalLight.position.set(1, 1, 1).normalize();
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.75);
+            directionalLight.position.set(1, 1.5, 1).normalize();
             state.scene.add(directionalLight);
-            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.7); // Additional light from another angle
-            directionalLight2.position.set(-1, -1, -1).normalize();
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.12);
+            directionalLight2.position.set(-1, 0.5, -1).normalize();
             state.scene.add(directionalLight2);
 
 

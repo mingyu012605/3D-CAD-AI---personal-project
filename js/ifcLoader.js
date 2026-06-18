@@ -98,10 +98,13 @@ function buildMesh(api, modelID, placedGeom) {
 
         const { x: r, y: g, z: b, w: a } = placedGeom.color;
         const mat = new THREE.MeshLambertMaterial({
-            color:       new THREE.Color(r, g, b),
-            opacity:     a,
-            transparent: a < 1,
-            side:        THREE.DoubleSide,
+            color:               new THREE.Color(r, g, b),
+            opacity:             a,
+            transparent:         a < 1,
+            side:                THREE.DoubleSide,
+            polygonOffset:       true,
+            polygonOffsetFactor: 1,
+            polygonOffsetUnits:  1,
         });
 
         const mesh = new THREE.Mesh(bufGeom, mat);
