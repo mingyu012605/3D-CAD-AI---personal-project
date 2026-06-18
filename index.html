@@ -122,6 +122,11 @@
         .digital-twin-actions button { min-height: 38px; border: 1px solid var(--line); border-radius: 7px; color: #e2e8f0; background: #1e293b; font-size: 11px; font-weight: 700; cursor: pointer; }
         .digital-twin-actions button:hover, .digital-twin-actions button.active { color: #fff; border-color: rgba(59, 130, 196, .65); background: var(--accent-blue); }
         .digital-twin-actions .reset-layer { color: #fecaca; background: #7f1d1d; }
+        .digital-twin-active-card { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin: 10px 0; padding: 11px; border: 1px solid rgba(59, 130, 196, .28); border-radius: 10px; background: rgba(14, 28, 54, .68); }
+        .digital-twin-active-card span { color: #64748b; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+        .digital-twin-active-card b { color: #e2e8f0; font-size: 13px; }
+        .digital-twin-active-card small, .digital-twin-active-card em { color: #8ca7c8; font-size: 10px; line-height: 1.35; font-style: normal; }
+        .digital-twin-active-card em { text-align: right; }
         .digital-twin-time { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: rgba(15, 23, 42, .45); }
         .digital-twin-time-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #cbd5e1; font-size: 11px; font-weight: 700; }
         .digital-twin-time-head button { flex: 0 0 auto; border: 1px solid rgba(59, 130, 196, .4); border-radius: 7px; color: #b7c7d8; background: #1e293b; padding: 6px 8px; font-size: 10px; font-weight: 800; cursor: pointer; }
@@ -151,9 +156,9 @@
         .digital-twin-records button { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; width: 100%; padding: 7px 8px; border: 1px solid rgba(51, 65, 85, .35); border-radius: 7px; color: #94a3b8; background: #1e293b; text-align: left; cursor: pointer; }
         .digital-twin-records button:hover { border-color: rgba(59, 130, 196, .55); background: #253449; }
         .digital-twin-records small { color: #64748b; font-size: 9px; }
-        .digital-twin-provenance { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(15, 23, 42, .35); font-size: 10px; }
-        .digital-twin-provenance .dt-prov-title { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 2px; }
-        .digital-twin-provenance > span { color: #8ca7c8; line-height: 1.55; }
+        .digital-twin-provenance { margin-top: 10px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(15, 23, 42, .28); font-size: 10px; }
+        .digital-twin-provenance summary { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+        .digital-twin-provenance > span { display: block; margin-top: 4px; color: #8ca7c8; line-height: 1.55; }
         .digital-twin-provenance b { color: #e2e8f0; }
         .digital-twin-selected small { color: #475569; font-size: 9px; line-height: 1.4; font-style: italic; margin-top: 2px; }
         @media (max-width: 900px) {
@@ -366,6 +371,10 @@
                     <section id="cadModeLayers" class="cad-mode-panel">
                         <h3 class="cad-panel-heading">Digital Twin Data Layers</h3>
                         <div class="cad-panel-subtitle">Live weather when configured, with clearly labelled operational simulations.</div>
+                        <div class="digital-twin-active-card">
+                            <span>Active Layer</span><em id="digitalTwinActiveFragments">No fragments coloured</em>
+                            <b id="digitalTwinActiveLayerName">None</b><small id="digitalTwinActiveLayerValue">Choose Energy, Occupancy, or Maintenance.</small>
+                        </div>
                         <div class="digital-twin-actions">
                             <button data-digital-twin-layer="energy">Energy Usage</button>
                             <button data-digital-twin-layer="occupancy">Occupancy</button>
@@ -384,6 +393,10 @@
                             <select id="digitalTwinLevelFilter">
                                 <option value="__all__">All Levels</option>
                             </select>
+                            <select id="digitalTwinLevelFilterMode" aria-label="Level filter display mode">
+                                <option value="ghost">Ghost other levels</option>
+                                <option value="hide">Hide other levels</option>
+                            </select>
                             <span id="digitalTwinLevelFilterStatus">All levels visible</span>
                         </div>
                         <div class="digital-twin-values">
@@ -397,14 +410,14 @@
                             <span><i style="background:#91a9bd"></i>Choose a layer to view its legend</span>
                         </div>
                         <div id="digitalTwinMaintenanceRecords" class="digital-twin-records"></div>
-                        <div class="digital-twin-provenance">
-                            <span class="dt-prov-title">Data provenance</span>
+                        <details class="digital-twin-provenance">
+                            <summary>Data provenance</summary>
                             <span><b>IFC metadata</b> — Real, from loaded IFC file</span>
                             <span><b>Weather</b> — <span id="digitalTwinWeatherSource">checking…</span></span>
                             <span><b>Energy load</b> — Derived estimate (weather × time of day)</span>
                             <span><b>Occupancy</b> — Simulated schedule (time-of-day model)</span>
                             <span><b>Maintenance</b> — Demo JSON records (maintenance_schedule.json)</span>
-                        </div>
+                        </details>
                     </section>
 
                     <section id="cadModeProject" class="cad-mode-panel">

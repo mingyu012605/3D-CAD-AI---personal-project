@@ -19,6 +19,7 @@ let maintenanceMatches = [];
 let simulationHour = new Date().getHours();
 let useCurrentTime = true;
 let activeLevelFilter = '__all__';
+let levelFilterMode = 'ghost';
 let lastLevelSignature = '';
 
 const ALL_LEVELS = '__all__';
@@ -126,6 +127,7 @@ function restoreMesh(mesh) {
 function restoreLevelFilterMesh(mesh) {
     const stored = levelFilterMaterials.get(mesh.uuid);
     if (!stored) return;
+    mesh.visible = stored.visible;
     mesh.material = cloneMaterials(stored.material);
     mesh.userData.initialMaterial = cloneMaterials(stored.initialMaterial);
     forEachMaterial(mesh.material, material => { material.needsUpdate = true; });
@@ -139,21 +141,34 @@ function clearLevelFilterVisuals() {
 function ghostMeshForLevelFilter(mesh) {
     if (!levelFilterMaterials.has(mesh.uuid)) {
         levelFilterMaterials.set(mesh.uuid, {
+            visible: mesh.visible,
             material: cloneMaterials(mesh.material),
             initialMaterial: cloneMaterials(mesh.userData.initialMaterial || mesh.material),
         });
     }
+    mesh.visible = true;
     mesh.material = cloneMaterials(mesh.material);
     mesh.userData.initialMaterial = cloneMaterials(mesh.userData.initialMaterial || mesh.material);
     forEachMaterial(mesh.material, material => {
         material.transparent = true;
-        material.opacity = Math.min(material.opacity ?? 1, 0.12);
+        material.opacity = Math.min(material.opacity ?? 1, 0.07);
         material.depthTest = true;
         material.depthWrite = false;
         if (material.emissive) material.emissive.setHex(0x000000);
         if (material.emissiveIntensity !== undefined) material.emissiveIntensity = 0;
         material.needsUpdate = true;
     });
+}
+
+function hideMeshForLevelFilter(mesh) {
+    if (!levelFilterMaterials.has(mesh.uuid)) {
+        levelFilterMaterials.set(mesh.uuid, {
+            visible: mesh.visible,
+            material: cloneMaterials(mesh.material),
+            initialMaterial: cloneMaterials(mesh.userData.initialMaterial || mesh.material),
+        });
+    }
+    mesh.visible = false;
 }
 
 function isVisibleForLevelFilter(mesh) {
@@ -169,15 +184,19 @@ function applyLevelFilterVisuals(meshes = getIFCMeshes()) {
         setValue('digitalTwinLevelFilterStatus', 'All levels visible');
         return;
     }
-    let ghosted = 0;
+    let muted = 0;
     meshes.forEach(mesh => {
         if (!isVisibleForLevelFilter(mesh)) {
-            ghostMeshForLevelFilter(mesh);
-            ghosted++;
+            if (levelFilterMode === 'hide') hideMeshForLevelFilter(mesh);
+            else ghostMeshForLevelFilter(mesh);
+            muted++;
+        } else {
+            mesh.visible = true;
         }
     });
     const label = activeLevelFilter === UNKNOWN_LEVEL ? 'Unknown Level' : activeLevelFilter;
-    setValue('digitalTwinLevelFilterStatus', `${label} active; ${ghosted} other IFC fragment${ghosted === 1 ? '' : 's'} ghosted`);
+    const action = levelFilterMode === 'hide' ? 'hidden' : 'softly ghosted';
+    setValue('digitalTwinLevelFilterStatus', `${label} active; ${muted} other IFC fragment${muted === 1 ? '' : 's'} ${action}`);
 }
 
 function colorMesh(mesh, color, options = {}) {
@@ -306,6 +325,12 @@ function setLegend(items) {
 function setValue(id, value) {
     const element = document.getElementById(id);
     if (element) element.textContent = value;
+}
+
+function setActiveLayerSummary(name, value, detail) {
+    setValue('digitalTwinActiveLayerName', name);
+    setValue('digitalTwinActiveLayerValue', value);
+    setValue('digitalTwinActiveFragments', detail);
 }
 
 function updateObjectGuidIndex(meshes = getIFCMeshes()) {
@@ -440,6 +465,7 @@ function applyEnergy(meshes) {
     setValue('digitalTwinWeatherValue', weatherLabel(weather));
     setValue('digitalTwinEnergyValue', `${baseLoad}% derived estimate`);
     setValue('digitalTwinOccupancyValue', 'Inactive');
+    setActiveLayerSummary('Energy Usage', `${baseLoad}% derived estimate from weather + time`, `${count} HVAC fragment${count === 1 ? '' : 's'} coloured`);
     setLegend([
         { color: '#22c55e', label: 'Low load' },
         { color: '#eab308', label: 'Moderate' },
@@ -483,6 +509,7 @@ function applyOccupancy(meshes) {
     setValue('digitalTwinWeatherValue', weatherLabel(weather));
     setValue('digitalTwinEnergyValue', 'Inactive');
     setValue('digitalTwinOccupancyValue', `${current.mode} / ${targets.length ? Math.round(total / targets.length) : current.value}% simulated`);
+    setActiveLayerSummary('Occupancy', `${current.mode} / ${targets.length ? Math.round(total / targets.length) : current.value}% simulated`, `${targets.length} space/level fragment${targets.length === 1 ? '' : 's'} coloured`);
     setLegend([
         { color: '#64748b', label: 'Low occupancy' },
         { color: '#22c55e', label: 'Normal' },
@@ -542,6 +569,7 @@ function applyMaintenance(meshes) {
     maintenanceMatches = [...matchesByGuid.values()];
     setValue('digitalTwinEnergyValue', 'Inactive');
     setValue('digitalTwinOccupancyValue', 'Inactive');
+    setActiveLayerSummary('Maintenance', `${maintenanceMatches.length} matched record${maintenanceMatches.length === 1 ? '' : 's'}`, `${count} equipment fragment${count === 1 ? '' : 's'} coloured`);
     setLegend([
         { color: '#22c55e', label: 'Recently serviced' },
         { color: '#eab308', label: 'Due soon' },
@@ -648,6 +676,7 @@ export function resetDigitalTwinColours() {
     setValue('digitalTwinLayerStatus', 'Original IFC colours restored');
     setValue('digitalTwinEnergyValue', 'Inactive');
     setValue('digitalTwinOccupancyValue', 'Inactive');
+    setActiveLayerSummary('None', 'Choose Energy, Occupancy, or Maintenance.', 'No fragments coloured');
     renderSelectedResult(state.selectedObject);
 }
 
@@ -681,6 +710,7 @@ export async function initDigitalTwinLayers() {
         : weather.source === 'openweathermap' ? 'Live from OpenWeatherMap'
         : 'Simulated fallback');
     setValue('digitalTwinMaintenanceValue', 'No element selected');
+    setActiveLayerSummary('None', 'Choose Energy, Occupancy, or Maintenance.', 'No fragments coloured');
     updateSimulationTimeUI();
     updateLevelFilterOptions();
     document.getElementById('digitalTwinTimeSlider')?.addEventListener('input', event => {
@@ -694,6 +724,14 @@ export async function initDigitalTwinLayers() {
     });
     document.getElementById('digitalTwinLevelFilter')?.addEventListener('change', async event => {
         activeLevelFilter = event.target.value || ALL_LEVELS;
+        if (activeLayer) {
+            await applyDigitalTwinLayer(activeLayer);
+            return;
+        }
+        withSelectionPreserved(() => applyLevelFilterVisuals());
+    });
+    document.getElementById('digitalTwinLevelFilterMode')?.addEventListener('change', async event => {
+        levelFilterMode = event.target.value === 'hide' ? 'hide' : 'ghost';
         if (activeLayer) {
             await applyDigitalTwinLayer(activeLayer);
             return;
