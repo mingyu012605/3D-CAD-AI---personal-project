@@ -6,6 +6,7 @@ import { calculateOccupancy, occupancyStatus } from './occupancyLayer.js';
 import { calculateMaintenanceStatus } from './maintenanceLayer.js';
 
 const baselineMaterials = new Map();
+const levelFilterMaterials = new Map();
 const resultByObject = new Map();
 const objectByGuid = new Map();
 let elementLinks = {};
@@ -17,6 +18,11 @@ let lastModelSignature = '';
 let maintenanceMatches = [];
 let simulationHour = new Date().getHours();
 let useCurrentTime = true;
+let activeLevelFilter = '__all__';
+let lastLevelSignature = '';
+
+const ALL_LEVELS = '__all__';
+const UNKNOWN_LEVEL = '__unknown__';
 
 function cloneMaterials(material) {
     if (!material) return null;
@@ -48,6 +54,10 @@ function getMetadata(mesh) {
         type: props.typeName || mesh?.userData?.ifcTypeKey || '',
         name: props.name || mesh?.name || '',
     };
+}
+
+function getLevelFilterValue(mesh) {
+    return getMetadata(mesh).level || UNKNOWN_LEVEL;
 }
 
 function metadataText(mesh) {
@@ -111,6 +121,63 @@ function restoreMesh(mesh) {
     mesh.material = cloneMaterials(baseline.material);
     mesh.userData.initialMaterial = cloneMaterials(baseline.initialMaterial);
     forEachMaterial(mesh.material, material => { material.needsUpdate = true; });
+}
+
+function restoreLevelFilterMesh(mesh) {
+    const stored = levelFilterMaterials.get(mesh.uuid);
+    if (!stored) return;
+    mesh.material = cloneMaterials(stored.material);
+    mesh.userData.initialMaterial = cloneMaterials(stored.initialMaterial);
+    forEachMaterial(mesh.material, material => { material.needsUpdate = true; });
+}
+
+function clearLevelFilterVisuals() {
+    getIFCMeshes().forEach(restoreLevelFilterMesh);
+    levelFilterMaterials.clear();
+}
+
+function ghostMeshForLevelFilter(mesh) {
+    if (!levelFilterMaterials.has(mesh.uuid)) {
+        levelFilterMaterials.set(mesh.uuid, {
+            material: cloneMaterials(mesh.material),
+            initialMaterial: cloneMaterials(mesh.userData.initialMaterial || mesh.material),
+        });
+    }
+    mesh.material = cloneMaterials(mesh.material);
+    mesh.userData.initialMaterial = cloneMaterials(mesh.userData.initialMaterial || mesh.material);
+    forEachMaterial(mesh.material, material => {
+        material.transparent = true;
+        material.opacity = Math.min(material.opacity ?? 1, 0.12);
+        material.depthTest = true;
+        material.depthWrite = false;
+        if (material.emissive) material.emissive.setHex(0x000000);
+        if (material.emissiveIntensity !== undefined) material.emissiveIntensity = 0;
+        material.needsUpdate = true;
+    });
+}
+
+function isVisibleForLevelFilter(mesh) {
+    if (activeLevelFilter === ALL_LEVELS) return true;
+    const level = getLevelFilterValue(mesh);
+    if (level === UNKNOWN_LEVEL && activeLevelFilter !== UNKNOWN_LEVEL) return true;
+    return level === activeLevelFilter;
+}
+
+function applyLevelFilterVisuals(meshes = getIFCMeshes()) {
+    clearLevelFilterVisuals();
+    if (activeLevelFilter === ALL_LEVELS) {
+        setValue('digitalTwinLevelFilterStatus', 'All levels visible');
+        return;
+    }
+    let ghosted = 0;
+    meshes.forEach(mesh => {
+        if (!isVisibleForLevelFilter(mesh)) {
+            ghostMeshForLevelFilter(mesh);
+            ghosted++;
+        }
+    });
+    const label = activeLevelFilter === UNKNOWN_LEVEL ? 'Unknown Level' : activeLevelFilter;
+    setValue('digitalTwinLevelFilterStatus', `${label} active; ${ghosted} other IFC fragment${ghosted === 1 ? '' : 's'} ghosted`);
 }
 
 function colorMesh(mesh, color, options = {}) {
@@ -265,6 +332,40 @@ function detailRow(label, value) {
 
 function renderFactRows(facts = []) {
     return facts.map(([label, value]) => detailRow(label, value)).join('');
+}
+
+function collectLevelOptions(meshes = getIFCMeshes()) {
+    const levels = new Set();
+    let hasUnknown = false;
+    meshes.forEach(mesh => {
+        const level = getMetadata(mesh).level;
+        if (level) levels.add(level);
+        else hasUnknown = true;
+    });
+    return {
+        levels: [...levels].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })),
+        hasUnknown,
+    };
+}
+
+function updateLevelFilterOptions() {
+    const select = document.getElementById('digitalTwinLevelFilter');
+    if (!select) return;
+    const meshes = getIFCMeshes();
+    const { levels, hasUnknown } = collectLevelOptions(meshes);
+    const signature = `${levels.join('|')}|${hasUnknown}|${meshes.length}`;
+    if (signature === lastLevelSignature) return;
+    lastLevelSignature = signature;
+    const options = [
+        [ALL_LEVELS, 'All Levels'],
+        ...levels.map(level => [level, level]),
+        ...(hasUnknown ? [[UNKNOWN_LEVEL, 'Unknown Level']] : []),
+    ];
+    if (!options.some(([value]) => value === activeLevelFilter)) activeLevelFilter = ALL_LEVELS;
+    select.innerHTML = options.map(([value, label]) =>
+        `<option value="${escapeHTML(value)}"${value === activeLevelFilter ? ' selected' : ''}>${escapeHTML(label)}</option>`
+    ).join('');
+    applyLevelFilterVisuals(meshes);
 }
 
 function updateLayerButtons() {
@@ -516,12 +617,14 @@ export async function applyDigitalTwinLayer(layer) {
 
     if (!weather) weather = await getWeather();
     withSelectionPreserved(() => {
+        clearLevelFilterVisuals();
         meshes.forEach(ensureBaseline);
         restoreBaseline();
         let affected = 0;
         if (layer === 'energy') affected = applyEnergy(meshes);
         if (layer === 'occupancy') affected = applyOccupancy(meshes);
         if (layer === 'maintenance') affected = applyMaintenance(meshes);
+        applyLevelFilterVisuals(meshes);
         setValue('digitalTwinLayerStatus', `${affected} IFC fragment${affected === 1 ? '' : 's'} coloured`);
     });
     updateLayerButtons();
@@ -531,7 +634,11 @@ export async function applyDigitalTwinLayer(layer) {
 }
 
 export function resetDigitalTwinColours() {
-    withSelectionPreserved(() => restoreBaseline(true));
+    withSelectionPreserved(() => {
+        clearLevelFilterVisuals();
+        restoreBaseline(true);
+        applyLevelFilterVisuals();
+    });
     activeLayer = null;
     resultByObject.clear();
     maintenanceMatches = [];
@@ -575,6 +682,7 @@ export async function initDigitalTwinLayers() {
         : 'Simulated fallback');
     setValue('digitalTwinMaintenanceValue', 'No element selected');
     updateSimulationTimeUI();
+    updateLevelFilterOptions();
     document.getElementById('digitalTwinTimeSlider')?.addEventListener('input', event => {
         simulationHour = Number(event.target.value);
         useCurrentTime = false;
@@ -584,6 +692,14 @@ export async function initDigitalTwinLayers() {
         useCurrentTime = true;
         refreshTimeLayer();
     });
+    document.getElementById('digitalTwinLevelFilter')?.addEventListener('change', async event => {
+        activeLevelFilter = event.target.value || ALL_LEVELS;
+        if (activeLayer) {
+            await applyDigitalTwinLayer(activeLayer);
+            return;
+        }
+        withSelectionPreserved(() => applyLevelFilterVisuals());
+    });
     document.querySelectorAll('[data-digital-twin-layer]').forEach(button => {
         button.addEventListener('click', () => applyDigitalTwinLayer(button.dataset.digitalTwinLayer));
     });
@@ -591,6 +707,7 @@ export async function initDigitalTwinLayers() {
 
     setInterval(() => {
         const signature = state.loadedModels.map(model => model.uuid).join('|');
+        updateLevelFilterOptions();
         if (activeLayer && signature !== lastModelSignature) applyDigitalTwinLayer(activeLayer);
     }, 2000);
 
