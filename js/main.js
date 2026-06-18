@@ -1,6 +1,6 @@
 ﻿import { state } from './state.js';
 import { addMessageToLog, indexScene, findObjectsByClass, makeTextSprite } from './utils.js';
-import { updateDynamicGrid, startAnimateLoop, initViewAxesHelper, onWindowResize } from './scene.js';
+import { updateDynamicGrid, startAnimateLoop, initViewAxesHelper, onWindowResize, getModelDisplayBounds, fitCameraToBounds } from './scene.js';
 import {
     selectObject, clearSelection, highlightAllModels, clearAllHighlights,
     getSelectedObjects, setSelectedObjects, removeObject,
@@ -3654,8 +3654,7 @@ import {
             const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
             const pixelDelta = THREE.MathUtils.clamp(event.deltaY * deltaScale, -90, 90);
             if (!Number.isFinite(state.navigationModelSize)) {
-                const bounds = new THREE.Box3();
-                state.loadedModels.forEach(model => bounds.expandByObject(model));
+                const bounds = getModelDisplayBounds();
                 state.navigationModelSize = bounds.isEmpty()
                     ? 10
                     : Math.max(...bounds.getSize(new THREE.Vector3()).toArray(), 0.01);
@@ -3757,28 +3756,10 @@ import {
         // Set camera to a preset view angle
         function setView(preset) {
             if (!state.camera || !state.controls) return;
-            const bbox = new THREE.Box3();
-            state.loadedModels.forEach(m => bbox.expandByObject(m));
-            const center = bbox.isEmpty() ? new THREE.Vector3() : bbox.getCenter(new THREE.Vector3());
-            const size   = bbox.isEmpty() ? 10 : bbox.getSize(new THREE.Vector3()).length();
-            const d = size * 1.5;
-
-            // Scale clipping planes to the model so nothing gets clipped
-            state.camera.near = Math.max(0.0001, size / 1000000);
-            state.camera.far  = Math.max(1000, size * 200);
-            state.camera.updateProjectionMatrix();
-
-            // Slight Z offset for top view avoids OrbitControls gimbal-lock singularity
-            const offsets = {
-                top:   new THREE.Vector3(0,   d,   d * 0.0001),
-                front: new THREE.Vector3(0,   0,   d),
-                right: new THREE.Vector3(d,   0,   0),
-                iso:   new THREE.Vector3(d * 0.6, d * 0.6, d * 0.6),
-            };
-            const dir = offsets[preset] || offsets.iso;
-            state.camera.position.copy(center).add(dir);
-            state.controls.target.copy(center);
-            state.controls.update();
+            const bbox = getModelDisplayBounds();
+            if (bbox.isEmpty()) return;
+            fitCameraToBounds(bbox, preset);
+            updateDynamicGrid();
         }
         window.setView = setView;
 
@@ -3786,14 +3767,7 @@ import {
         function resetView() {
             // Don't save state for view changes - this is just state.camera movement
             if (state.controls && state.camera && state.loadedModels.length > 0) {
-                const overallBbox = new THREE.Box3();
-                state.loadedModels.forEach(model => {
-                    model.traverse(child => {
-                        if (child.isMesh && child.visible && !child.userData.cadDecorHidden) {
-                            overallBbox.expandByObject(child);
-                        }
-                    });
-                });
+                const overallBbox = getModelDisplayBounds();
 
                 if (overallBbox.isEmpty()) {
                     console.warn("[resetView] Overall bounding box is empty. Cannot reset view.");
@@ -3802,25 +3776,16 @@ import {
                     return;
                 }
 
-                const center = overallBbox.getCenter(new THREE.Vector3());
                 const size = overallBbox.getSize(new THREE.Vector3());
                 const maxDim = Math.max(size.x, size.y, size.z);
 
                 console.log("[resetView] Overall Bounding Box:", overallBbox);
-                console.log("[resetView] Center:", center);
+                console.log("[resetView] Center:", overallBbox.getCenter(new THREE.Vector3()));
                 console.log("[resetView] Resetting view to fit all models.");
                 console.log("[resetView] Size:", size);
                 console.log("[resetView] Max Dimension:", maxDim);
 
-                // Scale clipping planes so the entire model is visible at any distance
-                state.camera.near = Math.max(0.0001, maxDim / 1000000);
-                state.camera.far  = Math.max(1000, maxDim * 200);
-                state.camera.updateProjectionMatrix();
-
-                const newCameraPosition = center.clone().add(new THREE.Vector3(maxDim * 0.8, maxDim * 0.8, maxDim * 0.8));
-                state.camera.position.copy(newCameraPosition);
-                state.controls.target.copy(center);
-                state.controls.update();
+                fitCameraToBounds(overallBbox, 'iso');
                 updateDynamicGrid();
 
                 addMessageToLog('AI', 'View reset to fit all models.');
@@ -5410,4 +5375,3 @@ import {
 
             console.log("[Init] Initialization complete. Try testButtonClicks() or forceCreateEmpty() in console if buttons don't work.");
         };
-

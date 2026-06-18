@@ -3,6 +3,7 @@ import { addMessageToLog } from './utils.js';
 import { clearSelection, clearAllHighlights } from './selection.js';
 import { createSerializableModelClones } from './exporter.js';
 import { updateUndoRedoButtons } from './history.js';
+import { getModelDisplayBounds, normalizeModelsToGround, fitCameraToBounds } from './scene.js';
 
 const AUTOSAVE_KEY = 'ai-vr-cad-editor-autosave-v1';
 let refreshTools = () => {};
@@ -102,23 +103,10 @@ function clearTransientEditingState() {
 function fitLoadedProjectView() {
     if (!state.camera || !state.controls || state.loadedModels.length === 0) return;
 
-    const bounds = new THREE.Box3();
-    state.loadedModels.forEach(model => bounds.expandByObject(model));
+    const bounds = getModelDisplayBounds();
     if (bounds.isEmpty()) return;
 
-    const center = bounds.getCenter(new THREE.Vector3());
-    const maxDimension = Math.max(...bounds.getSize(new THREE.Vector3()).toArray(), 0.01);
-    const fitDistance = maxDimension * 1.8;
-    const direction = state.camera.position.clone().sub(state.controls.target);
-    if (direction.lengthSq() < 1e-8) direction.set(1, 1, 1);
-    direction.normalize();
-    state.controls.target.copy(center);
-    state.camera.position.copy(center).addScaledVector(direction, fitDistance);
-    state.camera.near = Math.max(0.0001, maxDimension / 1000000);
-    state.camera.far = Math.max(1000, maxDimension * 200);
-    state.camera.updateProjectionMatrix();
-    state.controls.update();
-    state.navigationModelSize = maxDimension;
+    fitCameraToBounds(bounds, 'iso');
 }
 
 export function loadProjectData(project) {
@@ -151,6 +139,7 @@ export function loadProjectData(project) {
         state.scene.add(model);
         state.loadedModels.push(model);
     });
+    normalizeModelsToGround(state.loadedModels);
 
     if (project.camera && state.camera) {
         state.camera.position.fromArray(project.camera.position);

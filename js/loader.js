@@ -3,6 +3,7 @@ import { addMessageToLog } from './utils.js';
 import { saveSceneState } from './history.js';
 import { loadIFCFile } from './ifcLoader.js';
 import { loadNativeProjectFile } from './project.js';
+import { normalizeModelsToGround } from './scene.js';
 
 const RANDOM_MODEL_URLS = [
     'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF-Binary/Box.glb',
@@ -257,12 +258,7 @@ async function _loadIFCModel(file) {
 
         state.scene.add(group);
 
-        // Center model XZ at origin and snap bottom to ground plane (Y=0)
-        const bbox = new THREE.Box3().setFromObject(group);
-        if (!bbox.isEmpty()) {
-            const c = bbox.getCenter(new THREE.Vector3());
-            group.position.set(-c.x, -bbox.min.y, -c.z);
-        }
+        normalizeModelsToGround([group]);
 
         state.loadedModels.push(group);
         state.navigationModelSize = null;

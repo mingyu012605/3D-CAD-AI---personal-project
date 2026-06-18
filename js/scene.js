@@ -4,6 +4,65 @@ import { makeTextSprite } from './utils.js';
 const cadCanvas = document.getElementById('cadCanvas');
 const viewAxesContainer = document.getElementById('viewAxesContainer');
 
+function isDisplayBoundsMesh(child, preferIFC) {
+            if (!child.isMesh || !child.visible || child.userData?.cadDecorHidden || child.userData?.isGridLabel || child.name === 'gridHelper') {
+                return false;
+            }
+            if (!preferIFC) return true;
+            return child.userData?.isIFCElement || child.userData?.ifcProperties || child.userData?.IfcGUID || child.userData?.ifcGUID;
+        }
+
+function expandBoundsFromModels(models, preferIFC = true) {
+            const bounds = new THREE.Box3();
+            (models || []).forEach(model => model.traverse(child => {
+                if (isDisplayBoundsMesh(child, preferIFC)) bounds.expandByObject(child);
+            }));
+            return bounds;
+        }
+
+function getModelDisplayBounds(models = state.loadedModels) {
+            const ifcBounds = expandBoundsFromModels(models, true);
+            return ifcBounds.isEmpty() ? expandBoundsFromModels(models, false) : ifcBounds;
+        }
+
+function normalizeModelsToGround(models) {
+            const roots = (models || []).filter(Boolean);
+            if (roots.length === 0) return new THREE.Box3();
+            roots.forEach(model => model.updateMatrixWorld(true));
+            const bounds = getModelDisplayBounds(roots);
+            if (bounds.isEmpty()) return bounds;
+
+            const center = bounds.getCenter(new THREE.Vector3());
+            const offset = new THREE.Vector3(-center.x, -bounds.min.y, -center.z);
+            roots.forEach(model => model.position.add(offset));
+            roots.forEach(model => model.updateMatrixWorld(true));
+            return getModelDisplayBounds(roots);
+        }
+
+function fitCameraToBounds(bounds, preset = 'iso') {
+            if (!state.camera || !state.controls || !bounds || bounds.isEmpty()) return;
+            const center = bounds.getCenter(new THREE.Vector3());
+            const size = bounds.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z, 0.01);
+            const fov = THREE.MathUtils.degToRad(state.camera.fov || 60);
+            const distance = Math.max(maxDim * 1.15, (maxDim / (2 * Math.tan(fov / 2))) * 1.35);
+            const directions = {
+                top: new THREE.Vector3(0, 1, 0.0001),
+                front: new THREE.Vector3(0, 0, 1),
+                right: new THREE.Vector3(1, 0, 0),
+                iso: new THREE.Vector3(0.75, 0.65, 0.75),
+            };
+            const direction = (directions[preset] || directions.iso).normalize();
+
+            state.camera.near = Math.max(0.0001, maxDim / 1000000);
+            state.camera.far = Math.max(1000, distance + maxDim * 20);
+            state.camera.position.copy(center).addScaledVector(direction, distance);
+            state.controls.target.copy(center);
+            state.camera.updateProjectionMatrix();
+            state.controls.update();
+            state.navigationModelSize = maxDim;
+        }
+
 function updateDynamicGrid() {
             if (!state.scene) {
                 return;
@@ -24,10 +83,7 @@ function updateDynamicGrid() {
             state.currentGridLabels = [];
 
             // Keep the grid stable in world space. Its size follows the model, not camera zoom.
-            const bounds = new THREE.Box3();
-            state.loadedModels.forEach(model => model.traverse(child => {
-                if (child.isMesh && child.visible && !child.userData.cadDecorHidden) bounds.expandByObject(child);
-            }));
+            const bounds = getModelDisplayBounds();
             const size = bounds.isEmpty() ? new THREE.Vector3(20, 0, 20) : bounds.getSize(new THREE.Vector3());
             const center = bounds.isEmpty() ? new THREE.Vector3() : bounds.getCenter(new THREE.Vector3());
             const rawSize  = Math.max(20, size.x * 1.5, size.z * 1.5);
@@ -41,7 +97,7 @@ function updateDynamicGrid() {
             newGridHelper.material.opacity = 0.40;
             newGridHelper.material.transparent = true;
             newGridHelper.name = 'gridHelper';
-            newGridHelper.position.set(center.x, 0, center.z);
+            newGridHelper.position.set(center.x, -0.01, center.z);
             state.scene.add(newGridHelper);
             state.currentGridHelper = newGridHelper;
         }
@@ -179,4 +235,4 @@ function onWindowResize() {
 
 export { onWindowResize };
 
-export { updateDynamicGrid };
+export { updateDynamicGrid, getModelDisplayBounds, normalizeModelsToGround, fitCameraToBounds };
