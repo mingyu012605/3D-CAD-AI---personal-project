@@ -122,6 +122,11 @@
         .digital-twin-actions button { min-height: 38px; border: 1px solid var(--line); border-radius: 7px; color: #e2e8f0; background: #1e293b; font-size: 11px; font-weight: 700; cursor: pointer; }
         .digital-twin-actions button:hover, .digital-twin-actions button.active { color: #fff; border-color: rgba(59, 130, 196, .65); background: var(--accent-blue); }
         .digital-twin-actions .reset-layer { color: #fecaca; background: #7f1d1d; }
+        .digital-twin-time { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: rgba(15, 23, 42, .45); }
+        .digital-twin-time-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #cbd5e1; font-size: 11px; font-weight: 700; }
+        .digital-twin-time-head button { flex: 0 0 auto; border: 1px solid rgba(59, 130, 196, .4); border-radius: 7px; color: #b7c7d8; background: #1e293b; padding: 6px 8px; font-size: 10px; font-weight: 800; cursor: pointer; }
+        .digital-twin-time-head button.active { color: #fff; background: var(--accent-blue); }
+        .digital-twin-time input { width: 100%; accent-color: var(--accent-blue); }
         .digital-twin-values { display: grid; grid-template-columns: 1fr auto; gap: 7px; padding: 11px; border: 1px solid var(--line); border-radius: 9px; color: #64748b; background: var(--panel-soft); font-size: 11px; }
         .digital-twin-values b { color: #f1f5f9; text-align: right; }
         .digital-twin-legend { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding: 10px; border-radius: 9px; background: rgba(15, 23, 42, .55); }
@@ -357,6 +362,13 @@
                             <button data-digital-twin-layer="occupancy">Occupancy</button>
                             <button data-digital-twin-layer="maintenance">Maintenance</button>
                             <button id="digitalTwinResetColours" class="reset-layer">Reset Colours</button>
+                        </div>
+                        <div class="digital-twin-time">
+                            <div class="digital-twin-time-head">
+                                <span id="digitalTwinTimeLabel">Simulation time: current time</span>
+                                <button id="digitalTwinUseCurrentTime" type="button" class="active">Using current time</button>
+                            </div>
+                            <input id="digitalTwinTimeSlider" type="range" min="0" max="23" step="1" value="9" aria-label="Digital twin simulation hour">
                         </div>
                         <div class="digital-twin-values">
                             <span>Weather temperature</span><b id="digitalTwinWeatherValue">Loading...</b>

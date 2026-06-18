@@ -15,6 +15,8 @@ let weather = null;
 let initialized = false;
 let lastModelSignature = '';
 let maintenanceMatches = [];
+let simulationHour = new Date().getHours();
+let useCurrentTime = true;
 
 function cloneMaterials(material) {
     if (!material) return null;
@@ -171,6 +173,41 @@ function weatherLabel(w) {
     return `${w.temperatureC.toFixed(1)} °C — Simulated fallback`;
 }
 
+function formatHourLabel(hour) {
+    const normalized = ((Number(hour) % 24) + 24) % 24;
+    const suffix = normalized >= 12 ? 'PM' : 'AM';
+    const displayHour = normalized % 12 || 12;
+    return `${displayHour}:00 ${suffix}`;
+}
+
+function getSimulationDate() {
+    const date = new Date();
+    if (useCurrentTime) {
+        simulationHour = date.getHours();
+        return date;
+    }
+    date.setHours(simulationHour, 0, 0, 0);
+    return date;
+}
+
+function updateSimulationTimeUI() {
+    const date = getSimulationDate();
+    const hour = date.getHours();
+    const slider = document.getElementById('digitalTwinTimeSlider');
+    const currentButton = document.getElementById('digitalTwinUseCurrentTime');
+    if (slider) slider.value = String(hour);
+    setValue('digitalTwinTimeLabel', `Simulation time: ${formatHourLabel(hour)}${useCurrentTime ? ' (current)' : ''}`);
+    if (currentButton) {
+        currentButton.textContent = useCurrentTime ? 'Using current time' : 'Use current time';
+        currentButton.classList.toggle('active', useCurrentTime);
+    }
+}
+
+function refreshTimeLayer() {
+    updateSimulationTimeUI();
+    if (activeLayer === 'energy' || activeLayer === 'occupancy') applyDigitalTwinLayer(activeLayer);
+}
+
 function focusObject(object) {
     if (!object || !state.controls) return;
     try {
@@ -258,7 +295,9 @@ function renderMaintenanceRecords() {
 }
 
 function applyEnergy(meshes) {
-    const baseLoad = calculateEnergyLoad(weather.temperatureC);
+    const simulationDate = getSimulationDate();
+    const timeLabel = formatHourLabel(simulationDate.getHours());
+    const baseLoad = calculateEnergyLoad(weather.temperatureC, simulationDate);
     let count = 0;
     meshes.filter(isEnergyTarget).forEach(mesh => {
         const load = Math.max(0, Math.min(100, baseLoad + smallVariation(getMetadata(mesh).guid || mesh.uuid)));
@@ -267,14 +306,15 @@ function applyEnergy(meshes) {
         colorMesh(mesh, status.color, { mix: 0.52, opacity: 0.82 });
         resultByObject.set(mesh.uuid, {
             title: 'Energy Usage',
-            value: `${load}% simulated HVAC load`,
-            detail: `${status.label} / ${meta.category || 'Mechanical target'}${meta.level ? ` / ${meta.level}` : ''}`,
-            rule: 'Matched mechanical/HVAC equipment category in IFC metadata',
+            value: `${load}% derived HVAC load`,
+            detail: `${status.label} / ${timeLabel} / ${meta.category || 'Mechanical target'}${meta.level ? ` / ${meta.level}` : ''}`,
+            rule: 'Derived estimate from weather + selected simulation time; matched mechanical/HVAC IFC metadata',
         });
         count++;
     });
+    updateSimulationTimeUI();
     setValue('digitalTwinWeatherValue', weatherLabel(weather));
-    setValue('digitalTwinEnergyValue', `${baseLoad}% simulated`);
+    setValue('digitalTwinEnergyValue', `${baseLoad}% derived estimate`);
     setValue('digitalTwinOccupancyValue', 'Inactive');
     setLegend([
         { color: '#22c55e', label: 'Low load' },
@@ -286,6 +326,8 @@ function applyEnergy(meshes) {
 }
 
 function applyOccupancy(meshes) {
+    const simulationDate = getSimulationDate();
+    const timeLabel = formatHourLabel(simulationDate.getHours());
     const spaceTargets = meshes.filter(isOccupancyTarget);
     const fallbackTargets = spaceTargets.length === 0 ? meshes.filter(isLevelFallbackTarget) : [];
     const targets = [...spaceTargets, ...fallbackTargets];
@@ -293,20 +335,21 @@ function applyOccupancy(meshes) {
     targets.forEach(mesh => {
         const meta = getMetadata(mesh);
         const zone = meta.level || meta.name || meta.category || 'Building';
-        const occupancy = calculateOccupancy(zone);
+        const occupancy = calculateOccupancy(zone, simulationDate);
         const status = occupancyStatus(occupancy.value);
         const isFallback = fallbackTargets.includes(mesh);
         colorMesh(mesh, status.color, isFallback || isLargeArchitecturalSurface(mesh) ? { mix: 0.025, opacity: 0.06 } : { mix: 0.16, opacity: 0.28 });
         resultByObject.set(mesh.uuid, {
             title: 'Space Occupancy',
             value: `${occupancy.value}% simulated occupancy`,
-            detail: `${occupancy.mode} / ${zone}`,
+            detail: `${occupancy.mode} / ${timeLabel} / ${zone}`,
             rule: isFallback ? 'Level-based fallback — no space elements found in IFC'
-                : 'Matched space/room/zone element (simulated schedule)',
+                : 'Matched space/room/zone element (simulated time-of-day schedule)',
         });
         total += occupancy.value;
     });
-    const current = calculateOccupancy('building');
+    const current = calculateOccupancy('building', simulationDate);
+    updateSimulationTimeUI();
     setValue('digitalTwinWeatherValue', weatherLabel(weather));
     setValue('digitalTwinEnergyValue', 'Inactive');
     setValue('digitalTwinOccupancyValue', `${current.mode} / ${targets.length ? Math.round(total / targets.length) : current.value}% simulated`);
@@ -474,6 +517,16 @@ export async function initDigitalTwinLayers() {
         : weather.source === 'openweathermap' ? 'Live from OpenWeatherMap'
         : 'Simulated fallback');
     setValue('digitalTwinMaintenanceValue', 'No element selected');
+    updateSimulationTimeUI();
+    document.getElementById('digitalTwinTimeSlider')?.addEventListener('input', event => {
+        simulationHour = Number(event.target.value);
+        useCurrentTime = false;
+        refreshTimeLayer();
+    });
+    document.getElementById('digitalTwinUseCurrentTime')?.addEventListener('click', () => {
+        useCurrentTime = true;
+        refreshTimeLayer();
+    });
     document.querySelectorAll('[data-digital-twin-layer]').forEach(button => {
         button.addEventListener('click', () => applyDigitalTwinLayer(button.dataset.digitalTwinLayer));
     });
