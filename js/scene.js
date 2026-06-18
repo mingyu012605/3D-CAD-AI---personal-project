@@ -107,8 +107,9 @@ function fitCameraToBounds(bounds, preset = 'iso') {
             const center = bounds.getCenter(new THREE.Vector3());
             const size = bounds.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z, 0.01);
+            const fitPadding = 1.25;
             const fov = THREE.MathUtils.degToRad(state.camera.fov || 60);
-            const distance = Math.max(maxDim * 1.15, (maxDim / (2 * Math.tan(fov / 2))) * 1.35);
+            const distance = Math.max(maxDim * fitPadding, (maxDim / (2 * Math.tan(fov / 2))) * fitPadding);
             const directions = {
                 top: new THREE.Vector3(0, 1, 0.0001),
                 front: new THREE.Vector3(0, 0, 1),
@@ -149,15 +150,13 @@ function updateDynamicGrid() {
             const bounds = getModelDisplayBounds();
             const size = bounds.isEmpty() ? new THREE.Vector3(20, 0, 20) : bounds.getSize(new THREE.Vector3());
             const center = bounds.isEmpty() ? new THREE.Vector3() : bounds.getCenter(new THREE.Vector3());
-            const rawSize  = Math.max(20, size.x * 1.5, size.z * 1.5);
-            const exp      = Math.floor(Math.log10(rawSize));
-            const base     = Math.pow(10, exp);
-            const gridSize = Math.ceil(rawSize / base) * base;
-            const divisions = 40;
+            const maxXZ = Math.max(size.x, size.z, 0.01);
+            const gridSize = Math.max(maxXZ * 3, 50);
+            const divisions = Math.min(200, Math.max(20, Math.round(gridSize / 2)));
 
             // Create new GridHelper centered beneath the loaded model.
-            const newGridHelper = new THREE.GridHelper(gridSize, divisions, 0x4a6080, 0x2d4060);
-            newGridHelper.material.opacity = 0.40;
+            const newGridHelper = new THREE.GridHelper(gridSize, divisions, 0x526981, 0x33465c);
+            newGridHelper.material.opacity = 0.46;
             newGridHelper.material.transparent = true;
             newGridHelper.name = 'gridHelper';
             newGridHelper.position.set(center.x, -0.01, center.z);
