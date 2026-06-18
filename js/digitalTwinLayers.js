@@ -41,6 +41,7 @@ function getMetadata(mesh) {
     const linked = guid ? elementLinks[guid] || {} : {};
     return {
         guid,
+        expressID: props.expressID ?? mesh?.userData?.expressID ?? '',
         category: linked.category || props.category || props.Category || props.objectType || '',
         family: linked.familyAndType || props.typeName || props.name || '',
         level: props.level || linked.level || '',
@@ -173,6 +174,13 @@ function weatherLabel(w) {
     return `${w.temperatureC.toFixed(1)} °C — Simulated fallback`;
 }
 
+function weatherSourceLabel(w) {
+    if (!w) return 'Unavailable';
+    if (w.source === 'open-meteo') return 'Live Open-Meteo';
+    if (w.source === 'openweathermap') return 'Live OpenWeatherMap';
+    return 'Simulated fallback';
+}
+
 function formatHourLabel(hour) {
     const normalized = ((Number(hour) % 24) + 24) % 24;
     const suffix = normalized >= 12 ? 'PM' : 'AM';
@@ -251,6 +259,14 @@ function escapeHTML(value = '') {
     }[char]));
 }
 
+function detailRow(label, value) {
+    return `<div class="dt-detail-row"><em>${escapeHTML(label)}</em><span>${escapeHTML(value || 'Unknown')}</span></div>`;
+}
+
+function renderFactRows(facts = []) {
+    return facts.map(([label, value]) => detailRow(label, value)).join('');
+}
+
 function updateLayerButtons() {
     document.querySelectorAll('[data-digital-twin-layer]').forEach(button => {
         button.classList.toggle('active', button.dataset.digitalTwinLayer === activeLayer);
@@ -308,6 +324,13 @@ function applyEnergy(meshes) {
             title: 'Energy Usage',
             value: `${load}% derived HVAC load`,
             detail: `${status.label} / ${timeLabel} / ${meta.category || 'Mechanical target'}${meta.level ? ` / ${meta.level}` : ''}`,
+            facts: [
+                ['Status', status.label],
+                ['Energy load', `${load}%`],
+                ['Temperature', weather ? `${weather.temperatureC.toFixed(1)} °C` : 'Unavailable'],
+                ['Weather source', weatherSourceLabel(weather)],
+                ['Simulation time', timeLabel],
+            ],
             rule: 'Derived estimate from weather + selected simulation time; matched mechanical/HVAC IFC metadata',
         });
         count++;
@@ -343,6 +366,12 @@ function applyOccupancy(meshes) {
             title: 'Space Occupancy',
             value: `${occupancy.value}% simulated occupancy`,
             detail: `${occupancy.mode} / ${timeLabel} / ${zone}`,
+            facts: [
+                ['Status', occupancy.mode],
+                ['Occupancy', `${occupancy.value}%`],
+                ['Level / zone', zone],
+                ['Simulation time', timeLabel],
+            ],
             rule: isFallback ? 'Level-based fallback — no space elements found in IFC'
                 : 'Matched space/room/zone element (simulated time-of-day schedule)',
         });
@@ -389,6 +418,17 @@ function applyMaintenance(meshes) {
             title: 'Maintenance Schedule',
             value: status.label,
             detail: formatMaintenanceDetail(record, status),
+            facts: record ? [
+                ['Equipment', record.equipmentName || 'Equipment'],
+                ['IfcGUID', meta.guid || 'Unknown'],
+                ['Last service', record.lastServiceDate || 'Unknown'],
+                ['Interval', `${record.serviceIntervalDays || '?'} days`],
+                ['Days since', status.daysSinceService != null ? `${status.daysSinceService}` : 'Unknown'],
+                ['Status', status.label],
+            ] : [
+                ['Status', 'No maintenance record'],
+                ['IfcGUID', meta.guid || 'Unknown'],
+            ],
             rule: record
                 ? `Matched IfcGUID in maintenance_schedule.json (demo data) — GUID: ${meta.guid || 'unknown'}`
                 : 'No matching IfcGUID in demo maintenance records',
@@ -414,28 +454,45 @@ function applyMaintenance(meshes) {
 function renderSelectedResult(object) {
     const panel = document.getElementById('digitalTwinSelectedResult');
     if (!panel) return;
-    if (!object || !activeLayer) {
-        panel.innerHTML = '<strong>No active layer result</strong><span>Select a layer and an IFC element.</span>';
+    if (!object) {
+        panel.innerHTML = '<strong>No object selected</strong><span>Select an IFC element to inspect its digital twin status.</span>';
         return;
     }
     const result = resultByObject.get(object.uuid);
     const meta = getMetadata(object);
-    const metadataHTML = `
-        <span>Category: ${escapeHTML(meta.category || 'Unknown')}</span>
-        <span>Family: ${escapeHTML(meta.family || meta.type || 'Unknown')}</span>
-        <span>Level: ${escapeHTML(meta.level || 'Unknown')}</span>
-        <span>IfcGUID: ${escapeHTML(meta.guid || 'Unknown')}</span>
+    const linked = meta.guid ? elementLinks[meta.guid] || {} : {};
+    const docUrl = object.userData?.docUrl || linked.doc_url || '';
+    const docLabel = linked.doc_label || 'Linked document';
+    const identityHTML = `
+        <div class="dt-detail-section">
+            <strong>Selected Element</strong>
+            ${detailRow('Category', meta.category)}
+            ${detailRow('Family / Type', meta.family || meta.type)}
+            ${detailRow('Level', meta.level)}
+            ${detailRow('IfcGUID', meta.guid)}
+            ${detailRow('Express ID', meta.expressID)}
+        </div>
+        <div class="dt-detail-section">
+            <strong>Linked Document</strong>
+            ${detailRow('Status', docUrl ? `${docLabel} available` : 'No linked document saved')}
+            <small>Use the Linked Document controls above to save or open URLs.</small>
+        </div>
     `;
+    if (!activeLayer) {
+        panel.innerHTML = `${identityHTML}<div class="dt-detail-section"><strong>Digital Twin Status</strong><span>No active digital twin status for this element.</span></div>`;
+        return;
+    }
     if (!result) {
         const fallback = activeLayer === 'maintenance' ? 'No maintenance record' : 'This element is not targeted by the active layer.';
         const extra = activeLayer === 'maintenance'
             ? `<span>${maintenanceMatches.length} maintenance record${maintenanceMatches.length === 1 ? '' : 's'} matched in the loaded model.</span>`
             : '<span>Existing linked documents remain available above.</span>';
-        panel.innerHTML = `<strong>${escapeHTML(fallback)}</strong>${metadataHTML}${extra}`;
+        panel.innerHTML = `${identityHTML}<div class="dt-detail-section"><strong>Digital Twin Status</strong><span class="dt-status-pill">${escapeHTML(fallback)}</span>${extra}</div>`;
         return;
     }
     const ruleHTML = result.rule ? `<small>${escapeHTML(result.rule)}</small>` : '';
-    panel.innerHTML = `<strong>${escapeHTML(result.title)}</strong>${metadataHTML}<b>${escapeHTML(result.value)}</b><span>${escapeHTML(result.detail)}</span>${ruleHTML}`;
+    const factsHTML = renderFactRows(result.facts);
+    panel.innerHTML = `${identityHTML}<div class="dt-detail-section"><strong>Digital Twin Status</strong><span class="dt-status-pill">${escapeHTML(result.title)}</span><b>${escapeHTML(result.value)}</b>${factsHTML}<span>${escapeHTML(result.detail)}</span>${ruleHTML}</div>`;
 }
 
 function updateSelectedMaintenanceValue(object) {
