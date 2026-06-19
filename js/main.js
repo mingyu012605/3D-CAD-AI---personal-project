@@ -3646,6 +3646,29 @@ import {
             startAnimateLoop();
         }
 
+        function getZoomRaycastTargets() {
+            if (!state.zoomRaycastCache) {
+                state.zoomRaycastCache = { signature: '', targets: [], lastHitPoint: null, lastHitAt: 0, lastPointerX: 0, lastPointerY: 0 };
+            }
+            const signature = state.loadedModels.map(model => `${model.uuid}:${model.children?.length || 0}`).join('|');
+            if (state.zoomRaycastCache.signature === signature) return state.zoomRaycastCache.targets;
+
+            const targets = [];
+            state.loadedModels.forEach(model => model.traverse(object => {
+                if (object.isMesh
+                    && !object.userData?.isGridLabel
+                    && !object.userData?.isSelectionOutline
+                    && object !== state.currentGridHelper
+                    && object !== state.raycastDebugSphere) {
+                    targets.push(object);
+                }
+            }));
+            state.zoomRaycastCache.signature = signature;
+            state.zoomRaycastCache.targets = targets;
+            state.zoomRaycastCache.lastHitPoint = null;
+            return targets;
+        }
+
         function focusZoomOnPointer(event) {
             if (!state.controls || !state.camera || !state.renderer) return;
             event.preventDefault();
@@ -3672,21 +3695,22 @@ import {
             const targetPoint = state.controls.target.clone();
 
             if (pixelDelta < 0 && state.raycaster) {
-                const targets = [];
-                state.loadedModels.forEach(model => model.traverse(object => {
-                    if (object.isMesh
-                        && object.visible
-                        && !object.userData?.isGridLabel
-                        && !object.userData?.isSelectionOutline
-                        && object !== state.currentGridHelper
-                        && object !== state.raycastDebugSphere) {
-                        targets.push(object);
+                const cache = state.zoomRaycastCache;
+                const now = performance.now();
+                const pointerMoved = Math.hypot(pointer2D.x - cache.lastPointerX, pointer2D.y - cache.lastPointerY) > 0.08;
+                if (pointerMoved || now - cache.lastHitAt > 90) {
+                    const visibleTargets = getZoomRaycastTargets().filter(object => object.visible);
+                    if (visibleTargets.length > 0) {
+                        state.raycaster.setFromCamera(pointer2D, state.camera);
+                        const hit = state.raycaster.intersectObjects(visibleTargets, false)[0];
+                        cache.lastHitPoint = hit ? hit.point.clone() : null;
                     }
-                }));
-                state.raycaster.setFromCamera(pointer2D, state.camera);
-                const hit = state.raycaster.intersectObjects(targets, false)[0];
-                if (hit) {
-                    targetPoint.copy(hit.point);
+                    cache.lastHitAt = now;
+                    cache.lastPointerX = pointer2D.x;
+                    cache.lastPointerY = pointer2D.y;
+                }
+                if (cache.lastHitPoint) {
+                    targetPoint.copy(cache.lastHitPoint);
                 }
             }
 

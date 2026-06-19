@@ -19,6 +19,14 @@ export const state = {
   // Raycasting
   raycaster: null,
   mouse: null,
+  zoomRaycastCache: {
+    signature: '',
+    targets: [],
+    lastHitPoint: null,
+    lastHitAt: 0,
+    lastPointerX: 0,
+    lastPointerY: 0,
+  },
 
   // Grid
   currentGridHelper: null,
