@@ -10,6 +10,7 @@ const levelFilterMaterials = new Map();
 const resultByObject = new Map();
 const objectByGuid = new Map();
 const metadataCache = new WeakMap();
+let targetCache = { signature: '', energy: [], occupancySpaces: [], occupancyFallback: [] };
 let elementLinks = {};
 let maintenanceByGuid = new Map();
 let activeLayer = null;
@@ -42,6 +43,10 @@ function getIFCMeshes() {
         if (object.isMesh && object.userData?.isIFCElement) meshes.push(object);
     }));
     return meshes;
+}
+
+function getModelSignature() {
+    return state.loadedModels.map(model => model.uuid).join('|');
 }
 
 function getMetadata(mesh) {
@@ -112,6 +117,18 @@ function isLevelFallbackTarget(mesh) {
 
 function isLargeArchitecturalSurface(mesh) {
     return /(floor|slab|ceiling|roof)/i.test(descriptiveText(mesh));
+}
+
+function getLayerTargets(meshes = getIFCMeshes()) {
+    const signature = `${getModelSignature()}|${meshes.length}`;
+    if (targetCache.signature === signature) return targetCache;
+    targetCache = {
+        signature,
+        energy: meshes.filter(isEnergyTarget),
+        occupancySpaces: meshes.filter(isOccupancyTarget),
+        occupancyFallback: meshes.filter(isLevelFallbackTarget),
+    };
+    return targetCache;
 }
 
 function ensureBaseline(mesh) {
@@ -449,7 +466,7 @@ function applyEnergy(meshes) {
     const timeLabel = formatHourLabel(simulationDate.getHours());
     const baseLoad = calculateEnergyLoad(weather.temperatureC, simulationDate);
     let count = 0;
-    meshes.filter(isEnergyTarget).forEach(mesh => {
+    getLayerTargets(meshes).energy.forEach(mesh => {
         const load = Math.max(0, Math.min(100, baseLoad + smallVariation(getMetadata(mesh).guid || mesh.uuid)));
         const status = energyStatus(load);
         const meta = getMetadata(mesh);
@@ -486,8 +503,9 @@ function applyEnergy(meshes) {
 function applyOccupancy(meshes) {
     const simulationDate = getSimulationDate();
     const timeLabel = formatHourLabel(simulationDate.getHours());
-    const spaceTargets = meshes.filter(isOccupancyTarget);
-    const fallbackTargets = spaceTargets.length === 0 ? meshes.filter(isLevelFallbackTarget) : [];
+    const layerTargets = getLayerTargets(meshes);
+    const spaceTargets = layerTargets.occupancySpaces;
+    const fallbackTargets = spaceTargets.length === 0 ? layerTargets.occupancyFallback : [];
     const targets = [...spaceTargets, ...fallbackTargets];
     let total = 0;
     targets.forEach(mesh => {
@@ -666,7 +684,7 @@ export async function applyDigitalTwinLayer(layer) {
     updateLayerButtons();
     if (layer !== 'maintenance') renderMaintenanceRecords();
     renderSelectedResult(state.selectedObject);
-    lastModelSignature = state.loadedModels.map(model => model.uuid).join('|');
+    lastModelSignature = getModelSignature();
 }
 
 export function resetDigitalTwinColours() {
@@ -752,7 +770,7 @@ export async function initDigitalTwinLayers() {
     document.getElementById('digitalTwinResetColours')?.addEventListener('click', resetDigitalTwinColours);
 
     setInterval(() => {
-        const signature = state.loadedModels.map(model => model.uuid).join('|');
+        const signature = getModelSignature();
         updateLevelFilterOptions();
         if (activeLayer && signature !== lastModelSignature) applyDigitalTwinLayer(activeLayer);
     }, 2000);

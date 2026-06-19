@@ -3570,7 +3570,7 @@ import {
                 state.controls.dampingFactor = 0.14;
                 // OrbitControls handles touchscreen pinch zoom. Keep it gentler than
                 // the separately handled wheel/touchpad zoom below.
-                state.controls.zoomSpeed = 0.5;
+                state.controls.zoomSpeed = 0.62;
                 state.controls.minDistance = 0.02;
                 state.controls.screenSpacePanning = true;
                 state.controls.target.set(0, 0, 0); // Ensure state.controls target the origin
@@ -3654,14 +3654,14 @@ import {
             const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
             const rawPixelDelta = event.deltaY * deltaScale;
             const isMouseWheel = event.deltaMode === 1 || Math.abs(event.deltaY) >= 40;
-            const pixelDelta = THREE.MathUtils.clamp(rawPixelDelta, isMouseWheel ? -52 : -76, isMouseWheel ? 52 : 76);
+            const pixelDelta = THREE.MathUtils.clamp(rawPixelDelta, isMouseWheel ? -72 : -86, isMouseWheel ? 72 : 86);
             if (!Number.isFinite(state.navigationModelSize)) {
                 const bounds = getModelDisplayBounds();
                 state.navigationModelSize = bounds.isEmpty()
                     ? 10
                     : Math.max(...bounds.getSize(new THREE.Vector3()).toArray(), 0.01);
             }
-            const worldUnitsPerPixel = Math.max(0.00035, state.navigationModelSize * (isMouseWheel ? 0.00022 : 0.0003));
+            const worldUnitsPerPixel = Math.max(0.00045, state.navigationModelSize * (isMouseWheel ? 0.00034 : 0.00034));
             const pointer = new THREE.Vector3(
                 ((event.clientX - rect.left) / rect.width) * 2 - 1,
                 -((event.clientY - rect.top) / rect.height) * 2 + 1,
@@ -3687,10 +3687,10 @@ import {
                 const hit = state.raycaster.intersectObjects(targets, false)[0];
                 if (hit) {
                     const distanceToSurface = state.camera.position.distanceTo(hit.point);
-                    const minimumUsefulStep = Math.max(movement, distanceToSurface * (isMouseWheel ? 0.11 : 0.16));
-                    const maximumSafeStep = Math.max(worldUnitsPerPixel, distanceToSurface * 0.72);
+                    const minimumUsefulStep = Math.max(movement, distanceToSurface * (isMouseWheel ? 0.16 : 0.18));
+                    const maximumSafeStep = Math.max(worldUnitsPerPixel, distanceToSurface * 0.78);
                     movement = Math.min(minimumUsefulStep, maximumSafeStep);
-                    state.controls.target.lerp(hit.point, isMouseWheel ? 0.18 : 0.26);
+                    state.controls.target.lerp(hit.point, isMouseWheel ? 0.23 : 0.28);
                 }
             }
 
