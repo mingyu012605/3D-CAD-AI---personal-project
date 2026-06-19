@@ -9,6 +9,7 @@ const baselineMaterials = new Map();
 const levelFilterMaterials = new Map();
 const resultByObject = new Map();
 const objectByGuid = new Map();
+const metadataCache = new WeakMap();
 let elementLinks = {};
 let maintenanceByGuid = new Map();
 let activeLayer = null;
@@ -21,6 +22,7 @@ let useCurrentTime = true;
 let activeLevelFilter = '__all__';
 let levelFilterMode = 'ghost';
 let lastLevelSignature = '';
+let timeLayerTimer = null;
 
 const ALL_LEVELS = '__all__';
 const UNKNOWN_LEVEL = '__unknown__';
@@ -43,10 +45,12 @@ function getIFCMeshes() {
 }
 
 function getMetadata(mesh) {
+    if (!mesh) return { guid: null, expressID: '', category: '', family: '', level: '', type: '', name: '' };
+    if (metadataCache.has(mesh)) return metadataCache.get(mesh);
     const props = mesh?.userData?.ifcProperties || {};
     const guid = props.globalId || mesh?.userData?.globalId || mesh?.userData?.IfcGUID || mesh?.userData?.ifcGUID || null;
     const linked = guid ? elementLinks[guid] || {} : {};
-    return {
+    const metadata = {
         guid,
         expressID: props.expressID ?? mesh?.userData?.expressID ?? '',
         category: linked.category || props.category || props.Category || props.objectType || '',
@@ -55,6 +59,8 @@ function getMetadata(mesh) {
         type: props.typeName || mesh?.userData?.ifcTypeKey || '',
         name: props.name || mesh?.name || '',
     };
+    metadataCache.set(mesh, metadata);
+    return metadata;
 }
 
 function getLevelFilterValue(mesh) {
@@ -299,7 +305,9 @@ function updateSimulationTimeUI() {
 
 function refreshTimeLayer() {
     updateSimulationTimeUI();
-    if (activeLayer === 'energy' || activeLayer === 'occupancy') applyDigitalTwinLayer(activeLayer);
+    if (activeLayer !== 'energy' && activeLayer !== 'occupancy') return;
+    window.clearTimeout(timeLayerTimer);
+    timeLayerTimer = window.setTimeout(() => applyDigitalTwinLayer(activeLayer), 120);
 }
 
 function focusObject(object) {

@@ -1,10 +1,10 @@
 import { state } from './state.js';
 import { addMessageToLog } from './utils.js';
 
-const cadViewer = document.getElementById('cadViewer');
 let mouseDownX = 0;
 let mouseDownY = 0;
-const CLICK_TOLERANCE = 15;
+const MOUSE_CLICK_TOLERANCE = 6;
+const TOUCH_CLICK_TOLERANCE = 12;
 const SELECTION_ASSIST_RADIUS_PX = 9;
 const highlightMaterial = new THREE.MeshBasicMaterial({
     color: 0x3b82c4,
@@ -61,6 +61,17 @@ function findObjectIntersections(clientX, clientY, objectsToIntersect) {
     }
 
     return [];
+}
+
+function getSelectableMeshes() {
+    const meshes = [];
+    state.loadedModels.forEach(model => model.traverse(obj => {
+        if (!obj.isMesh || !obj.visible) return;
+        if (obj.userData?.isGridLabel || obj.userData?.isSelectionOutline || obj.userData?.isDecorativeContext) return;
+        if (obj === state.currentGridHelper || obj === state.raycastDebugSphere || isTransformControlPart(obj)) return;
+        meshes.push(obj);
+    }));
+    return meshes;
 }
 
 function isTransformControlPart(object) {
@@ -341,16 +352,13 @@ export function duplicateSelection() {
 }
 
 export function onCanvasClick(event) {
-    console.log(`[onCanvasClick] Event type: ${event.type}, Button: ${event.button}`);
     // Only process left-click (state.mouse button 0) or touchstart
     if (event.type === 'mousedown' && event.button !== 0) {
-        console.log("[onCanvasClick] Ignoring non-left click or non-touchstart event.");
         return;
     }
 
     // If state.transformControls are currently active and dragging, do not process selection
     if (state.transformControls && state.transformControls.dragging) {
-        console.log("[onCanvasClick] state.transformControls are dragging, skipping selection.");
         return;
     }
 
@@ -362,7 +370,7 @@ export function onCanvasClick(event) {
         mouseDownX = event.clientX;
         mouseDownY = event.clientY;
     }
-    console.log(`[onCanvasClick] state.mouse/Touch Down: Initial(${mouseDownX}, ${mouseDownY})`);
+    const clickTolerance = event.type === 'touchstart' ? TOUCH_CLICK_TOLERANCE : MOUSE_CLICK_TOLERANCE;
 
     // Add a temporary mouseup/touchend listener to check for drag vs click
     const onPointerUp = (upEvent) => {
@@ -384,60 +392,28 @@ export function onCanvasClick(event) {
 
         const deltaX = Math.abs(mouseDownX - currentX);
         const deltaY = Math.abs(mouseDownY - currentY);
+        const moved = Math.hypot(deltaX, deltaY);
 
-        console.log(`[onCanvasClick] state.mouse/Touch Up: Final(${currentX}, ${currentY}). DeltaX=${deltaX}, DeltaY=${deltaY}. Tolerance=${CLICK_TOLERANCE}`);
-
-        // Visual feedback for any click registered
-        cadViewer.style.backgroundColor = 'rgba(59,130,196,0.06)';
-        setTimeout(() => {
-            cadViewer.style.backgroundColor = '';
-        }, 100);
-
-
-        if (deltaX > CLICK_TOLERANCE || deltaY > CLICK_TOLERANCE) {
-            console.log("[onCanvasClick] Detected drag (movement exceeded tolerance), skipping selection.");
+        if (moved > clickTolerance || state.controls?.isDragging || state.transformControls?.dragging) {
+            // Treat mouse movement as orbit/pan, not selection.
         } else {
             // It was a click, proceed with raycasting
-            console.log("[onCanvasClick] Detected click (movement within tolerance), processing selection.");
             // Normalize state.mouse coordinates for raycasting using the release position.
             const rect = state.renderer.domElement.getBoundingClientRect();
             state.mouse.x = ((currentX - rect.left) / rect.width) * 2 - 1;
             state.mouse.y = -((currentY - rect.top) / rect.height) * 2 + 1;
-            console.log(`[onCanvasClick] Normalized state.mouse coords for raycasting: X=${state.mouse.x.toFixed(4)}, Y=${state.mouse.y.toFixed(4)}`);
-            console.log(`[onCanvasClick] state.raycaster set from state.camera. state.mouse: (${state.mouse.x.toFixed(3)}, ${state.mouse.y.toFixed(3)})`);
-            console.log(`[onCanvasClick] state.camera position: (${state.camera.position.x.toFixed(3)}, ${state.camera.position.y.toFixed(3)}, ${state.camera.position.z.toFixed(3)})`);
-            console.log(`[onCanvasClick] state.camera fov: ${state.camera.fov}, aspect: ${state.camera.aspect}`);
-
 
             state.raycaster.setFromCamera(state.mouse, state.camera);
 
-            const objectsToIntersect = [];
-            state.scene.traverse((obj) => { // Traverse the entire state.scene
-                // Only consider meshes that are visible and not part of the grid or labels
-                if (obj.isMesh
-                    && obj.visible
-                    && !obj.userData.isGridLabel
-                    && obj !== state.currentGridHelper
-                    && obj !== state.raycastDebugSphere
-                    && !isTransformControlPart(obj)) {
-                    objectsToIntersect.push(obj);
-                }
-            });
-            console.log(`[onCanvasClick] Total visible meshes considered for intersection: ${objectsToIntersect.length}`);
-            if (objectsToIntersect.length === 0) {
-                console.log("[onCanvasClick] No meshes available to intersect.");
-            }
-
+            const objectsToIntersect = getSelectableMeshes();
 
             // PRIORITY 1: Check for face selection if in face edit mode
             let faceGroupId = null;
             if (state.faceEditState.isActive) {
                 faceGroupId = _detectFaceFromClick();
-                console.log(`[onCanvasClick] Face detection result: ${faceGroupId}`);
             }
 
             if (faceGroupId) {
-                console.log("[onCanvasClick] Face overlay clicked:", faceGroupId);
                 _handleFaceClick(faceGroupId);
 
                 // Show debug sphere at face center
@@ -454,11 +430,9 @@ export function onCanvasClick(event) {
 
             // PRIORITY 2: Normal object intersection
             const intersects = findObjectIntersections(currentX, currentY, objectsToIntersect);
-            console.log(`[onCanvasClick] Intersections found by state.raycaster: ${intersects.length}`);
 
             if (intersects.length > 0) {
                 const intersectedObject = intersects[0].object;
-                console.log("[onCanvasClick] Object intersected:", intersectedObject.name || "Unnamed Object", "UUID:", intersectedObject.uuid, "Type:", intersectedObject.type);
 
                 // Show raycast debug sphere
                 state.raycastDebugSphere.position.copy(intersects[0].point);
@@ -470,7 +444,6 @@ export function onCanvasClick(event) {
                 // Normal object selection
                 selectObject(intersectedObject);
             } else {
-                console.log("[onCanvasClick] No object intersected by state.raycaster. Clearing selection.");
                 state.raycastDebugSphere.visible = false;
                 clearSelection();
 
@@ -492,9 +465,6 @@ export function onCanvasClick(event) {
 }
 
 export function selectObject(object) {
-    console.log(`[selectObject] Function called with object: ${object ? object.name || object.uuid : 'null'}`);
-    console.log(`[selectObject] Current state.selectedObject BEFORE: ${state.selectedObject ? state.selectedObject.name || state.selectedObject.uuid : 'null'}`);
-
     // Clear pending operations when object selection changes
     _onSelectionChanged();
 
@@ -515,7 +485,6 @@ export function selectObject(object) {
 
     if (object) {
         state.selectedObject = object;
-        console.log(`[selectObject] Selected object set to: ${state.selectedObject.name || 'Unnamed Object'} (UUID: ${state.selectedObject.uuid})`);
 
         const materials = Array.isArray(state.selectedObject.material) ? state.selectedObject.material : [state.selectedObject.material];
         const objectOriginalMaterials = []; // Array to store original material instances
@@ -523,22 +492,17 @@ export function selectObject(object) {
 
         materials.forEach((mat, index) => {
             if (mat && mat.isMaterial) { // Defensive check for valid material
-                console.log(`[selectObject] Processing material ${index}: Type=${mat.type}, Color=${mat.color ? mat.color.getHexString() : 'N/A'}, Emissive=${mat.emissive ? mat.emissive.getHexString() : 'N/A'}`);
-
                 // Store the original material instance itself
                 objectOriginalMaterials.push(mat.clone()); // Store a clone of the current material for highlight reversion
 
                 // Apply highlight. Large roof/slab/floor surfaces use outline only to avoid bright wash/flicker.
                 if (outlineOnly) {
-                    console.log(`[selectObject] Large architectural surface selected; using outline-only highlight.`);
                 } else if (mat.emissive !== undefined) {
                     mat.emissive.copy(highlightMaterial.color);
                     mat.emissiveIntensity = 1;
-                    console.log(`[selectObject] Applied emissive highlight to material for ${state.selectedObject.name || 'Unnamed Object'} (material index ${index}).`);
                 } else if (mat.color !== undefined) {
                     // If no emissive, change the main color
                     mat.color.copy(highlightMaterial.color);
-                    console.log(`[selectObject] Applied color highlight to material for ${state.selectedObject.name || 'Unnamed Object'} (material index ${index}).`);
                 } else {
                     console.warn(`[selectObject] Material for ${object.name || 'Unnamed Part'} (UUID: ${object.uuid}, material index ${index}) does not have an emissive or color property. Highlighting might not work as expected.`);
                 }
@@ -557,32 +521,22 @@ export function selectObject(object) {
         // Set default mode to translate, but ensure all modes work
         state.transformControls.setMode('translate');
 
-        console.log(`[selectObject] state.transformControls attached: ${state.transformControls.object ? state.transformControls.object.name || state.transformControls.object.uuid : 'none'}`);
-        console.log(`[selectObject] state.transformControls visible: ${state.transformControls.visible}`);
-        console.log(`[selectObject] state.transformControls mode: ${state.transformControls.mode}`);
-
         addMessageToLog('System', `Selected: ${object.name || 'Unnamed Part'} (UUID: ${object.uuid}). Press S to scale, R to rotate, G to move.`);
         _speakResponse(`Selected ${object.name || 'a part'}. Press S to scale.`);
         _onObjectSelected(object);
 
         // Don't save state on selection - save when actual changes happen
     } else {
-        console.log("[selectObject] No object provided for selection, clearing any existing selection.");
         clearSelection(); // If no object is passed, clear selection
     }
-    console.log(`[selectObject] Current state.selectedObject AFTER: ${state.selectedObject ? state.selectedObject.name || state.selectedObject.uuid : 'null'}`);
 }
 
 export function clearSelection() {
-    console.log(`[clearSelection] Function called. state.selectedObject BEFORE: ${state.selectedObject ? state.selectedObject.name || state.selectedObject.uuid : 'null'}`);
-
     // Clear pending operations when selection is cleared
     _onSelectionChanged();
     removeSelectionOutline(state.selectedObject);
 
     if (state.selectedObject && state.originalMaterialProperties.has(state.selectedObject.uuid)) {
-        console.log(`[clearSelection] Reverting highlight for: ${state.selectedObject.name || 'Unnamed Part'} (UUID: ${state.selectedObject.uuid})`);
-
         const originalMaterials = state.originalMaterialProperties.get(state.selectedObject.uuid); // Get the array of original material instances
         const currentMaterials = Array.isArray(state.selectedObject.material) ? state.selectedObject.material : [state.selectedObject.material];
 
@@ -605,7 +559,6 @@ export function clearSelection() {
                     }
                 }
                 state.selectedObject.material.needsUpdate = true;
-                console.log(`[clearSelection] Restored material for index ${index}.`);
             } else {
                 console.warn(`[clearSelection] Material at index ${index} for object ${state.selectedObject.name || state.selectedObject.uuid} is null or not a valid material, or no original material instance found. Skipping restore.`);
             }
@@ -615,14 +568,11 @@ export function clearSelection() {
         if (state.transformControls) {
             state.transformControls.detach(); // Detach state.controls when selection is cleared
             state.transformControls.visible = false; // Explicitly hide state.controls
-            console.log("[clearSelection] state.transformControls detached and hidden.");
         }
 
         state.originalMaterialProperties.delete(state.selectedObject.uuid); // Remove from map
         state.selectedObject = null; // Clear selected object reference
-        console.log("[clearSelection] Individual selection cleared and highlight reverted.");
     } else {
-        console.log("[clearSelection] No object selected or no original material properties to restore.");
         if (state.selectedObject && state.transformControls) {
             state.transformControls.detach();
             state.transformControls.visible = false;
@@ -631,7 +581,6 @@ export function clearSelection() {
     }
     state.currentlySelectedObjectsForEditing = []; // Clear the functional selection array
     _onObjectSelected(null);
-    console.log(`[clearSelection] Function finished. state.selectedObject AFTER: ${state.selectedObject ? state.selectedObject.name || state.selectedObject.uuid : 'null'}`);
     // Do NOT add message to log or speak here, as it's often called internally before a new selection.
     // addMessageToLog('System', 'Selection cleared.');
     // speakResponse('Selection cleared.');

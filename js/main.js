@@ -3570,8 +3570,8 @@ import {
                 state.controls.dampingFactor = 0.14;
                 // OrbitControls handles touchscreen pinch zoom. Keep it gentler than
                 // the separately handled wheel/touchpad zoom below.
-                state.controls.zoomSpeed = 0.65;
-                state.controls.minDistance = 0;
+                state.controls.zoomSpeed = 0.5;
+                state.controls.minDistance = 0.02;
                 state.controls.screenSpacePanning = true;
                 state.controls.target.set(0, 0, 0); // Ensure state.controls target the origin
             }
@@ -3652,14 +3652,16 @@ import {
 
             const rect = state.renderer.domElement.getBoundingClientRect();
             const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
-            const pixelDelta = THREE.MathUtils.clamp(event.deltaY * deltaScale, -90, 90);
+            const rawPixelDelta = event.deltaY * deltaScale;
+            const isMouseWheel = event.deltaMode === 1 || Math.abs(event.deltaY) >= 40;
+            const pixelDelta = THREE.MathUtils.clamp(rawPixelDelta, isMouseWheel ? -52 : -76, isMouseWheel ? 52 : 76);
             if (!Number.isFinite(state.navigationModelSize)) {
                 const bounds = getModelDisplayBounds();
                 state.navigationModelSize = bounds.isEmpty()
                     ? 10
                     : Math.max(...bounds.getSize(new THREE.Vector3()).toArray(), 0.01);
             }
-            const worldUnitsPerPixel = Math.max(0.0005, state.navigationModelSize * 0.00035);
+            const worldUnitsPerPixel = Math.max(0.00035, state.navigationModelSize * (isMouseWheel ? 0.00022 : 0.0003));
             const pointer = new THREE.Vector3(
                 ((event.clientX - rect.left) / rect.width) * 2 - 1,
                 -((event.clientY - rect.top) / rect.height) * 2 + 1,
@@ -3672,7 +3674,12 @@ import {
             if (pixelDelta < 0 && state.raycaster) {
                 const targets = [];
                 state.loadedModels.forEach(model => model.traverse(object => {
-                    if (object.isMesh && object.visible && !object.userData?.isGridLabel && !object.userData?.isSelectionOutline) {
+                    if (object.isMesh
+                        && object.visible
+                        && !object.userData?.isGridLabel
+                        && !object.userData?.isSelectionOutline
+                        && object !== state.currentGridHelper
+                        && object !== state.raycastDebugSphere) {
                         targets.push(object);
                     }
                 }));
@@ -3680,10 +3687,10 @@ import {
                 const hit = state.raycaster.intersectObjects(targets, false)[0];
                 if (hit) {
                     const distanceToSurface = state.camera.position.distanceTo(hit.point);
-                    const minimumUsefulStep = Math.max(movement, distanceToSurface * 0.18);
-                    const maximumSafeStep = Math.max(worldUnitsPerPixel, distanceToSurface * 0.85);
+                    const minimumUsefulStep = Math.max(movement, distanceToSurface * (isMouseWheel ? 0.11 : 0.16));
+                    const maximumSafeStep = Math.max(worldUnitsPerPixel, distanceToSurface * 0.72);
                     movement = Math.min(minimumUsefulStep, maximumSafeStep);
-                    state.controls.target.lerp(hit.point, 0.28);
+                    state.controls.target.lerp(hit.point, isMouseWheel ? 0.18 : 0.26);
                 }
             }
 
