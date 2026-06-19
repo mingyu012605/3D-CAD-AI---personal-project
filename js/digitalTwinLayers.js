@@ -10,6 +10,7 @@ const levelFilterMaterials = new Map();
 const resultByObject = new Map();
 const objectByGuid = new Map();
 const metadataCache = new WeakMap();
+const ownedMaterials = new WeakSet();
 let targetCache = { signature: '', energy: [], occupancySpaces: [], occupancyFallback: [] };
 let elementLinks = {};
 let maintenanceByGuid = new Map();
@@ -24,17 +25,40 @@ let activeLevelFilter = '__all__';
 let levelFilterMode = 'ghost';
 let lastLevelSignature = '';
 let timeLayerTimer = null;
+let materialCloneCount = 0;
+let lastLayerApplyMs = 0;
+let lastLayerFragmentCount = 0;
 
 const ALL_LEVELS = '__all__';
 const UNKNOWN_LEVEL = '__unknown__';
 
-function cloneMaterials(material) {
+function markOwnedMaterial(material) {
+    if (material?.isMaterial) {
+        ownedMaterials.add(material);
+        materialCloneCount++;
+    }
+}
+
+function cloneMaterials(material, owned = false) {
     if (!material) return null;
-    return Array.isArray(material) ? material.map(item => item.clone()) : material.clone();
+    const cloned = Array.isArray(material) ? material.map(item => item.clone()) : material.clone();
+    if (owned) forEachMaterial(cloned, markOwnedMaterial);
+    return cloned;
 }
 
 function forEachMaterial(material, callback) {
     (Array.isArray(material) ? material : [material]).filter(Boolean).forEach(callback);
+}
+
+function disposeOwnedMaterials(material) {
+    forEachMaterial(material, item => {
+        if (ownedMaterials.has(item)) item.dispose();
+    });
+}
+
+function disposeMaterialSnapshot(snapshot) {
+    forEachMaterial(snapshot?.material, material => material.dispose?.());
+    forEachMaterial(snapshot?.initialMaterial, material => material.dispose?.());
 }
 
 function getIFCMeshes() {
@@ -142,8 +166,10 @@ function ensureBaseline(mesh) {
 function restoreMesh(mesh) {
     const baseline = baselineMaterials.get(mesh.uuid);
     if (!baseline) return;
-    mesh.material = cloneMaterials(baseline.material);
-    mesh.userData.initialMaterial = cloneMaterials(baseline.initialMaterial);
+    disposeOwnedMaterials(mesh.material);
+    disposeOwnedMaterials(mesh.userData.initialMaterial);
+    mesh.material = cloneMaterials(baseline.material, true);
+    mesh.userData.initialMaterial = cloneMaterials(baseline.initialMaterial, true);
     forEachMaterial(mesh.material, material => { material.needsUpdate = true; });
 }
 
@@ -151,13 +177,16 @@ function restoreLevelFilterMesh(mesh) {
     const stored = levelFilterMaterials.get(mesh.uuid);
     if (!stored) return;
     mesh.visible = stored.visible;
-    mesh.material = cloneMaterials(stored.material);
-    mesh.userData.initialMaterial = cloneMaterials(stored.initialMaterial);
+    disposeOwnedMaterials(mesh.material);
+    disposeOwnedMaterials(mesh.userData.initialMaterial);
+    mesh.material = cloneMaterials(stored.material, true);
+    mesh.userData.initialMaterial = cloneMaterials(stored.initialMaterial, true);
     forEachMaterial(mesh.material, material => { material.needsUpdate = true; });
 }
 
 function clearLevelFilterVisuals() {
     getIFCMeshes().forEach(restoreLevelFilterMesh);
+    levelFilterMaterials.forEach(disposeMaterialSnapshot);
     levelFilterMaterials.clear();
 }
 
@@ -170,8 +199,10 @@ function ghostMeshForLevelFilter(mesh) {
         });
     }
     mesh.visible = true;
-    mesh.material = cloneMaterials(mesh.material);
-    mesh.userData.initialMaterial = cloneMaterials(mesh.userData.initialMaterial || mesh.material);
+    disposeOwnedMaterials(mesh.material);
+    disposeOwnedMaterials(mesh.userData.initialMaterial);
+    mesh.material = cloneMaterials(levelFilterMaterials.get(mesh.uuid).material, true);
+    mesh.userData.initialMaterial = cloneMaterials(levelFilterMaterials.get(mesh.uuid).initialMaterial, true);
     forEachMaterial(mesh.material, material => {
         material.transparent = true;
         material.opacity = Math.min(material.opacity ?? 1, 0.07);
@@ -226,8 +257,11 @@ function colorMesh(mesh, color, options = {}) {
     const { mix = 0.7, opacity = null } = options;
     ensureBaseline(mesh);
     // Each IFC fragment receives independent materials to avoid shared-material colour leaks.
-    mesh.material = cloneMaterials(mesh.material);
-    mesh.userData.initialMaterial = cloneMaterials(mesh.material);
+    const baseline = baselineMaterials.get(mesh.uuid);
+    disposeOwnedMaterials(mesh.material);
+    disposeOwnedMaterials(mesh.userData.initialMaterial);
+    mesh.material = cloneMaterials(baseline.material, true);
+    mesh.userData.initialMaterial = cloneMaterials(baseline.material, true);
     forEachMaterial(mesh.material, material => {
         if (material.color) material.color.lerp(new THREE.Color(color), mix);
         if (opacity != null) {
@@ -269,7 +303,10 @@ function withSelectionPreserved(callback) {
 
 function restoreBaseline(clearStored = false) {
     getIFCMeshes().forEach(restoreMesh);
-    if (clearStored) baselineMaterials.clear();
+    if (clearStored) {
+        baselineMaterials.forEach(disposeMaterialSnapshot);
+        baselineMaterials.clear();
+    }
 }
 
 function smallVariation(text = '') {
@@ -663,6 +700,7 @@ function updateSelectedMaintenanceValue(object) {
 
 export async function applyDigitalTwinLayer(layer) {
     if (!initialized) return;
+    const startedAt = performance.now();
     const meshes = getIFCMeshes();
     updateObjectGuidIndex(meshes);
     resultByObject.clear();
@@ -680,7 +718,9 @@ export async function applyDigitalTwinLayer(layer) {
         if (layer === 'maintenance') affected = applyMaintenance(meshes);
         applyLevelFilterVisuals(meshes);
         setValue('digitalTwinLayerStatus', `${affected} IFC fragment${affected === 1 ? '' : 's'} coloured`);
+        lastLayerFragmentCount = affected;
     });
+    lastLayerApplyMs = performance.now() - startedAt;
     updateLayerButtons();
     if (layer !== 'maintenance') renderMaintenanceRecords();
     renderSelectedResult(state.selectedObject);
@@ -724,6 +764,16 @@ async function loadJSON(url, fallback) {
 export async function initDigitalTwinLayers() {
     if (initialized) return;
     initialized = true;
+    window.getViewerPerformanceStats = () => ({
+        sceneObjects: state.scene?.children?.length || 0,
+        loadedModels: state.loadedModels.length,
+        selectableIfcMeshes: getIFCMeshes().filter(mesh => mesh.visible).length,
+        baselineMaterials: baselineMaterials.size,
+        levelFilterMaterials: levelFilterMaterials.size,
+        temporaryMaterialClonesCreated: materialCloneCount,
+        lastLayerApplyMs: Math.round(lastLayerApplyMs * 10) / 10,
+        lastLayerFragmentCount,
+    });
     [elementLinks, weather] = await Promise.all([
         loadJSON('element_links.json', {}),
         getWeather(),
