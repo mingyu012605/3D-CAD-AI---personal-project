@@ -3654,14 +3654,14 @@ import {
             const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
             const rawPixelDelta = event.deltaY * deltaScale;
             const isMouseWheel = event.deltaMode === 1 || Math.abs(event.deltaY) >= 40;
-            const pixelDelta = THREE.MathUtils.clamp(rawPixelDelta, isMouseWheel ? -72 : -86, isMouseWheel ? 72 : 86);
+            const pixelDelta = THREE.MathUtils.clamp(rawPixelDelta, isMouseWheel ? -96 : -110, isMouseWheel ? 80 : 92);
             if (!Number.isFinite(state.navigationModelSize)) {
                 const bounds = getModelDisplayBounds();
                 state.navigationModelSize = bounds.isEmpty()
                     ? 10
                     : Math.max(...bounds.getSize(new THREE.Vector3()).toArray(), 0.01);
             }
-            const worldUnitsPerPixel = Math.max(0.00045, state.navigationModelSize * (isMouseWheel ? 0.00034 : 0.00034));
+            const worldUnitsPerPixel = Math.max(0.0006, state.navigationModelSize * (isMouseWheel ? 0.00052 : 0.00044));
             const pointer = new THREE.Vector3(
                 ((event.clientX - rect.left) / rect.width) * 2 - 1,
                 -((event.clientY - rect.top) / rect.height) * 2 + 1,
@@ -3670,8 +3670,8 @@ import {
             const pointer2D = new THREE.Vector2(pointer.x, pointer.y);
             const zoomDirection = pointer.unproject(state.camera).sub(state.camera.position).normalize();
             const baseMovement = -pixelDelta * worldUnitsPerPixel;
-            const minStep = state.navigationModelSize * (isMouseWheel ? 0.006 : 0.004);
-            const maxStep = state.navigationModelSize * (isMouseWheel ? 0.038 : 0.032);
+            const minStep = state.navigationModelSize * (isMouseWheel ? 0.01 : 0.006);
+            const maxStep = state.navigationModelSize * (isMouseWheel ? 0.065 : 0.048);
             const directionSign = Math.sign(baseMovement) || 1;
             let movement = directionSign * THREE.MathUtils.clamp(Math.abs(baseMovement), minStep, maxStep);
 
@@ -3691,8 +3691,8 @@ import {
                 const hit = state.raycaster.intersectObjects(targets, false)[0];
                 if (hit) {
                     const distanceToSurface = Math.max(0.001, state.camera.position.distanceTo(hit.point));
-                    movement = Math.min(movement, distanceToSurface * 0.65);
-                    state.controls.target.lerp(hit.point, isMouseWheel ? 0.18 : 0.24);
+                    movement = Math.min(movement, distanceToSurface * 0.88);
+                    state.controls.target.lerp(hit.point, isMouseWheel ? 0.28 : 0.3);
                 }
             }
 
