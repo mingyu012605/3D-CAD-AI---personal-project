@@ -3669,7 +3669,11 @@ import {
             );
             const pointer2D = new THREE.Vector2(pointer.x, pointer.y);
             const zoomDirection = pointer.unproject(state.camera).sub(state.camera.position).normalize();
-            let movement = -pixelDelta * worldUnitsPerPixel;
+            const baseMovement = -pixelDelta * worldUnitsPerPixel;
+            const minStep = state.navigationModelSize * (isMouseWheel ? 0.006 : 0.004);
+            const maxStep = state.navigationModelSize * (isMouseWheel ? 0.038 : 0.032);
+            const directionSign = Math.sign(baseMovement) || 1;
+            let movement = directionSign * THREE.MathUtils.clamp(Math.abs(baseMovement), minStep, maxStep);
 
             if (pixelDelta < 0 && state.raycaster) {
                 const targets = [];
@@ -3686,11 +3690,9 @@ import {
                 state.raycaster.setFromCamera(pointer2D, state.camera);
                 const hit = state.raycaster.intersectObjects(targets, false)[0];
                 if (hit) {
-                    const distanceToSurface = state.camera.position.distanceTo(hit.point);
-                    const minimumUsefulStep = Math.max(movement, distanceToSurface * (isMouseWheel ? 0.16 : 0.18));
-                    const maximumSafeStep = Math.max(worldUnitsPerPixel, distanceToSurface * 0.78);
-                    movement = Math.min(minimumUsefulStep, maximumSafeStep);
-                    state.controls.target.lerp(hit.point, isMouseWheel ? 0.23 : 0.28);
+                    const distanceToSurface = Math.max(0.001, state.camera.position.distanceTo(hit.point));
+                    movement = Math.min(movement, distanceToSurface * 0.65);
+                    state.controls.target.lerp(hit.point, isMouseWheel ? 0.18 : 0.24);
                 }
             }
 
