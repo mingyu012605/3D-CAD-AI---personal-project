@@ -3568,9 +3568,9 @@ import {
                 state.controls = new THREE.OrbitControls(state.camera, state.renderer.domElement);
                 state.controls.enableDamping = true;
                 state.controls.dampingFactor = 0.14;
-                // OrbitControls handles touchscreen pinch zoom. Keep it gentler than
-                // the separately handled wheel/touchpad zoom below.
-                state.controls.zoomSpeed = 0.62;
+                // OrbitControls handles touchscreen pinch zoom; wheel/touchpad zoom
+                // uses the cursor-focused handler below.
+                state.controls.zoomSpeed = 1.25;
                 state.controls.rotateSpeed = -0.82;
                 state.controls.minDistance = 0.02;
                 state.controls.screenSpacePanning = true;
@@ -3655,14 +3655,13 @@ import {
             const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
             const rawPixelDelta = event.deltaY * deltaScale;
             const isMouseWheel = event.deltaMode === 1 || Math.abs(event.deltaY) >= 40;
-            const pixelDelta = THREE.MathUtils.clamp(rawPixelDelta, isMouseWheel ? -180 : -155, isMouseWheel ? 130 : 115);
+            const pixelDelta = THREE.MathUtils.clamp(rawPixelDelta, isMouseWheel ? -240 : -220, isMouseWheel ? 190 : 170);
             if (!Number.isFinite(state.navigationModelSize)) {
                 const bounds = getModelDisplayBounds();
                 state.navigationModelSize = bounds.isEmpty()
                     ? 10
                     : Math.max(...bounds.getSize(new THREE.Vector3()).toArray(), 0.01);
             }
-            const worldUnitsPerPixel = Math.max(0.001, state.navigationModelSize * (isMouseWheel ? 0.00115 : 0.0008));
             const pointer = new THREE.Vector3(
                 ((event.clientX - rect.left) / rect.width) * 2 - 1,
                 -((event.clientY - rect.top) / rect.height) * 2 + 1,
@@ -3670,11 +3669,7 @@ import {
             );
             const pointer2D = new THREE.Vector2(pointer.x, pointer.y);
             const zoomDirection = pointer.unproject(state.camera).sub(state.camera.position).normalize();
-            const baseMovement = -pixelDelta * worldUnitsPerPixel;
-            const minStep = state.navigationModelSize * (isMouseWheel ? 0.025 : 0.012);
-            const maxStep = state.navigationModelSize * (isMouseWheel ? 0.16 : 0.09);
-            const directionSign = Math.sign(baseMovement) || 1;
-            let movement = directionSign * THREE.MathUtils.clamp(Math.abs(baseMovement), minStep, maxStep);
+            const targetPoint = state.controls.target.clone();
 
             if (pixelDelta < 0 && state.raycaster) {
                 const targets = [];
@@ -3691,15 +3686,26 @@ import {
                 state.raycaster.setFromCamera(pointer2D, state.camera);
                 const hit = state.raycaster.intersectObjects(targets, false)[0];
                 if (hit) {
-                    state.controls.target.lerp(hit.point, isMouseWheel ? 0.4 : 0.38);
+                    targetPoint.copy(hit.point);
                 }
             }
 
-            // Move both camera and orbit target toward the cursor. Unlike changing
-            // camera-to-target distance, this never stalls when the camera reaches
-            // the old target and keeps close-range navigation constant.
-            state.camera.position.addScaledVector(zoomDirection, movement);
-            state.controls.target.addScaledVector(zoomDirection, movement);
+            const targetBlend = pixelDelta < 0 ? (isMouseWheel ? 0.62 : 0.5) : 0.18;
+            state.controls.target.lerp(targetPoint, targetBlend);
+
+            const offset = state.camera.position.clone().sub(targetPoint);
+            const distance = Math.max(offset.length(), 0.001);
+            const signedWheelUnits = pixelDelta / (isMouseWheel ? 100 : 180);
+            const zoomFactor = Math.exp(signedWheelUnits * (isMouseWheel ? 0.55 : 0.34));
+            const minDistance = Math.max(0.015, state.navigationModelSize * 0.00008);
+            const maxDistance = Math.max(state.navigationModelSize * 60, 100);
+            const newDistance = THREE.MathUtils.clamp(distance * zoomFactor, minDistance, maxDistance);
+
+            if (offset.lengthSq() > 0.000001) {
+                state.camera.position.copy(targetPoint).add(offset.normalize().multiplyScalar(newDistance));
+            } else {
+                state.camera.position.copy(targetPoint).addScaledVector(zoomDirection.negate(), newDistance);
+            }
             state.camera.near = Math.max(0.01, state.navigationModelSize / 10000);
             state.camera.updateProjectionMatrix();
             state.controls.update();
