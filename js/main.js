@@ -3570,8 +3570,8 @@ import {
                 state.controls.dampingFactor = 0.14;
                 // OrbitControls handles touchscreen pinch zoom; wheel/touchpad zoom
                 // uses the cursor-focused handler below.
-                state.controls.zoomSpeed = 1.25;
-                state.controls.rotateSpeed = -0.82;
+                state.controls.zoomSpeed = 1.0;
+                state.controls.rotateSpeed = 0.82;
                 state.controls.minDistance = 0.02;
                 state.controls.screenSpacePanning = true;
                 state.controls.target.set(0, 0, 0); // Ensure state.controls target the origin
@@ -3678,9 +3678,9 @@ import {
             const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
             const rawPixelDelta = event.deltaY * deltaScale;
             const isMouseWheel = event.deltaMode === 1 || Math.abs(event.deltaY) >= 40;
-            const pixelDelta = THREE.MathUtils.clamp(rawPixelDelta, isMouseWheel ? -240 : -220, isMouseWheel ? 190 : 170);
+            const pixelDelta = THREE.MathUtils.clamp(rawPixelDelta, isMouseWheel ? -210 : -190, isMouseWheel ? 165 : 145);
             if (Math.abs(pixelDelta) < 0.01) return;
-            const minimumWheelDelta = isMouseWheel ? 110 : 28;
+            const minimumWheelDelta = isMouseWheel ? 78 : 18;
             const effectivePixelDelta = Math.sign(pixelDelta) * Math.max(Math.abs(pixelDelta), minimumWheelDelta);
             if (!Number.isFinite(state.navigationModelSize)) {
                 const bounds = getModelDisplayBounds();
@@ -3717,13 +3717,13 @@ import {
                 }
             }
 
-            const targetBlend = pixelDelta < 0 ? (isMouseWheel ? 0.68 : 0.58) : 0.18;
+            const targetBlend = pixelDelta < 0 ? (isMouseWheel ? 0.58 : 0.48) : 0.16;
             state.controls.target.lerp(targetPoint, targetBlend);
 
             const offset = state.camera.position.clone().sub(targetPoint);
             const distance = Math.max(offset.length(), 0.001);
-            const signedWheelUnits = effectivePixelDelta / (isMouseWheel ? 100 : 70);
-            const zoomFactor = Math.exp(signedWheelUnits * (isMouseWheel ? 0.7 : 0.62));
+            const signedWheelUnits = effectivePixelDelta / (isMouseWheel ? 115 : 95);
+            const zoomFactor = Math.exp(signedWheelUnits * (isMouseWheel ? 0.48 : 0.42));
             const minDistance = Math.max(0.015, state.navigationModelSize * 0.00008);
             const maxDistance = Math.max(state.navigationModelSize * 60, 100);
             const newDistance = THREE.MathUtils.clamp(distance * zoomFactor, minDistance, maxDistance);
