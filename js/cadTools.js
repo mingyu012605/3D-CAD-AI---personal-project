@@ -42,7 +42,7 @@ function refreshStructureButton() {
     if (!button || !clearButton) return;
     const active = state.allHighlightsOriginalMaterials.size > 0;
     button.classList.toggle('active', active);
-    button.textContent = active ? 'Structure Shown' : 'Show Structure';
+    button.textContent = active ? 'Shown' : 'Structure';
     button.disabled = active;
     clearButton.disabled = !active;
 }
@@ -137,9 +137,9 @@ function refreshObjectTree(force = false) {
         row.dataset.uuid = model.uuid;
         row.innerHTML = `
             <span class="cad-tree-name" title="Click to select; Ctrl-click for multi-select">${model.name || 'Unnamed Model'}</span>
-            <button data-action="visibility" title="Show/hide">${model.visible ? 'Eye' : 'Off'}</button>
-            <button data-action="lock" title="Lock/unlock">${model.userData.cadLocked ? 'Lock' : 'Free'}</button>
-            <button data-action="isolate" title="Isolate model">Iso</button>`;
+            <button data-action="visibility" title="Show/hide">${model.visible ? 'View' : 'Off'}</button>
+            <button data-action="lock" title="Lock/unlock">${model.userData.cadLocked ? 'Lock' : 'Edit'}</button>
+            <button data-action="isolate" title="Isolate model">Solo</button>`;
         tree.appendChild(row);
     });
 

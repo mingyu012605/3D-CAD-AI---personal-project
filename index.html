@@ -37,9 +37,9 @@
         .product-mark small, .project-path small { color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .11em; text-transform: uppercase; }
         .project-path { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
         .project-path strong { overflow: hidden; color: #cbd5e1; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-        .product-search { position: relative; margin-left: auto; width: min(360px, 29vw); }
+        .product-search { position: relative; margin-left: auto; width: min(410px, 32vw); }
         .product-search svg { position: absolute; top: 50%; left: 12px; width: 15px; fill: none; stroke: #64748b; transform: translateY(-50%); }
-        .product-search input { width: 100%; box-sizing: border-box; padding: 10px 14px 10px 36px; border: 1px solid var(--line); border-radius: var(--radius-md); outline: none; color: #cbd5e1; background: #101b2b; font: 12px Inter, sans-serif; }
+        .product-search input { width: 100%; box-sizing: border-box; padding: 11px 14px 11px 36px; border: 1px solid rgba(93, 111, 134, .42); border-radius: 10px; outline: none; color: #cbd5e1; background: #0d1929; font: 13px Inter, sans-serif; letter-spacing: -.01em; }
         .product-search input:focus { border-color: rgba(59, 130, 196, .72); box-shadow: 0 0 0 3px rgba(59, 130, 196, .12); }
         .live-pill { display: flex; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px; color: #94a3b8; font-size: 10px; font-weight: 700; letter-spacing: .08em; white-space: nowrap; }
         .live-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px rgba(34, 197, 94, .55); }
@@ -53,8 +53,8 @@
         .context-card span { font-size: 10px; font-weight: 600; letter-spacing: .05em; }
         .viewer-hint { display: flex; gap: 12px; padding: 7px 10px; border-radius: var(--radius-md); color: #6f829a; background: rgba(15, 27, 43, .86); border: 1px solid rgba(93, 111, 134, .28); font-size: 10px; backdrop-filter: blur(8px); }
         .right-panel { position: absolute; inset: 58px 0 0 auto; width: 372px; height: auto; overflow: hidden; min-width: 330px; padding: 14px 15px; background: var(--panel); border-left: 1px solid var(--line); box-shadow: -12px 0 30px rgba(0, 0, 0, .18); }
-        .editor-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-        .editor-actions button { min-width: 0; height: 32px; padding: 5px; overflow: hidden; border: 1px solid rgba(93, 111, 134, .24); border-radius: var(--radius-sm); color: #9cafc5; background: #17263a; font-size: 10px; font-weight: 700; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; transition: border-color .16s ease, background-color .16s ease, color .16s ease; }
+        .editor-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin-bottom: 12px; padding-bottom: 13px; border-bottom: 1px solid var(--line); }
+        .editor-actions button { min-width: 0; height: 34px; padding: 5px 8px; overflow: hidden; border: 1px solid rgba(93, 111, 134, .28); border-radius: 7px; color: #9cafc5; background: #152337; font-size: 10.5px; font-weight: 750; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; transition: border-color .16s ease, background-color .16s ease, color .16s ease; }
         .editor-actions button:hover:not(:disabled) { color: #eaf2fb; border-color: rgba(59, 130, 196, .45); background: #1c3048; }
         .editor-actions button.active, .editor-actions .primary-action { color: #fff; border-color: rgba(87, 139, 190, .48); background: #2f6fa3; }
         .editor-actions button:disabled { opacity: .35; cursor: not-allowed; }
@@ -69,7 +69,7 @@
         .sidebar-workspace { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 3px 10px 0; scrollbar-color: #334155 transparent; scrollbar-width: thin; }
         .cad-mode-panel { display: none; }
         .cad-mode-panel.active { display: block; }
-        .cad-panel-heading { margin: 4px 0 3px; color: #eef4fb; font-size: 16px; font-weight: 800; letter-spacing: -.025em; }
+        .cad-panel-heading { margin: 4px 0 4px; color: #eef4fb; font-size: 15px; font-weight: 820; letter-spacing: -.025em; }
         .cad-panel-subtitle { color: var(--muted); font-size: 10.5px; line-height: 1.45; margin-bottom: 12px; }
         .cad-empty-state { padding: 14px 15px; color: #7b8ca3; background: var(--panel-flat); border: 1px solid var(--line); border-radius: var(--radius-md); line-height: 1.5; }
         .cad-empty-state strong { color: #e2e8f0; }
@@ -82,21 +82,26 @@
         .cad-stat-formulas { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
         .cad-stat-formula { padding: 7px 8px; overflow-wrap: anywhere; border-left: 2px solid var(--accent); border-radius: 4px; color: #8ca7c8; background: rgba(15, 23, 42, .65); font: 10px/1.4 Consolas, monospace; }
         .cad-tools-panel { display: flex; flex-direction: column; gap: 6px; }
-        .cad-tools-panel details, .doc-link-group { padding: 10px 11px; border: 1px solid var(--line) !important; border-radius: var(--radius-md); background: var(--panel-flat); }
-        .cad-tools-panel summary { cursor: pointer; color: #dce7f3; font-size: 11px; font-weight: 800; letter-spacing: .01em; }
+        .cad-tools-panel details, .doc-link-group { padding: 10px 11px 11px; border: 1px solid rgba(93, 111, 134, .32) !important; border-radius: 9px; background: #101d2f; }
+        .cad-tools-panel summary { cursor: pointer; color: #dce7f3; font-size: 11px; font-weight: 850; letter-spacing: .01em; list-style-position: outside; }
         .cad-tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
-        .cad-tool-grid label { color: #64748b; font-size: 10px; }
+        .cad-tool-grid label, .cad-tools-panel .cad-tool-row label { color: #91a5bd; font-size: 10.5px; font-weight: 750; letter-spacing: .01em; }
         .cad-tool-grid input, .cad-tool-row input, .cad-tool-row select, .doc-url-input { width: 100%; box-sizing: border-box; margin-top: 3px; padding: 7px 8px; color: #e2e8f0; background: #0d1827 !important; border: 1px solid rgba(93, 111, 134, .5) !important; border-radius: var(--radius-sm); outline: none; }
         .cad-tool-grid input:focus, .cad-tool-row input:focus, .cad-tool-row select:focus, .doc-url-input:focus { border-color: rgba(59, 130, 196, .7) !important; box-shadow: 0 0 0 2px rgba(59, 130, 196, .12); }
-        .cad-tool-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+        .cad-tool-row { display: flex; align-items: center; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
+        .cad-tools-panel .cad-tool-row { display: grid; grid-template-columns: minmax(90px, auto) 1fr; align-items: end; }
+        .cad-tools-panel .cad-tool-row label { display: flex; align-items: center; gap: 8px; min-height: 30px; color: #b9c7d6; font-size: 11px; }
+        .cad-tools-panel input[type="checkbox"] { appearance: none; width: 15px; height: 15px; margin: 0; border: 1px solid rgba(145, 165, 189, .72); border-radius: 4px; background: #0a1422; box-shadow: inset 0 0 0 2px #0a1422; }
+        .cad-tools-panel input[type="checkbox"]:checked { border-color: #4f8cc9; background: #4f8cc9; }
+        .cad-tools-panel input[type="range"] { width: 100%; height: 4px; margin-top: 10px; accent-color: #3f7fb9; cursor: pointer; }
         .cad-tool-row button, .cad-tools-panel > details > button, .view-control-button { padding: 7px 9px; border: 1px solid rgba(93, 111, 134, .34); border-radius: var(--radius-sm); color: #d7e2ee; background: #17263a; cursor: pointer; transition: border-color .16s ease, background-color .16s ease, color .16s ease; }
         .cad-tool-row button:hover, .cad-tools-panel > details > button:hover, .view-control-button:hover { color: #fff; border-color: rgba(59, 130, 196, .5); background: #203753; }
         .cad-tool-output { margin-top: 8px; color: #8ca7c8; font-size: 11px; line-height: 1.45; }
         .cad-object-tree { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; max-height: 220px; overflow-y: auto; }
-        .cad-tree-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 4px; align-items: center; padding: 6px; border-radius: 6px; background: rgba(15, 23, 42, .55); }
-        .cad-tree-row.selected { outline: 1px solid rgba(59, 130, 196, .75); }
-        .cad-tree-name { overflow: hidden; color: #cbd5e1; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-        .cad-tree-row button { padding: 3px 6px; border: 0; border-radius: 4px; color: #94a3b8; background: #253449; cursor: pointer; }
+        .cad-tree-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, auto); gap: 5px; align-items: center; padding: 7px; border: 1px solid rgba(93, 111, 134, .24); border-radius: 7px; background: #101b2b; }
+        .cad-tree-row.selected { outline: 1px solid rgba(80, 139, 196, .68); background: #13243a; }
+        .cad-tree-name { overflow: hidden; color: #d7e2ee; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+        .cad-tree-row button { min-width: 34px; padding: 4px 6px; border: 1px solid rgba(93, 111, 134, .28); border-radius: 5px; color: #9cafc5; background: #17263a; cursor: pointer; font-size: 9.5px; font-weight: 800; }
         .cad-object-selected .object-properties-controls { margin-top: 0; padding-top: 0; border-top: 0; }
         .cad-object-selected .object-properties-controls h3 { display: none; }
         .doc-link-group { width: 100%; box-sizing: border-box; margin-top: 12px; padding: 11px !important; }
@@ -243,12 +248,12 @@
                 <nav id="headerEditorActions" class="editor-actions" aria-label="Editor actions">
                     <button id="backToUploadCircleButton" onclick="window.goBack()" title="Back to start">Back</button>
                     <button class="tab-button active" id="chatTabButton">Chat</button>
-                    <button class="tab-button" id="codeEditorTabButton">Appearance</button>
-                    <button class="tab-button" id="uploadNewFileButton">Add Model</button>
+                    <button class="tab-button" id="codeEditorTabButton">Style</button>
+                    <button class="tab-button" id="uploadNewFileButton">Add</button>
                     <button class="tab-button primary-action" id="saveButton">Save</button>
                     <button id="undoButton">Undo</button>
                     <button id="redoButton">Redo</button>
-                    <button id="structureHighlightButton" class="structure-action">Show Structure</button>
+                    <button id="structureHighlightButton" class="structure-action">Structure</button>
                     <button id="clearStructureButton" class="clear-action">Clear</button>
                 </nav>
                 <div class="cad-mode-tabs" role="tablist" aria-label="Sidebar mode">
