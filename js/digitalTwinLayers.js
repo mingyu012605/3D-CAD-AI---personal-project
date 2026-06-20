@@ -205,7 +205,7 @@ function ghostMeshForLevelFilter(mesh) {
     mesh.userData.initialMaterial = cloneMaterials(levelFilterMaterials.get(mesh.uuid).initialMaterial, true);
     forEachMaterial(mesh.material, material => {
         material.transparent = true;
-        material.opacity = Math.min(material.opacity ?? 1, 0.07);
+        material.opacity = Math.min(material.opacity ?? 1, 0.12);
         material.depthTest = true;
         material.depthWrite = false;
         if (material.emissive) material.emissive.setHex(0x000000);
@@ -507,7 +507,7 @@ function applyEnergy(meshes) {
         const load = Math.max(0, Math.min(100, baseLoad + smallVariation(getMetadata(mesh).guid || mesh.uuid)));
         const status = energyStatus(load);
         const meta = getMetadata(mesh);
-        colorMesh(mesh, status.color, { mix: 0.52, opacity: 0.82 });
+        colorMesh(mesh, status.color, { mix: 0.42, opacity: 0.74 });
         resultByObject.set(mesh.uuid, {
             title: 'Energy Usage',
             value: `${load}% derived HVAC load`,
@@ -551,7 +551,7 @@ function applyOccupancy(meshes) {
         const occupancy = calculateOccupancy(zone, simulationDate);
         const status = occupancyStatus(occupancy.value);
         const isFallback = fallbackTargets.includes(mesh);
-        colorMesh(mesh, status.color, isFallback || isLargeArchitecturalSurface(mesh) ? { mix: 0.025, opacity: 0.06 } : { mix: 0.16, opacity: 0.28 });
+        colorMesh(mesh, status.color, isFallback || isLargeArchitecturalSurface(mesh) ? { mix: 0.018, opacity: 0.1 } : { mix: 0.12, opacity: 0.24 });
         resultByObject.set(mesh.uuid, {
             title: 'Space Occupancy',
             value: `${occupancy.value}% simulated occupancy`,
@@ -625,7 +625,7 @@ function applyMaintenance(meshes) {
                 : 'No matching IfcGUID in demo maintenance records',
         });
         if (status.color != null) {
-            colorMesh(mesh, status.color, { mix: 0.55, opacity: 0.82 });
+            colorMesh(mesh, status.color, { mix: 0.46, opacity: 0.76 });
             count++;
         }
     });

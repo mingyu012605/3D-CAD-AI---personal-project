@@ -9,7 +9,7 @@ const SELECTION_ASSIST_RADIUS_PX = 9;
 const highlightMaterial = new THREE.MeshBasicMaterial({
     color: 0x3b82c4,
     transparent: true,
-    opacity: 0.22,
+    opacity: 0.14,
     depthTest: false,
     depthWrite: false
 });
@@ -98,9 +98,9 @@ function addSelectionOutline(object) {
         const outline = new THREE.LineSegments(
             new THREE.EdgesGeometry(mesh.geometry, 20),
             new THREE.LineBasicMaterial({
-                color: 0x4f8cc9,
+                color: 0x6fa3d7,
                 transparent: true,
-                opacity: 0.9,
+                opacity: 0.78,
                 depthTest: false,
                 depthWrite: false
             })
