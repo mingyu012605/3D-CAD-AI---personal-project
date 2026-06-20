@@ -4191,7 +4191,7 @@ import {
                 addMessageToLog('System', `View axis clicked: ${direction} ${axis}-axis.`);
 
                 // Temporary visual feedback on the container
-                viewAxesContainer.style.backgroundColor = '#DAA520'; // Accent yellow
+                viewAxesContainer.style.backgroundColor = '#2f6fa3';
                 setTimeout(() => {
                     viewAxesContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.3)'; // Revert to original gray
                 }, 200); // Flash for 200ms
@@ -5408,7 +5408,7 @@ import {
             }
 
             // Initial message to guide the user on the upload page
-            addMessageToLog('System', 'Welcome to the AI VR CAD Editor! Please choose an option above to get started: "Create Empty Model", "Edit Existing Model" (to upload a file), or "Load Random Model".');
+            addMessageToLog('System', 'Welcome to Forma Twin. Please choose an option above to get started: "Create Empty Model", "Edit Existing Model" (to upload a file), or "Load Random Model".');
 
             // Don't save initial empty state - let first action create the baseline
             console.log("[Init] Undo/redo system ready - first action will create baseline state");

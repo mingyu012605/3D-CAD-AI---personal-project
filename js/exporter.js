@@ -137,7 +137,7 @@ export async function saveSceneAsGLB(filename = defaultFilename()) {
     }
 
     const exportScene = new THREE.Scene();
-    exportScene.name = 'AI VR CAD Editor Scene';
+    exportScene.name = 'Forma Twin Scene';
     createSerializableModelClones().forEach(model => exportScene.add(model));
     const result = await new Promise((resolve, reject) => {
         const exporter = new THREE.GLTFExporter();
