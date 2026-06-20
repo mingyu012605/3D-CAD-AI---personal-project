@@ -161,6 +161,34 @@
         .dt-detail-row { display: grid; grid-template-columns: 82px 1fr; gap: 8px; color: #8ca7c8; font-size: 10px; line-height: 1.4; }
         .dt-detail-row em { color: #64748b; font-style: normal; }
         .dt-status-pill { align-self: flex-start; padding: 3px 7px; border: 1px solid rgba(59, 130, 196, .35); border-radius: 999px; color: #dbeafe; background: rgba(59, 130, 196, .16); font-size: 10px; font-weight: 800; }
+        /* Focused polish for the visible controls in the screenshots. */
+        #headerEditorActions.editor-actions { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 0 0 14px; }
+        #headerEditorActions.editor-actions button { height: 36px; border-radius: 8px; background: #142236; border-color: rgba(102, 122, 146, .26); color: #9daec2; box-shadow: inset 0 1px 0 rgba(255,255,255,.025); }
+        #headerEditorActions.editor-actions button:hover:not(:disabled) { background: #1a3049; border-color: rgba(67, 128, 184, .55); color: #edf5ff; }
+        #headerEditorActions .tab-button.active, #headerEditorActions .primary-action, #headerEditorActions .structure-action { background: linear-gradient(180deg, #367fb8, #2b669b); border-color: rgba(114, 171, 218, .42); color: #fff; }
+        #headerEditorActions #clearStructureButton:not(:disabled) { background: #132236; color: #7c8da3; }
+        #headerEditorActions #redoButton:disabled, #headerEditorActions #clearStructureButton:disabled { background: #101b2b; border-color: rgba(93, 111, 134, .14); color: #4d5e73; opacity: 1; }
+        .product-search input::placeholder { color: #718299; opacity: 1; }
+        .product-search input:hover { border-color: rgba(100, 124, 150, .58); background: #101e31; }
+        #cadObjectTree.cad-object-tree { gap: 6px; }
+        #cadObjectTree .cad-tree-row { min-height: 34px; padding: 7px 8px; border-radius: 8px; background: #101b2b; border: 1px solid rgba(93,111,134,.24); }
+        #cadObjectTree .cad-tree-name { color: #d2deeb; font-size: 11px; font-weight: 650; letter-spacing: -.01em; }
+        #cadObjectTree .cad-tree-row button { min-width: 30px; height: 24px; padding: 0 7px; border-radius: 6px; background: #1b2a40; border: 1px solid rgba(93,111,134,.32); color: #9fb1c7; font-size: 9px; font-weight: 850; letter-spacing: .01em; }
+        #cadObjectTree .cad-tree-row button:hover { color: #fff; background: #25415f; border-color: rgba(75,139,194,.5); }
+        #cadModeTools .cad-panel-heading { margin: 2px 0 10px; padding-bottom: 9px; border-bottom: 1px solid rgba(93,111,134,.24); font-size: 18px; line-height: 1.1; }
+        #cadToolsPanel.cad-tools-panel { gap: 9px; }
+        #cadToolsPanel.cad-tools-panel details { padding: 0; overflow: hidden; border-radius: 10px; background: #101b2b; border-color: rgba(93,111,134,.3) !important; }
+        #cadToolsPanel.cad-tools-panel summary { padding: 10px 12px; background: #132236; border-bottom: 1px solid rgba(93,111,134,.22); color: #dce7f3; font-size: 12px; line-height: 1; }
+        #cadToolsPanel details > .cad-tool-row, #cadToolsPanel details > .cad-tool-output, #cadToolsPanel details > button, #cadToolsPanel details > input[type="range"] { margin: 10px 12px 12px; }
+        #cadToolsPanel .cad-tool-row { display: grid !important; grid-template-columns: minmax(94px, 120px) minmax(0, 1fr); gap: 10px; align-items: center; }
+        #cadToolsPanel .cad-tool-row:has(select) { grid-template-columns: minmax(94px, 118px) minmax(0, 1fr); }
+        #cadToolsPanel .cad-tool-row label { min-height: auto !important; color: #a9bad0 !important; font-size: 12px !important; font-weight: 750 !important; line-height: 1.2; }
+        #cadToolsPanel .cad-tool-row input[type="number"], #cadToolsPanel .cad-tool-row select { height: 34px; margin: 0; font-size: 12px; color: #dce7f3; background: #0b1624 !important; }
+        #cadToolsPanel input[type="checkbox"] { width: 16px !important; height: 16px !important; flex: 0 0 16px; }
+        #cadToolsPanel input[type="range"] { width: calc(100% - 24px); height: 4px; margin-top: 14px; }
+        #cadToolsPanel .cad-tool-output { color: #91a5bd; font-size: 12px; line-height: 1.45; }
+        #cadToolsPanel details > button, #cadToolsPanel [data-cad-boolean] { height: 32px; padding: 0 12px; border-radius: 7px; font-size: 12px; font-weight: 750; }
+        #cadToolsPanel details:last-child .cad-tool-row { display: flex !important; gap: 8px; align-items: center; }
         .digital-twin-records { display: none; flex-direction: column; gap: 6px; margin-top: 10px; padding: 10px; border: 1px solid rgba(51, 65, 85, .45); border-radius: 9px; background: rgba(15, 23, 42, .55); }
         .digital-twin-records.visible { display: flex; }
         .digital-twin-records strong { color: #cbd5e1; font-size: 11px; }
