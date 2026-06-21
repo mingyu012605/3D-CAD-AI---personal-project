@@ -4738,18 +4738,19 @@ import {
             state.loadedModels.forEach(model => {
                 if (state.scene && model) {
                     state.scene.remove(model);
-                    // Dispose geometry and materials
-                    if (model.geometry) model.geometry.dispose();
-                    if (model.material) {
-                        if (Array.isArray(model.material)) {
-                            model.material.forEach(mat => mat.dispose());
-                        } else {
-                            model.material.dispose();
-                        }
-                    }
+                    model.traverse(object => {
+                        object.geometry?.dispose?.();
+                        const materials = Array.isArray(object.material) ? object.material : [object.material];
+                        materials.filter(Boolean).forEach(material => material.dispose?.());
+                    });
                 }
             });
             state.loadedModels.length = 0;
+            if (state.zoomRaycastCache) {
+                state.zoomRaycastCache.signature = '';
+                state.zoomRaycastCache.targets = [];
+                state.zoomRaycastCache.lastHitPoint = null;
+            }
             clearSelection();
             clearAllHighlights();
             console.log('[clearAllModels] All models cleared');

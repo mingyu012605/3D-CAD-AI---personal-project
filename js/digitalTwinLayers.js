@@ -28,6 +28,7 @@ let timeLayerTimer = null;
 let materialCloneCount = 0;
 let lastLayerApplyMs = 0;
 let lastLayerFragmentCount = 0;
+let lastAppliedLayerSignature = '';
 
 const ALL_LEVELS = '__all__';
 const UNKNOWN_LEVEL = '__unknown__';
@@ -361,7 +362,7 @@ function refreshTimeLayer() {
     updateSimulationTimeUI();
     if (activeLayer !== 'energy' && activeLayer !== 'occupancy') return;
     window.clearTimeout(timeLayerTimer);
-    timeLayerTimer = window.setTimeout(() => applyDigitalTwinLayer(activeLayer), 120);
+    timeLayerTimer = window.setTimeout(() => applyDigitalTwinLayer(activeLayer), 220);
 }
 
 function focusObject(object) {
@@ -703,11 +704,29 @@ export async function applyDigitalTwinLayer(layer) {
     const startedAt = performance.now();
     const meshes = getIFCMeshes();
     updateObjectGuidIndex(meshes);
+    if (!weather) weather = await getWeather();
+    const timeHour = getSimulationDate().getHours();
+    const applySignature = [
+        layer,
+        getModelSignature(),
+        meshes.length,
+        weather?.source || '',
+        weather?.temperatureC?.toFixed?.(1) || '',
+        timeHour,
+        activeLevelFilter,
+        levelFilterMode,
+        maintenanceByGuid.size,
+    ].join('|');
+    if (applySignature === lastAppliedLayerSignature && resultByObject.size > 0) {
+        activeLayer = layer;
+        updateLayerButtons();
+        renderSelectedResult(state.selectedObject);
+        return;
+    }
     resultByObject.clear();
     maintenanceMatches = [];
     activeLayer = layer;
 
-    if (!weather) weather = await getWeather();
     withSelectionPreserved(() => {
         clearLevelFilterVisuals();
         meshes.forEach(ensureBaseline);
@@ -721,6 +740,7 @@ export async function applyDigitalTwinLayer(layer) {
         lastLayerFragmentCount = affected;
     });
     lastLayerApplyMs = performance.now() - startedAt;
+    lastAppliedLayerSignature = applySignature;
     updateLayerButtons();
     if (layer !== 'maintenance') renderMaintenanceRecords();
     renderSelectedResult(state.selectedObject);
@@ -734,6 +754,7 @@ export function resetDigitalTwinColours() {
         applyLevelFilterVisuals();
     });
     activeLayer = null;
+    lastAppliedLayerSignature = '';
     resultByObject.clear();
     maintenanceMatches = [];
     updateLayerButtons();
@@ -829,6 +850,7 @@ export async function initDigitalTwinLayers() {
     setInterval(async () => {
         const refreshed = await getWeather();
         weather = refreshed;
+        lastAppliedLayerSignature = '';
         setValue('digitalTwinWeatherValue', weatherLabel(weather));
         setValue('digitalTwinWeatherSource', weather.source === 'open-meteo' ? 'Live from Open-Meteo (no key)'
             : weather.source === 'openweathermap' ? 'Live from OpenWeatherMap'

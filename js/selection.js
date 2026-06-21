@@ -3,9 +3,9 @@ import { addMessageToLog } from './utils.js';
 
 let mouseDownX = 0;
 let mouseDownY = 0;
-const MOUSE_CLICK_TOLERANCE = 6;
+const MOUSE_CLICK_TOLERANCE = 9;
 const TOUCH_CLICK_TOLERANCE = 12;
-const SELECTION_ASSIST_RADIUS_PX = 9;
+const SELECTION_ASSIST_RADIUS_PX = 7;
 const highlightMaterial = new THREE.MeshBasicMaterial({
     color: 0x3b82c4,
     transparent: true,
@@ -15,6 +15,8 @@ const highlightMaterial = new THREE.MeshBasicMaterial({
 });
 const SELECTION_OUTLINE_NAME = '__selectionOutline';
 let lastHoveredGroupId = null;
+let selectableCacheSignature = '';
+let selectableCacheTargets = [];
 
 function isObjectLocked(object) {
     let current = object;
@@ -38,19 +40,15 @@ function isMaterialUsedByAnotherMesh(material, owner) {
     return isUsed;
 }
 
-function findObjectIntersections(clientX, clientY, objectsToIntersect) {
+function findObjectIntersections(clientX, clientY, objectsToIntersect, useAssist = true) {
     const rect = state.renderer.domElement.getBoundingClientRect();
-    const offsets = [
+    const offsets = useAssist ? [
         [0, 0],
         [SELECTION_ASSIST_RADIUS_PX, 0],
         [-SELECTION_ASSIST_RADIUS_PX, 0],
         [0, SELECTION_ASSIST_RADIUS_PX],
         [0, -SELECTION_ASSIST_RADIUS_PX],
-        [SELECTION_ASSIST_RADIUS_PX * 0.7, SELECTION_ASSIST_RADIUS_PX * 0.7],
-        [-SELECTION_ASSIST_RADIUS_PX * 0.7, SELECTION_ASSIST_RADIUS_PX * 0.7],
-        [SELECTION_ASSIST_RADIUS_PX * 0.7, -SELECTION_ASSIST_RADIUS_PX * 0.7],
-        [-SELECTION_ASSIST_RADIUS_PX * 0.7, -SELECTION_ASSIST_RADIUS_PX * 0.7],
-    ];
+    ] : [[0, 0]];
 
     for (const [offsetX, offsetY] of offsets) {
         state.mouse.x = ((clientX + offsetX - rect.left) / rect.width) * 2 - 1;
@@ -64,14 +62,23 @@ function findObjectIntersections(clientX, clientY, objectsToIntersect) {
 }
 
 function getSelectableMeshes() {
-    const meshes = [];
-    state.loadedModels.forEach(model => model.traverse(obj => {
-        if (!obj.isMesh || !obj.visible) return;
-        if (obj.userData?.isGridLabel || obj.userData?.isSelectionOutline || obj.userData?.isDecorativeContext) return;
-        if (obj === state.currentGridHelper || obj === state.raycastDebugSphere || isTransformControlPart(obj)) return;
-        meshes.push(obj);
-    }));
-    return meshes;
+    const signature = state.loadedModels.map(model => `${model.uuid}:${model.children?.length || 0}`).join('|');
+    if (signature !== selectableCacheSignature) {
+        selectableCacheSignature = signature;
+        selectableCacheTargets = [];
+        state.loadedModels.forEach(model => model.traverse(obj => {
+            if (!obj.isMesh) return;
+            if (obj.userData?.isGridLabel || obj.userData?.isSelectionOutline || obj.userData?.isDecorativeContext) return;
+            if (obj === state.currentGridHelper || obj === state.raycastDebugSphere || isTransformControlPart(obj)) return;
+            selectableCacheTargets.push(obj);
+        }));
+    }
+    return selectableCacheTargets.filter(obj => obj.visible);
+}
+
+function invalidateSelectableCache() {
+    selectableCacheSignature = '';
+    selectableCacheTargets = [];
 }
 
 function isTransformControlPart(object) {
@@ -225,16 +232,12 @@ export function setSelectedObjects(objects) {
             }
         });
 
-        console.log(`[setSelectedObjects] Selected ${objects.length} objects for multi-editing`);
         addMessageToLog('System', `Selected ${objects.length} objects for editing.`);
     }
 }
 
 export function duplicateSelection() {
-    console.log("=== DUPLICATE SELECTION ===");
-
     const selection = getSelectedObjects();
-    console.log(`Selection count: ${selection.length}`);
 
     if (selection.length === 0) {
         addMessageToLog('System', 'No objects selected to duplicate.');
@@ -249,8 +252,6 @@ export function duplicateSelection() {
 
     try {
         for (const srcObject of selection) {
-            console.log(`Duplicating: ${srcObject.name || srcObject.type} (UUID: ${srcObject.uuid})`);
-
             // Deep clone the object including children
             const clone = srcObject.clone(true);
 
@@ -298,6 +299,7 @@ export function duplicateSelection() {
             // Add to state.loadedModels if the original was a top-level model
             if (state.loadedModels.includes(srcObject)) {
                 state.loadedModels.push(clone);
+                invalidateSelectableCache();
             }
 
             createdObjects.push(clone);
@@ -312,11 +314,11 @@ export function duplicateSelection() {
                     const modelIndex = state.loadedModels.indexOf(clone);
                     if (modelIndex !== -1) {
                         state.loadedModels.splice(modelIndex, 1);
+                        invalidateSelectableCache();
                     }
                 }
             });
 
-            console.log(`✅ Created clone: ${clone.name} at position (${clone.position.x}, ${clone.position.y}, ${clone.position.z})`);
         }
 
         // Update selection to the new clones
@@ -328,8 +330,6 @@ export function duplicateSelection() {
         const message = `Duplicated ${createdObjects.length} object${createdObjects.length > 1 ? 's' : ''}. Copies created to the right.`;
         addMessageToLog('System', message);
         _speakResponse(message);
-
-        console.log(`✅ Duplication complete: ${createdObjects.length} objects created`);
 
     } catch (error) {
         console.error("❌ Duplication failed:", error);
@@ -343,6 +343,7 @@ export function duplicateSelection() {
             const modelIndex = state.loadedModels.indexOf(obj);
             if (modelIndex !== -1) {
                 state.loadedModels.splice(modelIndex, 1);
+                invalidateSelectableCache();
             }
         });
 
@@ -415,31 +416,14 @@ export function onCanvasClick(event) {
 
             if (faceGroupId) {
                 _handleFaceClick(faceGroupId);
-
-                // Show debug sphere at face center
-                const group = state.faceEditState.groups.find(g => g.id === faceGroupId);
-                if (group) {
-                    state.raycastDebugSphere.position.copy(group.centroid);
-                    state.raycastDebugSphere.visible = true;
-                    setTimeout(() => {
-                        state.raycastDebugSphere.visible = false;
-                    }, 500);
-                }
                 return; // Don't process normal object selection
             }
 
             // PRIORITY 2: Normal object intersection
-            const intersects = findObjectIntersections(currentX, currentY, objectsToIntersect);
+            const intersects = findObjectIntersections(currentX, currentY, objectsToIntersect, event.type === 'touchstart');
 
             if (intersects.length > 0) {
                 const intersectedObject = intersects[0].object;
-
-                // Show raycast debug sphere
-                state.raycastDebugSphere.position.copy(intersects[0].point);
-                state.raycastDebugSphere.visible = true;
-                setTimeout(() => {
-                    state.raycastDebugSphere.visible = false;
-                }, 500);
 
                 // Normal object selection
                 selectObject(intersectedObject);
@@ -587,7 +571,6 @@ export function clearSelection() {
 }
 
 export function highlightAllModels() {
-    console.log("[highlightAllModels] Attempting to highlight all models.");
     clearSelection(); // Clear any individual selection first
     clearAllHighlights(); // Clear any previous "select all" highlights
 
@@ -657,7 +640,6 @@ export function highlightAllModels() {
             state.transformControls.attach(groupHelper);
             state.transformControls.visible = true;
             state.transformControls.setMode('translate'); // Start with translate mode
-            console.log("[highlightAllModels] Transform state.controls attached to group helper");
         }
 
         // Set as selected object for movement
@@ -718,17 +700,13 @@ export function highlightAllModels() {
 
         addMessageToLog('AI', `Selected ${highlightedCount} objects. You can now move, scale, rotate, or duplicate them together. Press G/R/S to switch modes.`);
         _speakResponse(`Selected all ${highlightedCount} objects. You can now edit them together.`);
-        console.log(`[highlightAllModels] Successfully selected ${highlightedCount} objects for group editing.`);
     } else {
         addMessageToLog('System', 'No objects found to select in the state.scene.');
         _speakResponse('No objects found to select.');
-        console.log("[highlightAllModels] No objects found to select.");
     }
 }
 
 export function clearAllHighlights() {
-    console.log("[clearAllHighlights] Attempting to clear all highlights.");
-
     state.currentlySelectedObjectsForEditing.forEach(removeSelectionOutline);
 
     // Remove group helper if it exists
@@ -747,12 +725,10 @@ export function clearAllHighlights() {
         }
         state.scene.remove(groupHelper);
         if (state.selectedObject === groupHelper) state.selectedObject = null;
-        console.log("[clearAllHighlights] Removed group editing helper");
     }
 
     if (state.allHighlightsOriginalMaterials.size === 0) {
         state.currentlySelectedObjectsForEditing = [];
-        console.log("[clearAllHighlights] No global highlights to clear.");
         return;
     }
 
@@ -781,21 +757,22 @@ export function clearAllHighlights() {
     state.currentlySelectedObjectsForEditing = []; // Clear the functional selection array
     addMessageToLog('System', `Cleared highlights from ${clearedCount} objects.`);
     _speakResponse('All highlights cleared.');
-    console.log(`[clearAllHighlights] Successfully cleared highlights from ${clearedCount} objects.`);
 }
 
 export function removeObject() {
     if (state.selectedObject) {
         const object = state.selectedObject;
         const objectToRemoveName = object.name || "Unnamed Part";
-        const objectToRemoveUUID = object.uuid;
         const parent = object.parent;
         const modelIndex = state.loadedModels.indexOf(object);
 
         if (parent) {
             clearSelection();
             parent.remove(object);
-            if (modelIndex > -1) state.loadedModels.splice(modelIndex, 1);
+            if (modelIndex > -1) {
+                state.loadedModels.splice(modelIndex, 1);
+                invalidateSelectableCache();
+            }
 
             _beginUndoGroup(`Delete ${objectToRemoveName}`);
             _addUndoAction({
@@ -807,21 +784,19 @@ export function removeObject() {
                     parent.add(object);
                     if (modelIndex > -1 && !state.loadedModels.includes(object)) {
                         state.loadedModels.splice(modelIndex, 0, object);
+                        invalidateSelectableCache();
                     }
                 },
                 apply: () => {
                     object.parent?.remove(object);
                     const currentIndex = state.loadedModels.indexOf(object);
-                    if (currentIndex > -1) state.loadedModels.splice(currentIndex, 1);
+                    if (currentIndex > -1) {
+                        state.loadedModels.splice(currentIndex, 1);
+                        invalidateSelectableCache();
+                    }
                 }
             });
             _endUndoGroup();
-
-            if (modelIndex > -1) {
-                console.log(`[Remove Object] Removed top-level model: ${objectToRemoveName}. Remaining models: ${state.loadedModels.length}`);
-            } else {
-                console.log(`[Remove Object] Removed object: ${objectToRemoveName} (UUID: ${objectToRemoveUUID})`);
-            }
 
             if (state.originalMaterialProperties.has(object.uuid)) {
                 state.originalMaterialProperties.delete(object.uuid);
@@ -846,7 +821,6 @@ export function removeObject() {
 }
 
 export function duplicateSelectedObject() {
-    console.log("[duplicateSelectedObject] Legacy function called, redirecting to duplicateSelection()");
     // Redirect to the new unified function
     duplicateSelection();
 }
