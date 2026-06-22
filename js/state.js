@@ -26,6 +26,9 @@ export const state = {
     lastHitAt: 0,
     lastPointerX: 0,
     lastPointerY: 0,
+    lastWheelAt: 0,
+    visibleSignature: '',
+    visibleTargets: [],
   },
 
   // Grid

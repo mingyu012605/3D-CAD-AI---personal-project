@@ -3648,7 +3648,7 @@ import {
 
         function getZoomRaycastTargets() {
             if (!state.zoomRaycastCache) {
-                state.zoomRaycastCache = { signature: '', targets: [], lastHitPoint: null, lastHitAt: 0, lastPointerX: 0, lastPointerY: 0 };
+                state.zoomRaycastCache = { signature: '', targets: [], lastHitPoint: null, lastHitAt: 0, lastPointerX: 0, lastPointerY: 0, lastWheelAt: 0, visibleSignature: '', visibleTargets: [] };
             }
             const signature = state.loadedModels.map(model => `${model.uuid}:${model.children?.length || 0}`).join('|');
             if (state.zoomRaycastCache.signature === signature) return state.zoomRaycastCache.targets;
@@ -3666,7 +3666,20 @@ import {
             state.zoomRaycastCache.signature = signature;
             state.zoomRaycastCache.targets = targets;
             state.zoomRaycastCache.lastHitPoint = null;
+            state.zoomRaycastCache.visibleSignature = '';
+            state.zoomRaycastCache.visibleTargets = [];
             return targets;
+        }
+
+        function getVisibleZoomRaycastTargets() {
+            const cache = state.zoomRaycastCache;
+            const targets = getZoomRaycastTargets();
+            const visibleSignature = `${cache.signature}|${targets.length}|${state.currentGridHelper?.uuid || ''}|${state.raycastDebugSphere?.uuid || ''}`;
+            if (cache.visibleSignature !== visibleSignature) {
+                cache.visibleTargets = targets.filter(object => object.visible);
+                cache.visibleSignature = visibleSignature;
+            }
+            return cache.visibleTargets;
         }
 
         function focusZoomOnPointer(event) {
@@ -3700,9 +3713,11 @@ import {
             if (pixelDelta < 0 && state.raycaster) {
                 const cache = state.zoomRaycastCache;
                 const now = performance.now();
+                const rapidWheel = now - (cache.lastWheelAt || 0) < 55;
+                cache.lastWheelAt = now;
                 const pointerMoved = Math.hypot(pointer2D.x - cache.lastPointerX, pointer2D.y - cache.lastPointerY) > 0.08;
-                if (pointerMoved || now - cache.lastHitAt > 90) {
-                    const visibleTargets = getZoomRaycastTargets().filter(object => object.visible);
+                if (!rapidWheel && (pointerMoved || now - cache.lastHitAt > 140)) {
+                    const visibleTargets = getVisibleZoomRaycastTargets();
                     if (visibleTargets.length > 0) {
                         state.raycaster.setFromCamera(pointer2D, state.camera);
                         const hit = state.raycaster.intersectObjects(visibleTargets, false)[0];
@@ -4750,6 +4765,8 @@ import {
                 state.zoomRaycastCache.signature = '';
                 state.zoomRaycastCache.targets = [];
                 state.zoomRaycastCache.lastHitPoint = null;
+                state.zoomRaycastCache.visibleSignature = '';
+                state.zoomRaycastCache.visibleTargets = [];
             }
             clearSelection();
             clearAllHighlights();
