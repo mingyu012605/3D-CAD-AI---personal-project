@@ -5426,7 +5426,7 @@ import {
             }
 
             // Initial message to guide the user on the upload page
-            addMessageToLog('System', 'Welcome to Forma Twin. Please choose an option above to get started: "Create Empty Model", "Edit Existing Model" (to upload a file), or "Load Random Model".');
+            addMessageToLog('System', 'Welcome to FormaLink. Please choose an option above to get started: "Create Empty Model", "Edit Existing Model" (to upload a file), or "Load Random Model".');
 
             // Don't save initial empty state - let first action create the baseline
             console.log("[Init] Undo/redo system ready - first action will create baseline state");

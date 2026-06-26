@@ -137,7 +137,7 @@ export async function saveSceneAsGLB(filename = defaultFilename()) {
     }
 
     const exportScene = new THREE.Scene();
-    exportScene.name = 'Forma Twin Scene';
+    exportScene.name = 'FormaLink Scene';
     createSerializableModelClones().forEach(model => exportScene.add(model));
     const result = await new Promise((resolve, reject) => {
         const exporter = new THREE.GLTFExporter();
