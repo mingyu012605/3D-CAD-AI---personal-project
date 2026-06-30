@@ -4,3 +4,4 @@ tmp-browser-smoke.mjs
 node_modules/
 .env
 *.log
+samples/*.ifc
