@@ -4,9 +4,12 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import OpenAI from 'openai'; // Correct import for v4+
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config(); // Load environment variables from .env file
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -18,6 +21,9 @@ const openai = new OpenAI({
 // Middleware
 app.use(cors()); // Enable CORS for all origins (adjust for production)
 app.use(express.json()); // Enable parsing JSON request bodies
+
+// Serve static files (index.html, js/, css/, samples/, etc.)
+app.use(express.static(__dirname));
 
 // AI Proxy Route
 app.post('/api/ai', async (req, res) => {

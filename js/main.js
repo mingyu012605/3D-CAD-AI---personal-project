@@ -4383,7 +4383,9 @@ import {
 
         // --- Backend API Configuration ---
         // This URL should point to your Render backend's AI proxy endpoint.
-        const BACKEND_API_URL = "https://mingyu.onrender.com/api/ai"; // YOUR RENDER BACKEND URL HERE
+        const BACKEND_API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? '/api/ai'
+            : 'https://mingyu.onrender.com/api/ai';
 
         async function sendAICommand(command) {
             sendTextCommandBtn.disabled = true;
