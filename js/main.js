@@ -21,7 +21,7 @@ import {
 } from './history.js';
 import { createPrimitive } from './primitives.js';
 import {
-    loadRandomModel, loadModel, loadSampleByUrl,
+    loadRandomModel, loadModel, loadSampleByUrl, loadSampleIFCByUrl,
     initLoaderCallbacks, initLoaderEventHandlers
 } from './loader.js';
 import { initDocLink, onObjectSelected as docLinkOnSelected } from './docLink.js';
@@ -3546,6 +3546,7 @@ import {
         const RECENT_FILES_KEY = 'forma-link-recent-files-v1';
 
         const SAMPLE_URLS = {
+            building: 'https://raw.githubusercontent.com/IFCjs/web-ifc/main/examples/IfcOpenHouse.ifc',
             duck:    'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
             helmet:  'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb',
             truck:   'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/glTF-Binary/CesiumMilkTruck.glb',
@@ -3659,7 +3660,12 @@ import {
             editorPage.classList.add('page-active');
             headerEditorActions.hidden = false;
             requestAnimationFrame(() => onWindowResize());
-            loadSampleByUrl(url, name.charAt(0).toUpperCase() + name.slice(1) + ' (Sample)');
+            const displayName = name.charAt(0).toUpperCase() + name.slice(1) + ' (Sample)';
+            if (url.toLowerCase().endsWith('.ifc')) {
+                loadSampleIFCByUrl(url, displayName);
+            } else {
+                loadSampleByUrl(url, displayName);
+            }
             addMessageToLog('System', `Loading sample: ${name}`);
         };
 

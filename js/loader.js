@@ -223,6 +223,7 @@ function _loadGLBFromUrl(modelUrl, displayName) {
         });
         state.loadedModels.push(model);
         state.navigationModelSize = null;
+        normalizeModelsToGround([model]);
         _resetView();
         addMessageToLog('System', `Model "${model.name}" loaded successfully.`);
         _speakResponse('Model loaded.');
@@ -253,6 +254,28 @@ export function loadRandomModel() {
 export function loadSampleByUrl(url, displayName) {
     if (!url) return;
     _loadGLBFromUrl(url, displayName);
+}
+
+export async function loadSampleIFCByUrl(url, displayName) {
+    if (!url) return;
+    if (loadingMsg) {
+        loadingMsg.style.display = 'block';
+        loadingMsg.style.color = '#007bff';
+        loadingMsg.textContent = 'Fetching IFC sample…';
+    }
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const buffer = await response.arrayBuffer();
+        const urlBasename = url.split('/').pop();
+        const fileName = urlBasename.toLowerCase().endsWith('.ifc') ? urlBasename : (displayName || urlBasename) + '.ifc';
+        const file = new File([buffer], fileName, { type: 'application/x-ifc' });
+        await _loadIFCModel(file);
+    } catch (err) {
+        console.error('[loadSampleIFCByUrl]', err);
+        addMessageToLog('System', `Failed to load IFC sample: ${err.message}`);
+        if (loadingMsg) loadingMsg.style.display = 'none';
+    }
 }
 
 async function _loadIFCModel(file) {
