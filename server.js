@@ -13,10 +13,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Initialize OpenAI client with API key from environment variables
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // Ensure your API key is in your Render environment variables as OPENAI_API_KEY
-});
+// Initialize OpenAI client lazily so server starts even without API key
+let openai = null;
+function getOpenAI() {
+  if (!openai) {
+    if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not set.');
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return openai;
+}
 
 // Middleware
 app.use(cors()); // Enable CORS for all origins (adjust for production)
@@ -34,7 +39,7 @@ app.post('/api/ai', async (req, res) => {
   }
 
   try {
-    const chatCompletion = await openai.chat.completions.create({
+    const chatCompletion = await getOpenAI().chat.completions.create({
       model: "gpt-4o-mini", // Or any other model you prefer
       messages: [
         { role: "system", content: `You are an AI assistant for a 3D CAD editor. Your primary goal is to interpret user commands and **always** return a structured JSON object that the frontend can execute. You can now work with multiple 3D models loaded in the scene simultaneously.
