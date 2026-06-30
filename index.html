@@ -207,32 +207,304 @@
             .product-search { width: auto; flex: 1; }
         }
         @media (max-height: 760px) { .sidebar-chat { flex-basis: 155px !important; min-height: 135px; } }
+
+        /* ─── Revit-style Start Page ──────────────────────────────────────────── */
+        #uploadPage {
+            background: #1c2333 !important;
+            padding: 0 !important; align-items: stretch !important;
+            justify-content: stretch !important; flex-direction: row !important;
+        }
+        .start-layout { display: flex; width: 100%; height: 100%; overflow: hidden; }
+
+        /* ── Sidebar (matches Revit 2026 sidebar) ── */
+        .start-sidebar {
+            width: 205px; flex: 0 0 205px;
+            background: #151c29;
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+        .start-brand {
+            padding: 18px 16px 14px;
+            border-bottom: 1px solid rgba(255,255,255,.07);
+        }
+        .start-brand-row { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
+        .start-brand-logo {
+            width: 28px; height: 28px; border-radius: 5px; flex: 0 0 28px;
+            background: linear-gradient(145deg,#1f4f86,#326fa9);
+            display: grid; place-items: center;
+        }
+        .start-brand-logo svg { width: 15px; fill: white; }
+        .start-brand-name { color: #e2e8f0; font-size: 14px; font-weight: 700; }
+        .start-brand-ver { color: #3a5270; font-size: 10px; font-weight: 500; margin-top: 1px; }
+
+        /* Sidebar sections: Models, Families style */
+        .sb-section { padding: 12px 14px 6px; }
+        .sb-section-label { color: #3a5270; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
+        .sb-btn {
+            display: block; width: 100%; padding: 6px 10px; margin-bottom: 4px;
+            border: 1px solid rgba(255,255,255,.09); border-radius: 4px;
+            color: #8facc7; background: rgba(255,255,255,.05);
+            font-size: 12px; font-weight: 500; font-family: inherit;
+            cursor: pointer; text-align: left;
+            transition: background .12s, color .12s, border-color .12s;
+        }
+        .sb-btn:hover { background: rgba(255,255,255,.11); color: #d4e5f8; border-color: rgba(255,255,255,.16); }
+
+        .sb-divider { height: 1px; background: rgba(255,255,255,.07); margin: 6px 14px; }
+
+        /* Nav items (Recent, Autodesk Projects… equivalent) */
+        .sb-nav { padding: 6px 8px; flex: 1 1 auto; }
+        .sb-nav-item {
+            display: block; width: 100%; padding: 7px 10px; margin-bottom: 1px;
+            border: none; border-radius: 4px;
+            color: #5a7898; background: transparent;
+            font-size: 12.5px; font-family: inherit; cursor: pointer; text-align: left;
+            transition: background .12s, color .12s;
+        }
+        .sb-nav-item:hover { background: rgba(255,255,255,.08); color: #b8d0e8; }
+        .sb-nav-item.active { color: #d4e8ff; font-weight: 600; background: rgba(255,255,255,.06); }
+
+        .start-sidebar-foot { padding: 10px 16px; color: #1e3048; font-size: 9px; border-top: 1px solid rgba(255,255,255,.05); }
+
+        /* ── Main content ── */
+        .start-main {
+            flex: 1 1 0; min-width: 0; overflow-y: auto; position: relative;
+            background: #1c2333;
+            scrollbar-color: #2a3a52 transparent; scrollbar-width: thin;
+        }
+
+        /* Top bar inside main (title + sort + search) */
+        .start-topbar {
+            display: flex; align-items: center; gap: 10px;
+            padding: 14px 22px 10px;
+            border-bottom: 1px solid rgba(255,255,255,.07);
+        }
+        .start-topbar-title { color: #d4e5f8; font-size: 14px; font-weight: 600; flex: 0 0 auto; }
+        .start-topbar-sep { width: 1px; height: 14px; background: rgba(255,255,255,.12); margin: 0 2px; }
+        .start-sort-lbl { color: #3a5270; font-size: 11px; flex: 0 0 auto; }
+        .start-sort-sel {
+            padding: 3px 7px; border: 1px solid rgba(255,255,255,.1); border-radius: 3px;
+            background: rgba(255,255,255,.04); color: #7a9ab8; font-size: 11px; font-family: inherit; cursor: pointer;
+        }
+        .start-search-bar {
+            margin-left: auto; display: flex; align-items: center; gap: 5px;
+            padding: 5px 10px; border: 1px solid rgba(255,255,255,.09); border-radius: 4px;
+            background: rgba(255,255,255,.04); width: min(220px, 26%);
+        }
+        .start-search-bar svg { width: 12px; height: 12px; fill: none; stroke: #3a5270; stroke-width: 2; flex: 0 0 12px; }
+        .start-search-bar input { border: none; background: transparent; color: #8aaac8; font-size: 11px; font-family: inherit; outline: none; flex: 1; min-width: 0; }
+        .start-search-bar input::placeholder { color: #2e4460; }
+
+        /* Section label above tile grids */
+        .start-grid-area { padding: 18px 22px 40px; }
+        .start-section-lbl { color: #3a5270; font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; margin: 0 0 12px; display: flex; align-items: center; justify-content: space-between; }
+        .start-clear-btn { color: #2a3e58; font-size: 10.5px; background: transparent; border: none; font-family: inherit; cursor: pointer; transition: color .12s; }
+        .start-clear-btn:hover { color: #6a8aaa; }
+
+        /* The tile grid — matches Revit's project card grid */
+        .start-tiles {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        /* Individual project tile (matches Revit) */
+        .start-tile {
+            background: transparent; border: none; padding: 0;
+            cursor: pointer; text-align: left; font-family: inherit;
+        }
+        .start-tile-thumb {
+            width: 100%; aspect-ratio: 4/3; border-radius: 4px; overflow: hidden;
+            background: #c8d4de; /* light blue-gray like Revit thumbnails */
+            display: flex; align-items: center; justify-content: center;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0,0,0,.3);
+            transition: box-shadow .15s, transform .15s;
+        }
+        .start-tile:hover .start-tile-thumb { box-shadow: 0 8px 22px rgba(0,0,0,.5); transform: translateY(-2px); }
+        .start-tile-thumb svg { width: 48px; height: 48px; fill: none; stroke: #4878a0; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; opacity: .75; }
+        .start-tile-ext {
+            position: absolute; bottom: 5px; left: 5px;
+            padding: 2px 6px; border-radius: 3px;
+            background: rgba(30,50,80,.82); color: #7ec8ff;
+            font-size: 8px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
+        }
+        .start-tile-name { margin-top: 7px; color: #c8daee; font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .start-tile-date { color: #364e66; font-size: 10.5px; margin-top: 1px; }
+
+        /* Slight variation for sample tiles: green/blue ext badge */
+        .start-tile.sample .start-tile-ext { background: rgba(20,55,40,.82); color: #6adaa8; }
+
+        /* Empty state */
+        .start-empty { padding: 36px 20px; text-align: center; color: #2a3e58; }
+        .start-empty p { margin: 0 0 12px; font-size: 13px; }
+        .start-empty button { padding: 7px 16px; border: 1px solid rgba(59,130,196,.35); border-radius: 4px; color: #3a7ab8; background: transparent; font-size: 12px; font-family: inherit; cursor: pointer; }
+        .start-empty button:hover { background: rgba(59,130,196,.08); }
+
+        /* Drop zone overlay */
+        #dropZone {
+            position: absolute !important; inset: 0 !important; z-index: 60 !important;
+            display: none !important; pointer-events: none !important;
+            flex-direction: column !important; align-items: center !important; justify-content: center !important;
+            background: rgba(22,28,42,.93) !important; border: 2px dashed rgba(59,130,196,.5) !important;
+            border-radius: 0 !important; color: #60a5fa !important;
+            font-size: 13px !important; font-weight: 600 !important;
+        }
+        #dropZone.drag-show { display: flex !important; pointer-events: auto !important; }
+
+        /* Loading toast */
+        #loadingMsg {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            padding: 10px 20px; border-radius: 8px;
+            background: rgba(18,24,38,.97); border: 1px solid rgba(93,111,134,.4);
+            color: #e2e8f0; font-size: 13px; z-index: 200; display: none;
+            backdrop-filter: blur(10px); box-shadow: 0 8px 28px rgba(0,0,0,.5); white-space: nowrap;
+        }
     </style>
     <!-- Import Map for ES Modules -->
 </head>
 <body>
     <div class="page-container">
         <section id="uploadPage" class="page page-active">
-            <div class="upload-content">
-                <h2>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 1L2 6v12l10 5 10-5V6L12 1zm0 2.31L18.47 6 12 9.31 5.53 6 12 3.31zM4 7.69l6 3.15v6.52L4 13.84V7.69zm8 11.01L6.47 16 12 12.69l5.53 3.31L12 18.7zM20 13.84l-6 3.15V10.84l6-3.15v6.15z" />
-                        <circle cx="12" cy="12" r="2" fill="#8fc7ff" />
-                        <path d="M12 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" fill="#fff" />
-                    </svg>
-                    Forma Link
-                </h2>
-                <div class="button-group">
-                    <button class="button primary" id="createNewEmptyModelButton">Create Empty Model</button>
-                    <button class="button primary" id="editExistingModelButton">Edit Existing Model</button>
-                    <button class="button secondary" id="loadRandomModelButton">Load Random Model</button>
-                </div>
-                <div id="dropZone">
-                    Drag and Drop your .gltf, .glb, or .ifc file here
-                </div>
-                <p id="loadingMsg">Loading model, please wait...</p>
-                <!-- The file input is kept here, hidden, as it's triggered programmatically -->
-                <input type="file" id="fileInput" accept=".cadproject,.gltf,.glb,.ifc" style="display: none;" />
+            <!-- Hidden elements required by existing JS -->
+            <input type="file" id="fileInput" accept=".cadproject,.gltf,.glb,.ifc" style="display:none;" />
+            <button id="loadRandomModelButton" style="display:none;" aria-hidden="true"></button>
+            <p id="loadingMsg">Loading model, please wait...</p>
+
+            <div class="start-layout">
+                <!-- ── Sidebar (Revit-style) ── -->
+                <aside class="start-sidebar">
+                    <div class="start-brand">
+                        <div class="start-brand-row">
+                            <div class="start-brand-logo">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5 3.5 7v10L12 21.5 20.5 17V7L12 2.5Zm0 2.4 5.9 3.1-5.9 3.1L6.1 8 12 4.9Zm-6.5 5 5.3 2.8v5.7l-5.3-2.8V9.9Zm7.7 8.5v-5.7l5.3-2.8v5.7l-5.3 2.8Z"/></svg>
+                            </div>
+                            <span class="start-brand-name">Forma Link</span>
+                        </div>
+                        <div class="start-brand-ver">2026</div>
+                    </div>
+
+                    <div class="sb-section">
+                        <div class="sb-section-label">Models</div>
+                        <button class="sb-btn" id="editExistingModelButton">Open ...</button>
+                        <button class="sb-btn" id="createNewEmptyModelButton">New ...</button>
+                    </div>
+
+                    <div class="sb-divider"></div>
+
+                    <nav class="sb-nav">
+                        <button class="sb-nav-item active" onclick="startShowSection('all',this)">Recent</button>
+                        <button class="sb-nav-item" onclick="startShowSection('samples',this)">Samples</button>
+                        <button class="sb-nav-item" onclick="startShowSection('all',this)">Getting Started</button>
+                    </nav>
+
+                    <div class="start-sidebar-foot">Forma Link &middot; v1.0</div>
+                </aside>
+
+                <!-- ── Main content ── -->
+                <main class="start-main" id="startMain">
+                    <!-- Drop zone overlay -->
+                    <div id="dropZone">
+                        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:10px;opacity:.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Drop .gltf · .glb · .ifc · .cadproject
+                    </div>
+
+                    <!-- Top bar -->
+                    <div class="start-topbar">
+                        <span class="start-topbar-title" id="startTopbarTitle">Recent</span>
+                        <div class="start-topbar-sep"></div>
+                        <span class="start-sort-lbl">Sort by</span>
+                        <select class="start-sort-sel" id="startSortSel">
+                            <option>Date modified</option>
+                            <option>Name</option>
+                        </select>
+                        <div class="start-search-bar">
+                            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+                            <input type="search" id="startSearchInput" placeholder="Search for recent files" />
+                        </div>
+                    </div>
+
+                    <!-- Grid area -->
+                    <div class="start-grid-area">
+
+                        <!-- Recent files -->
+                        <div id="startSectionRecent">
+                            <div class="start-section-lbl">
+                                <span>Recent</span>
+                                <button class="start-clear-btn" id="clearRecentBtn" onclick="clearRecentFiles()" style="display:none;">Clear all</button>
+                            </div>
+                            <div class="start-tiles" id="recentFilesList">
+                                <div class="start-empty" id="recentEmptyState">
+                                    <p>No recent files yet.</p>
+                                    <button onclick="document.getElementById('editExistingModelButton').click()">Browse for a file to open</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Samples -->
+                        <div id="startSectionSamples">
+                            <div class="start-section-lbl"><span>Sample Files</span></div>
+                            <div class="start-tiles">
+
+                                <button class="start-tile sample" onclick="loadSample('duck')">
+                                    <div class="start-tile-thumb">
+                                        <svg viewBox="0 0 48 48"><path d="M24 4C16 4 8 11 8 20c0 5 2 9.4 5.2 12.6L12 40h24l-1.2-7.4C37.8 29.4 40 25 40 20c0-9-8-16-16-16z"/><circle cx="19" cy="19" r="2" fill="#4878a0" stroke="none"/></svg>
+                                        <span class="start-tile-ext">GLB</span>
+                                    </div>
+                                    <div class="start-tile-name">Duck</div>
+                                    <div class="start-tile-date">Khronos Sample</div>
+                                </button>
+
+                                <button class="start-tile sample" onclick="loadSample('helmet')">
+                                    <div class="start-tile-thumb" style="background:#b8c4ce;">
+                                        <svg viewBox="0 0 48 48"><path d="M24 4a18 18 0 0 0-18 18c0 6.8 3.8 12.8 9.4 16H24h8.6A18 18 0 0 0 42 22 18 18 0 0 0 24 4z"/><path d="M16 38h16M20 38v4M28 38v4"/></svg>
+                                        <span class="start-tile-ext">GLB</span>
+                                    </div>
+                                    <div class="start-tile-name">Damaged Helmet</div>
+                                    <div class="start-tile-date">Khronos Sample</div>
+                                </button>
+
+                                <button class="start-tile sample" onclick="loadSample('truck')">
+                                    <div class="start-tile-thumb" style="background:#baccba;">
+                                        <svg viewBox="0 0 48 48"><rect x="2" y="16" width="30" height="20" rx="2"/><path d="M32 22h8l6 6v8H32V22z"/><circle cx="11" cy="37" r="5"/><circle cx="37" cy="37" r="5"/></svg>
+                                        <span class="start-tile-ext">GLB</span>
+                                    </div>
+                                    <div class="start-tile-name">Milk Truck</div>
+                                    <div class="start-tile-date">Khronos Sample</div>
+                                </button>
+
+                                <button class="start-tile sample" onclick="loadSample('avocado')">
+                                    <div class="start-tile-thumb" style="background:#bac8b2;">
+                                        <svg viewBox="0 0 48 48"><path d="M24 4C18 4 12 11 12 19c0 10 8 17 11 25h2c3-8 11-15 11-25C36 11 30 4 24 4z"/><circle cx="24" cy="20" r="5" fill="#4878a0" stroke="none" opacity=".5"/></svg>
+                                        <span class="start-tile-ext">GLB</span>
+                                    </div>
+                                    <div class="start-tile-name">Avocado</div>
+                                    <div class="start-tile-date">Khronos Sample</div>
+                                </button>
+
+                                <button class="start-tile sample" onclick="loadSample('box')">
+                                    <div class="start-tile-thumb" style="background:#ccc8b8;">
+                                        <svg viewBox="0 0 48 48"><path d="M42 32V16a4 4 0 0 0-2-3.46L26 4.54a4 4 0 0 0-4 0L8 12.54A4 4 0 0 0 6 16v16a4 4 0 0 0 2 3.46l14 8a4 4 0 0 0 4 0l14-8A4 4 0 0 0 42 32z"/><polyline points="6.54 13.92 24 24.02 41.46 13.92"/><line x1="24" y1="44.16" x2="24" y2="24"/></svg>
+                                        <span class="start-tile-ext">GLB</span>
+                                    </div>
+                                    <div class="start-tile-name">Box</div>
+                                    <div class="start-tile-date">Khronos Sample</div>
+                                </button>
+
+                                <button class="start-tile sample" onclick="loadSample('empty')">
+                                    <div class="start-tile-thumb" style="background:#c0c8d4;">
+                                        <svg viewBox="0 0 48 48" stroke-dasharray="4 3"><rect x="6" y="6" width="36" height="36" rx="3"/><line x1="24" y1="16" x2="24" y2="32"/><line x1="16" y1="24" x2="32" y2="24"/></svg>
+                                        <span class="start-tile-ext" style="background:rgba(40,40,60,.8);color:#a0b8d8;">TPL</span>
+                                    </div>
+                                    <div class="start-tile-name">Empty Scene</div>
+                                    <div class="start-tile-date">Start from scratch</div>
+                                </button>
+
+                            </div>
+                        </div>
+
+                    </div><!-- /start-grid-area -->
+                </main>
             </div>
         </section>
 

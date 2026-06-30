@@ -206,25 +206,13 @@ function validateFileExtension(name = '') {
         || lowerName.endsWith('.ifc');
 }
 
-export function loadRandomModel() {
-    // Added error handling for empty RANDOM_MODEL_URLS
-    if (RANDOM_MODEL_URLS.length === 0) {
-        console.warn("[loadRandomModel] RANDOM_MODEL_URLS is empty. Cannot load a random model.");
-        addMessageToLog('System', 'No random models available to load. Please try uploading a model or creating a new one.');
-        _speakResponse('No random models available to load.');
-        return;
-    }
-
-    const randomIndex = Math.floor(Math.random() * RANDOM_MODEL_URLS.length);
-    const modelUrl = RANDOM_MODEL_URLS[randomIndex];
-    console.log(`[loadRandomModel] Attempting to load random model from URL: ${modelUrl} (Index: ${randomIndex})`); // Added index to log
+function _loadGLBFromUrl(modelUrl, displayName) {
     const loader = new THREE.GLTFLoader();
     loader.load(modelUrl, (gltf) => {
-        const randomModel = gltf.scene;
-        randomModel.name = `Random Model (${modelUrl.split('/').pop()})`;
-        state.scene.add(randomModel);
-        // Store initial material(s) for the loaded model or its meshes
-        randomModel.traverse((obj) => {
+        const model = gltf.scene;
+        model.name = displayName || `Sample (${modelUrl.split('/').pop()})`;
+        state.scene.add(model);
+        model.traverse((obj) => {
             if (obj.isMesh && obj.material) {
                 if (Array.isArray(obj.material)) {
                     obj.userData.initialMaterial = obj.material.map(mat => mat.clone());
@@ -233,20 +221,38 @@ export function loadRandomModel() {
                 }
             }
         });
-        state.loadedModels.push(randomModel);
+        state.loadedModels.push(model);
         state.navigationModelSize = null;
         _resetView();
-        addMessageToLog('System', `Random model "${randomModel.name}" loaded successfully.`);
-        _speakResponse(`Random model loaded.`);
-        console.log(`[loadRandomModel] Random model "${randomModel.name}" loaded successfully.`);
-        saveSceneState(); // Save state after loading a new model
-    }, (xhr) => { // Progress callback
-        loadingMsg.textContent = `Loading ${modelUrl}: ${Math.round(xhr.loaded / xhr.total * 100)}%`;
+        addMessageToLog('System', `Model "${model.name}" loaded successfully.`);
+        _speakResponse('Model loaded.');
+        if (loadingMsg) loadingMsg.style.display = 'none';
+        saveSceneState();
+    }, (xhr) => {
+        if (loadingMsg && xhr.total) {
+            loadingMsg.style.display = 'block';
+            loadingMsg.textContent = `Loading ${Math.round(xhr.loaded / xhr.total * 100)}%…`;
+        }
     }, (error) => {
-        console.error(`[loadRandomModel] Error loading random model from ${modelUrl}:`, error);
-        addMessageToLog('System', `Failed to load random model from ${modelUrl}. Error details in console. Please try another option.`); // More specific error message
-        _speakResponse(`Failed to load random model. Please check the console for details.`);
+        console.error(`[loader] Error loading model from ${modelUrl}:`, error);
+        addMessageToLog('System', `Failed to load model. Error details in console.`);
+        _speakResponse('Failed to load model.');
+        if (loadingMsg) loadingMsg.style.display = 'none';
     });
+}
+
+export function loadRandomModel() {
+    if (RANDOM_MODEL_URLS.length === 0) {
+        addMessageToLog('System', 'No random models available.');
+        return;
+    }
+    const url = RANDOM_MODEL_URLS[Math.floor(Math.random() * RANDOM_MODEL_URLS.length)];
+    _loadGLBFromUrl(url);
+}
+
+export function loadSampleByUrl(url, displayName) {
+    if (!url) return;
+    _loadGLBFromUrl(url, displayName);
 }
 
 async function _loadIFCModel(file) {

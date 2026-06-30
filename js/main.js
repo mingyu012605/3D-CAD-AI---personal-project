@@ -21,7 +21,7 @@ import {
 } from './history.js';
 import { createPrimitive } from './primitives.js';
 import {
-    loadRandomModel, loadModel,
+    loadRandomModel, loadModel, loadSampleByUrl,
     initLoaderCallbacks, initLoaderEventHandlers
 } from './loader.js';
 import { initDocLink, onObjectSelected as docLinkOnSelected } from './docLink.js';
@@ -3490,6 +3490,7 @@ import {
                 loadingMsg.style.display = 'block';
                 console.log(`[goToEditor] Transitioning to editor. Preparing to load uploaded model: ${state.uploadedFile.name}`);
                 console.log(`[goToEditor] Current state.droppedFileBlobs keys:`, Array.from(state.droppedFileBlobs.keys()));
+                saveRecentFile(state.uploadedFile.name, state.uploadedFile.size);
                 loadModel(state.uploadedFile);
             } else {
                 console.warn("[goToEditor] Invalid loadType or no state.uploadedFile for 'uploaded' type. Defaulting to empty state.scene.");
@@ -3538,7 +3539,149 @@ import {
             console.log("[Navigation] Returned to upload page. State reset.");
             addMessageToLog('System', 'Welcome back! Choose an option to get started.');
             updateUndoRedoButtons(); // Update buttons on page change
+            renderRecentFiles();
         }
+
+        // ─── Recent Files ───────────────────────────────────────────────────────
+        const RECENT_FILES_KEY = 'forma-link-recent-files-v1';
+
+        const SAMPLE_URLS = {
+            duck:    'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
+            helmet:  'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb',
+            truck:   'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/glTF-Binary/CesiumMilkTruck.glb',
+            avocado: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Avocado/glTF-Binary/Avocado.glb',
+            box:     'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF-Binary/Box.glb',
+        };
+
+        function getRecentFiles() {
+            try { return JSON.parse(localStorage.getItem(RECENT_FILES_KEY) || '[]'); } catch { return []; }
+        }
+
+        function saveRecentFile(name, size) {
+            const files = getRecentFiles().filter(f => f.name !== name);
+            files.unshift({ name, size, openedAt: new Date().toISOString() });
+            if (files.length > 20) files.length = 20;
+            localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(files));
+        }
+
+        function _timeAgo(iso) {
+            const diff = Date.now() - new Date(iso).getTime();
+            const m = Math.floor(diff / 60000);
+            if (m < 1) return 'Just now';
+            if (m < 60) return `${m}m ago`;
+            const h = Math.floor(m / 60);
+            if (h < 24) return `${h}h ago`;
+            const d = Math.floor(h / 24);
+            if (d < 7) return `${d}d ago`;
+            return new Date(iso).toLocaleDateString();
+        }
+
+        function _extIcon(ext) {
+            const s = `width="44" height="44" viewBox="0 0 48 48" fill="none" stroke="#4878a0" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"`;
+            const icons = {
+                ifc: `<svg ${s}><path d="M24 5 5 14v20l19 9 19-9V14L24 5zm0 4.8 11.8 6.2L24 22 12.2 16 24 9.8zm-13 10 10.6 5.6v11.4L11 30.2V19.8zm17.4 17v-11.4L40 19.8v11.4l-11.6 5.6z"/></svg>`,
+                glb:  `<svg ${s}><path d="M42 32V16a4 4 0 0 0-2-3.46L26 4.54a4 4 0 0 0-4 0L8 12.54A4 4 0 0 0 6 16v16a4 4 0 0 0 2 3.46l14 8a4 4 0 0 0 4 0l14-8A4 4 0 0 0 42 32z"/><polyline points="6.54 13.92 24 24.02 41.46 13.92"/><line x1="24" y1="44.16" x2="24" y2="24"/></svg>`,
+                gltf: `<svg ${s}><path d="M42 32V16a4 4 0 0 0-2-3.46L26 4.54a4 4 0 0 0-4 0L8 12.54A4 4 0 0 0 6 16v16a4 4 0 0 0 2 3.46l14 8a4 4 0 0 0 4 0l14-8A4 4 0 0 0 42 32z"/><polyline points="6.54 13.92 24 24.02 41.46 13.92"/><line x1="24" y1="44.16" x2="24" y2="24"/></svg>`,
+                cadproject: `<svg ${s}><path d="M26 4H10a4 4 0 0 0-4 4v32a4 4 0 0 0 4 4h28a4 4 0 0 0 4-4V18L26 4z"/><polyline points="26 4 26 18 40 18"/><line x1="16" y1="28" x2="32" y2="28"/><line x1="16" y1="34" x2="32" y2="34"/></svg>`,
+            };
+            return icons[ext] || icons.glb;
+        }
+
+        function renderRecentFiles() {
+            const list = document.getElementById('recentFilesList');
+            if (!list) return;
+            const emptyState = document.getElementById('recentEmptyState');
+            const clearBtn = document.getElementById('clearRecentBtn');
+            list.querySelectorAll('.start-tile.recent').forEach(el => el.remove());
+
+            const files = getRecentFiles();
+            if (files.length === 0) {
+                if (emptyState) emptyState.style.display = '';
+                if (clearBtn) clearBtn.style.display = 'none';
+                return;
+            }
+            if (emptyState) emptyState.style.display = 'none';
+            if (clearBtn) clearBtn.style.display = '';
+
+            // thumb backgrounds by extension
+            const thumbBg = { ifc: '#b8ccd8', glb: '#c0ccb8', gltf: '#c0ccb8', cadproject: '#c4b8d0' };
+
+            files.forEach((file, i) => {
+                const ext = (file.name.split('.').pop() || '').toLowerCase();
+                const bg = thumbBg[ext] || '#c0c8d4';
+                const tile = document.createElement('button');
+                tile.className = 'start-tile recent';
+                tile.title = file.name;
+                tile.innerHTML = `
+                    <div class="start-tile-thumb" style="background:${bg};">
+                        ${_extIcon(ext)}
+                        <span class="start-tile-ext">.${ext.toUpperCase()}</span>
+                        <button style="position:absolute;top:5px;right:5px;width:20px;height:20px;border:none;border-radius:3px;background:rgba(0,0,0,.35);color:#fff;cursor:pointer;display:grid;place-items:center;font-size:10px;padding:0;" title="Remove" onclick="event.stopPropagation();window.removeRecentFile(${i})">✕</button>
+                    </div>
+                    <div class="start-tile-name">${file.name}</div>
+                    <div class="start-tile-date">${_timeAgo(file.openedAt)}</div>`;
+                tile.addEventListener('click', () => { fileInput.value = ''; fileInput.click(); });
+                list.appendChild(tile);
+            });
+        }
+
+        window.removeRecentFile = function(index) {
+            const files = getRecentFiles();
+            files.splice(index, 1);
+            localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(files));
+            renderRecentFiles();
+        };
+
+        window.clearRecentFiles = function() {
+            localStorage.removeItem(RECENT_FILES_KEY);
+            renderRecentFiles();
+        };
+
+        window.startShowSection = function(section, btn) {
+            document.querySelectorAll('.sb-nav-item').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            const recent  = document.getElementById('startSectionRecent');
+            const samples = document.getElementById('startSectionSamples');
+            const title   = document.getElementById('startTopbarTitle');
+            if (recent)  recent.style.display  = (section === 'samples') ? 'none' : '';
+            if (samples) samples.style.display  = (section === 'recent')  ? 'none' : '';
+            if (title)   title.textContent = section === 'samples' ? 'Samples' : 'Recent';
+        };
+
+        window.loadSample = function(name) {
+            if (name === 'empty') { goToEditor('empty'); return; }
+            const url = SAMPLE_URLS[name];
+            if (!url) { goToEditor('random'); return; }
+            disposeSceneResources();
+            uploadPage.classList.remove('page-active');
+            uploadPage.classList.add('page-inactive');
+            editorPage.classList.remove('page-inactive');
+            editorPage.classList.add('page-active');
+            headerEditorActions.hidden = false;
+            requestAnimationFrame(() => onWindowResize());
+            loadSampleByUrl(url, name.charAt(0).toUpperCase() + name.slice(1) + ' (Sample)');
+            addMessageToLog('System', `Loading sample: ${name}`);
+        };
+
+        // Show/hide dropZone overlay when files are dragged onto the start page
+        let _dragCounter = 0;
+        document.body.addEventListener('dragenter', (e) => {
+            if (uploadPage.classList.contains('page-active') && e.dataTransfer?.types?.includes('Files')) {
+                _dragCounter++;
+                dropZone.classList.add('drag-show');
+            }
+        });
+        document.body.addEventListener('dragleave', (e) => {
+            if (uploadPage.classList.contains('page-active')) {
+                _dragCounter = Math.max(0, _dragCounter - 1);
+                if (_dragCounter === 0) dropZone.classList.remove('drag-show');
+            }
+        });
+        dropZone.addEventListener('drop', () => { _dragCounter = 0; dropZone.classList.remove('drag-show'); });
+
+        // Initial render
+        renderRecentFiles();
+        // ────────────────────────────────────────────────────────────────────────
 
         // --- Three.js state.scene Setup and Model Loading ---
         function initScene() {
