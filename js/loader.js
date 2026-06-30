@@ -256,35 +256,89 @@ export function loadSampleByUrl(url, displayName) {
     _loadGLBFromUrl(url, displayName);
 }
 
+async function _getIFCFromCache(cacheKey) {
+    try {
+        return await new Promise((resolve, reject) => {
+            const req = indexedDB.open('ifc-sample-cache', 1);
+            req.onupgradeneeded = e => e.target.result.createObjectStore('files');
+            req.onsuccess = e => {
+                const tx = e.target.result.transaction('files', 'readonly');
+                const get = tx.objectStore('files').get(cacheKey);
+                get.onsuccess = () => resolve(get.result || null);
+                get.onerror = reject;
+            };
+            req.onerror = reject;
+        });
+    } catch { return null; }
+}
+
+async function _putIFCInCache(cacheKey, buffer) {
+    try {
+        await new Promise((resolve, reject) => {
+            const req = indexedDB.open('ifc-sample-cache', 1);
+            req.onupgradeneeded = e => e.target.result.createObjectStore('files');
+            req.onsuccess = e => {
+                const tx = e.target.result.transaction('files', 'readwrite');
+                tx.objectStore('files').put(buffer, cacheKey);
+                tx.oncomplete = resolve;
+                tx.onerror = reject;
+            };
+            req.onerror = reject;
+        });
+    } catch { /* cache write failure is non-fatal */ }
+}
+
 export async function loadSampleIFCByUrl(url, displayName) {
     if (!url) return;
-    if (loadingMsg) {
-        loadingMsg.style.display = 'block';
-        loadingMsg.style.color = '#007bff';
-        loadingMsg.textContent = 'Loading IFC sample…';
+    const setMsg = (text, color = '#007bff') => {
+        if (loadingMsg) { loadingMsg.style.display = 'block'; loadingMsg.style.color = color; loadingMsg.textContent = text; }
+    };
+    setMsg('Checking cache…');
+
+    const cacheKey = url;
+    let buffer = await _getIFCFromCache(cacheKey);
+
+    if (buffer) {
+        setMsg('Loading from cache…');
+    } else {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const total = parseInt(response.headers.get('content-length') || '0');
+            const reader = response.body.getReader();
+            const chunks = [];
+            let received = 0;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                received += value.length;
+                if (total) setMsg(`Downloading… ${Math.round(received / total * 100)}%`);
+                else setMsg(`Downloading… ${Math.round(received / 1048576)} MB`);
+            }
+            buffer = new Uint8Array(received);
+            let offset = 0;
+            for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.length; }
+            buffer = buffer.buffer;
+            _putIFCInCache(cacheKey, buffer); // save for next time
+        } catch (err) {
+            // URL unavailable — fall back to file picker
+            console.warn('[loadSampleIFCByUrl] fetch failed, opening file picker:', err.message);
+            if (loadingMsg) loadingMsg.style.display = 'none';
+            addMessageToLog('System', 'Select your IFC file to load it as the main sample.');
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.ifc';
+            input.onchange = async (e) => { const f = e.target.files?.[0]; if (f) await _loadIFCModel(f); };
+            input.click();
+            return;
+        }
     }
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const buffer = await response.arrayBuffer();
-        const urlBasename = url.split('/').pop();
-        const fileName = urlBasename.toLowerCase().endsWith('.ifc') ? urlBasename : (displayName || urlBasename) + '.ifc';
-        const file = new File([buffer], fileName, { type: 'application/x-ifc' });
-        await _loadIFCModel(file);
-    } catch (err) {
-        // URL unavailable — fall back to file picker so it always works
-        console.warn('[loadSampleIFCByUrl] fetch failed, opening file picker:', err.message);
-        if (loadingMsg) loadingMsg.style.display = 'none';
-        addMessageToLog('System', 'Select your IFC file to load it as the main sample.');
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.ifc';
-        input.onchange = async (e) => {
-            const file = e.target.files?.[0];
-            if (file) await _loadIFCModel(file);
-        };
-        input.click();
-    }
+
+    const urlBasename = url.split('/').pop();
+    const fileName = urlBasename.toLowerCase().endsWith('.ifc') ? urlBasename : (displayName || urlBasename) + '.ifc';
+    const file = new File([buffer], fileName, { type: 'application/x-ifc' });
+    await _loadIFCModel(file);
 }
 
 async function _loadIFCModel(file) {
