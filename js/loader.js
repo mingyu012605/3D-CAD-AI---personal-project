@@ -261,7 +261,7 @@ export async function loadSampleIFCByUrl(url, displayName) {
     if (loadingMsg) {
         loadingMsg.style.display = 'block';
         loadingMsg.style.color = '#007bff';
-        loadingMsg.textContent = 'Fetching IFC sample…';
+        loadingMsg.textContent = 'Loading IFC sample…';
     }
     try {
         const response = await fetch(url);
@@ -272,9 +272,18 @@ export async function loadSampleIFCByUrl(url, displayName) {
         const file = new File([buffer], fileName, { type: 'application/x-ifc' });
         await _loadIFCModel(file);
     } catch (err) {
-        console.error('[loadSampleIFCByUrl]', err);
-        addMessageToLog('System', `Failed to load IFC sample: ${err.message}`);
+        // URL unavailable — fall back to file picker so it always works
+        console.warn('[loadSampleIFCByUrl] fetch failed, opening file picker:', err.message);
         if (loadingMsg) loadingMsg.style.display = 'none';
+        addMessageToLog('System', 'Select your IFC file to load it as the main sample.');
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.ifc';
+        input.onchange = async (e) => {
+            const file = e.target.files?.[0];
+            if (file) await _loadIFCModel(file);
+        };
+        input.click();
     }
 }
 
