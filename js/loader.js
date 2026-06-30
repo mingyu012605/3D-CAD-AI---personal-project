@@ -288,21 +288,44 @@ async function _putIFCInCache(cacheKey, buffer) {
     } catch { /* cache write failure is non-fatal */ }
 }
 
+let _bannerAnimId = null;
+let _bannerPct = 0;
+
 function _setBanner(text, pct) {
     const banner = document.getElementById('topLoadingBanner');
     if (!banner) return;
     banner.classList.add('visible');
+    _bannerPct = pct;
     const t = document.getElementById('topLoadingBannerText');
     const fill = document.getElementById('topLoadingBannerFill');
     const pctEl = document.getElementById('topLoadingBannerPct');
     if (t) t.textContent = text;
     if (fill) fill.style.width = `${pct}%`;
-    if (pctEl) pctEl.textContent = pct > 0 ? `${Math.round(pct)}%` : '';
+    if (pctEl) pctEl.textContent = `${Math.round(pct)}%`;
+}
+
+function _startParseAnimation(text) {
+    // Animates the bar from current position slowly toward 95% while parsing
+    if (_bannerAnimId) clearInterval(_bannerAnimId);
+    _setBanner(text, _bannerPct);
+    _bannerAnimId = setInterval(() => {
+        const remaining = 95 - _bannerPct;
+        _bannerPct += remaining * 0.018; // slows down as it approaches 95
+        const fill = document.getElementById('topLoadingBannerFill');
+        const pctEl = document.getElementById('topLoadingBannerPct');
+        if (fill) fill.style.width = `${_bannerPct}%`;
+        if (pctEl) pctEl.textContent = `${Math.round(_bannerPct)}%`;
+    }, 250);
 }
 
 function _hideBanner() {
-    const banner = document.getElementById('topLoadingBanner');
-    if (banner) banner.classList.remove('visible');
+    if (_bannerAnimId) { clearInterval(_bannerAnimId); _bannerAnimId = null; }
+    // Jump to 100%, show "Done" briefly, then hide
+    _setBanner('Model loaded!', 100);
+    setTimeout(() => {
+        const banner = document.getElementById('topLoadingBanner');
+        if (banner) banner.classList.remove('visible');
+    }, 1200);
 }
 
 export async function loadSampleIFCByUrl(url, displayName) {
@@ -318,7 +341,7 @@ export async function loadSampleIFCByUrl(url, displayName) {
     let buffer = await _getIFCFromCache(cacheKey);
 
     if (buffer) {
-        _setBanner('Loading from cache — almost ready…', 50);
+        _startParseAnimation('Loading from cache — parsing model…');
         setMsg('Loading from cache…');
     } else {
         try {
@@ -333,9 +356,9 @@ export async function loadSampleIFCByUrl(url, displayName) {
                 if (done) break;
                 chunks.push(value);
                 received += value.length;
-                const pct = total ? Math.round(received / total * 45) : 0;
+                const pct = total ? Math.round(received / total * 50) : 0;
                 const dlText = total
-                    ? `Downloading IFC… ${Math.round(received / total * 100)}%  — first load only, next time is instant`
+                    ? `Downloading IFC… ${Math.round(received / total * 100)}% — first load only, next time is instant`
                     : `Downloading IFC… ${Math.round(received / 1048576)} MB`;
                 _setBanner(dlText, pct);
                 setMsg(total ? `Downloading… ${Math.round(received / total * 100)}%` : `Downloading… ${Math.round(received / 1048576)} MB`);
@@ -355,14 +378,14 @@ export async function loadSampleIFCByUrl(url, displayName) {
             input.accept = '.ifc';
             input.onchange = async (e) => {
                 const f = e.target.files?.[0];
-                if (f) { _setBanner('Parsing IFC model…', 50); await _loadIFCModel(f); }
+                if (f) { _startParseAnimation('Parsing IFC model…'); await _loadIFCModel(f); }
             };
             input.click();
             return;
         }
     }
 
-    _setBanner('Parsing IFC model — hang tight…', 50);
+    _startParseAnimation('Parsing IFC model — hang tight…');
     const urlBasename = url.split('/').pop();
     const fileName = urlBasename.toLowerCase().endsWith('.ifc') ? urlBasename : (displayName || urlBasename) + '.ifc';
     const file = new File([buffer], fileName, { type: 'application/x-ifc' });
