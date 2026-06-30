@@ -3332,33 +3332,48 @@ import {
             }
         }
 
-        // --- Apply CSS Function (remains the same, but now accessed via AI command or direct console) ---
-        applyCssButton.addEventListener('click', () => {
-            console.log("[Apply CSS] button clicked."); // Debug log
-            const cssText = cssCodeEditor.value;
-            try {
-                cadViewer.style.cssText = cssText;
-                addMessageToLog('System', 'Viewer appearance applied.');
-            } catch (error) {
-                addMessageToLog('System', `Error applying CSS: ${error.message}`);
-                console.error("Error applying CSS:", error);
+        // Viewer appearance: set Three.js clear color + optional CSS overlay for patterns
+        const VIEWER_STYLES = {
+            light:     { color: 0xf5f7fa, alpha: 1, bg: '#f5f7fa' },
+            blueprint: { color: 0x0d1b2e, alpha: 1, bg: '#0d1b2e' },
+            dark:      { color: 0x182231, alpha: 1, bg: '#182231' },
+            grid:      { color: 0xf0f4f8, alpha: 1, bg: '#f0f4f8' },
+        };
+
+        function applyViewerStyle(preset, customBg) {
+            if (preset && VIEWER_STYLES[preset]) {
+                const s = VIEWER_STYLES[preset];
+                if (state.renderer) state.renderer.setClearColor(s.color, s.alpha);
+                cadViewer.style.background = s.bg;
+                cssCodeEditor.value = `background: ${s.bg};`;
+            } else if (customBg) {
+                // Try to parse a hex/rgb color from the CSS text
+                const match = customBg.match(/background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,8}|rgb[a]?\([^)]+\)|[a-z]+)/i);
+                if (match && state.renderer) {
+                    try {
+                        const c = new THREE.Color(match[1]);
+                        state.renderer.setClearColor(c, 1);
+                    } catch { /* unrecognised color, skip */ }
+                }
+                cadViewer.style.cssText = customBg;
             }
+            addMessageToLog('System', 'Viewer appearance applied.');
+        }
+
+        applyCssButton.addEventListener('click', () => {
+            applyViewerStyle(null, cssCodeEditor.value);
         });
+
         document.querySelectorAll('[data-viewer-style]').forEach(button => {
             button.addEventListener('click', () => {
-                const styles = {
-                    light: 'background: #ffffff;',
-                    blueprint: 'background: linear-gradient(135deg, #eaf4ff, #cddff2);',
-                    dark: 'background: #182231;',
-                    grid: 'background-color: #ffffff; background-image: linear-gradient(#dfe7ef 1px, transparent 1px), linear-gradient(90deg, #dfe7ef 1px, transparent 1px); background-size: 24px 24px;',
-                };
-                cssCodeEditor.value = styles[button.dataset.viewerStyle] || '';
-                applyCssButton.click();
+                applyViewerStyle(button.dataset.viewerStyle);
             });
         });
+
         resetCssButton.addEventListener('click', () => {
+            if (state.renderer) state.renderer.setClearColor(0x17243a, 1);
+            cadViewer.style.background = '#17243a';
             cssCodeEditor.value = '';
-            cadViewer.style.cssText = '';
             addMessageToLog('System', 'Viewer appearance reset.');
         });
 
