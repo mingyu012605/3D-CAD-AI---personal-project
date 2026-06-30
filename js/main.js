@@ -5371,22 +5371,21 @@ import {
 
         window.addEventListener('resize', onWindowResize, false);
 
-        // Function to handle tab switching (AI Chat / Code Editor)
-        function setActiveTab(tabName) {
-            // Remove 'active' class from all tab buttons and content
-            // Ensure we only affect the tab buttons within the right-panel
-            document.querySelectorAll('.editor-actions .tab-button').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.right-panel .tab-content').forEach(content => content.classList.remove('active'));
+        const sidebarWorkspace = document.querySelector('.sidebar-workspace');
 
-            // Add 'active' class to the clicked tab button and corresponding content
+        function setActiveTab(tabName) {
+            document.querySelectorAll('.editor-actions .tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.right-panel .tab-content').forEach(c => c.classList.remove('active'));
+
+            const showInspector = (tabName !== 'chat' && tabName !== 'codeEditor');
+            if (sidebarWorkspace) sidebarWorkspace.style.display = showInspector ? '' : 'none';
+
             if (tabName === 'chat') {
                 chatTabButton.classList.add('active');
                 chatContent.classList.add('active');
-                speakResponse('Switched to AI chat.');
             } else if (tabName === 'codeEditor') {
                 codeEditorTabButton.classList.add('active');
                 codeEditorContent.classList.add('active');
-                speakResponse('Switched to code editor.');
             }
         }
 

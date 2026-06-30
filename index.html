@@ -52,7 +52,7 @@
         .context-card strong { display: block; margin-bottom: 3px; color: #e2e8f0; font-size: 12px; }
         .context-card span { font-size: 10px; font-weight: 600; letter-spacing: .05em; }
         .viewer-hint { display: flex; gap: 12px; padding: 7px 10px; border-radius: var(--radius-md); color: #6f829a; background: rgba(15, 27, 43, .86); border: 1px solid rgba(93, 111, 134, .28); font-size: 10px; backdrop-filter: blur(8px); }
-        .right-panel { position: absolute; inset: 58px 0 0 auto; width: 372px; height: auto; overflow: hidden; min-width: 330px; padding: 14px 15px; background: var(--panel); border-left: 1px solid var(--line); box-shadow: -12px 0 30px rgba(0, 0, 0, .18); }
+        .right-panel { position: absolute; inset: 58px 0 0 auto; width: 372px; min-width: 330px; padding: 14px 15px; background: var(--panel); border-left: 1px solid var(--line); box-shadow: -12px 0 30px rgba(0, 0, 0, .18); display: flex; flex-direction: column; height: calc(100vh - 58px); box-sizing: border-box; overflow: hidden; }
         .editor-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin-bottom: 12px; padding-bottom: 13px; border-bottom: 1px solid var(--line); }
         .editor-actions button { min-width: 0; height: 34px; padding: 5px 8px; overflow: hidden; border: 1px solid rgba(93, 111, 134, .28); border-radius: 7px; color: #9cafc5; background: #152337; font-size: 10.5px; font-weight: 750; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; transition: border-color .16s ease, background-color .16s ease, color .16s ease; }
         .editor-actions button:hover:not(:disabled) { color: #eaf2fb; border-color: rgba(59, 130, 196, .45); background: #1c3048; }
@@ -112,9 +112,10 @@
         #viewToolbar .view-btn { min-width: 40px; padding: 7px 8px; color: #9cafc5; background: transparent; border-color: transparent; border-radius: var(--radius-sm); font-weight: 800; }
         #viewToolbar .view-btn:hover { color: #fff; border-color: rgba(59, 130, 196, .38); background: #203753; }
         #viewAxesContainer { display: none !important; }
-        .sidebar-chat { flex: 0 0 214px !important; min-height: 170px; border-top: 1px solid var(--line); padding-top: 10px; }
-        .sidebar-chat #aiLog { min-height: 55px; background: #101b2b; border: 1px solid rgba(93, 111, 134, .26); color: #8da0b8; }
-        .sidebar-chat .ai-input-group { flex-shrink: 0; }
+        /* Chat and Style each take the full panel height when active */
+        #chatContent.active, #codeEditorContent.active { flex: 1 1 auto; min-height: 0; }
+        #chatContent { border-top: none; }
+        #chatContent #aiLog { background: transparent; }
         .ai-input-group { min-width: 0; }
         .ai-input-group input { min-width: 0; width: 0; background: rgba(15, 23, 42, .65); border-color: var(--line); }
         .ai-input-group button { flex-shrink: 0; background: #253449; }
@@ -633,7 +634,7 @@
             <div class="right-panel">
                 <nav id="headerEditorActions" class="editor-actions" aria-label="Editor actions">
                     <button id="backToUploadCircleButton" onclick="window.goBack()" title="Back to start">Back</button>
-                    <button class="tab-button active" id="chatTabButton">Chat</button>
+                    <button class="tab-button" id="chatTabButton">Chat</button>
                     <button class="tab-button" id="codeEditorTabButton">Style</button>
                     <button class="tab-button" id="uploadNewFileButton">Add</button>
                     <button class="tab-button primary-action" id="saveButton">Save</button>
@@ -832,7 +833,7 @@
                 </div>
 
                 <!-- Chat Content remains visible by default -->
-                <div id="chatContent" class="tab-content active sidebar-chat">
+                <div id="chatContent" class="tab-content">
                     <div id="aiLog">
                         <p class="system-message">Ask me anything about your model, or give a command like "rotate 90°" or "change color to red".</p>
                     </div>
