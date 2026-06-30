@@ -3546,7 +3546,7 @@ import {
         const RECENT_FILES_KEY = 'forma-link-recent-files-v1';
 
         const SAMPLE_URLS = {
-            building: 'https://raw.githubusercontent.com/IFCjs/web-ifc/main/examples/IfcOpenHouse.ifc',
+            building: 'https://raw.githubusercontent.com/youshengCode/IfcSampleFiles/main/Ifc2x3_Duplex_Architecture.ifc',
             duck:    'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
             helmet:  'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb',
             truck:   'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/glTF-Binary/CesiumMilkTruck.glb',
