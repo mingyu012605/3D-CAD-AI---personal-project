@@ -126,11 +126,11 @@ function buildMesh(api, modelID, placedGeom) {
  * onProgress(message) is called with status strings during loading.
  */
 export async function loadIFCFile(file, onProgress) {
-    onProgress?.('Loading IFC engine…');
+    // onProgress(message, pct) — pct is 0-100, optional
+    onProgress?.('Loading IFC engine…', 0);
     await ensureAPI();
 
-    onProgress?.(`Parsing ${file.name}…`);
-    // Yield to browser so the status message renders before the synchronous parse
+    onProgress?.(`Parsing ${file.name}…`, 5);
     await new Promise(r => setTimeout(r, 60));
 
     const buffer  = await file.arrayBuffer();
@@ -145,11 +145,38 @@ export async function loadIFCFile(file, onProgress) {
     group.userData.ifcModelID  = modelID;
     group.userData.typeIndex   = {};
 
-    onProgress?.('Building geometry — this may take a moment…');
+    onProgress?.('Indexing model structure…', 15);
     await new Promise(r => setTimeout(r, 60));
     await buildSpatialLevelIndex(modelID);
 
+    // Count total IFC entities to use as denominator for progress
+    let totalEntities = 0;
+    try {
+        const allLines = ifcAPI.GetAllLines(modelID);
+        totalEntities = allLines.size ? allLines.size() : (allLines.length ?? 0);
+    } catch { /* best-effort */ }
+
+    onProgress?.('Building geometry…', 20);
+    await new Promise(r => setTimeout(r, 60));
+
+    let processed = 0;
+    let lastReportedPct = 20;
+
     ifcAPI.StreamAllMeshes(modelID, (mesh) => {
+        processed++;
+
+        // totalEntities is all entities (non-geometric included), so geometric
+        // elements are typically ~10-20% of total. Scale accordingly.
+        if (totalEntities > 0) {
+            // Map processed/totalEntities into 20-99% range.
+            // We multiply by 6 because geometric elements are ~15% of all entities.
+            const rawPct = 20 + Math.min(79, Math.round((processed / totalEntities) * 6 * 79));
+            if (rawPct >= lastReportedPct + 2) {
+                lastReportedPct = rawPct;
+                onProgress?.(`Building geometry… (${processed} elements)`, rawPct);
+            }
+        }
+
         const expressID = mesh.expressID;
         let props;
         try {
@@ -175,9 +202,7 @@ export async function loadIFCFile(file, onProgress) {
         }
     });
 
-    // COORDINATE_TO_ORIGIN:true already converts the coordinate system to Y-up,
-    // so no additional group rotation is needed here.
-
+    onProgress?.(`Finalising scene…`, 99);
     return group;
 }
 

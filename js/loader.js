@@ -305,17 +305,10 @@ function _setBanner(text, pct) {
 }
 
 function _startParseAnimation(text) {
-    // Animates the bar from current position slowly toward 95% while parsing
-    if (_bannerAnimId) clearInterval(_bannerAnimId);
+    // Called before parsing begins — banner shows current download pct
+    // Real progress will come via onProgress callbacks from ifcLoader
+    if (_bannerAnimId) { clearInterval(_bannerAnimId); _bannerAnimId = null; }
     _setBanner(text, _bannerPct);
-    _bannerAnimId = setInterval(() => {
-        const remaining = 95 - _bannerPct;
-        _bannerPct += remaining * 0.018; // slows down as it approaches 95
-        const fill = document.getElementById('topLoadingBannerFill');
-        const pctEl = document.getElementById('topLoadingBannerPct');
-        if (fill) fill.style.width = `${_bannerPct}%`;
-        if (pctEl) pctEl.textContent = `${Math.round(_bannerPct)}%`;
-    }, 250);
 }
 
 function _hideBanner() {
@@ -395,8 +388,13 @@ export async function loadSampleIFCByUrl(url, displayName) {
 async function _loadIFCModel(file) {
     addMessageToLog('System', `Loading IFC: ${file.name}…`);
     try {
-        const group = await loadIFCFile(file, msg => {
+        const group = await loadIFCFile(file, (msg, pct) => {
             addMessageToLog('System', msg);
+            // pct from ifcLoader is 0-100; map it into banner's 50-99 range
+            if (pct != null) {
+                const bannerPct = 50 + Math.round(pct / 2);
+                _setBanner(msg, Math.min(99, bannerPct));
+            }
         });
 
         state.scene.add(group);
