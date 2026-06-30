@@ -3547,6 +3547,8 @@ import {
 
         const SAMPLE_URLS = {
             building: 'https://raw.githubusercontent.com/mingyu012605/3D-CAD-AI---personal-project/main/samples/rmebasicsampleproject.ifc',
+            house:   './samples/house.glb',
+            tower:   './samples/tower.glb',
             duck:    'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
             helmet:  'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb',
             truck:   'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/glTF-Binary/CesiumMilkTruck.glb',

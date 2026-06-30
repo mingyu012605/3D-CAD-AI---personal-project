@@ -288,17 +288,37 @@ async function _putIFCInCache(cacheKey, buffer) {
     } catch { /* cache write failure is non-fatal */ }
 }
 
+function _setBanner(text, pct) {
+    const banner = document.getElementById('topLoadingBanner');
+    if (!banner) return;
+    banner.classList.add('visible');
+    const t = document.getElementById('topLoadingBannerText');
+    const fill = document.getElementById('topLoadingBannerFill');
+    const pctEl = document.getElementById('topLoadingBannerPct');
+    if (t) t.textContent = text;
+    if (fill) fill.style.width = `${pct}%`;
+    if (pctEl) pctEl.textContent = pct > 0 ? `${Math.round(pct)}%` : '';
+}
+
+function _hideBanner() {
+    const banner = document.getElementById('topLoadingBanner');
+    if (banner) banner.classList.remove('visible');
+}
+
 export async function loadSampleIFCByUrl(url, displayName) {
     if (!url) return;
     const setMsg = (text, color = '#007bff') => {
         if (loadingMsg) { loadingMsg.style.display = 'block'; loadingMsg.style.color = color; loadingMsg.textContent = text; }
     };
+
+    _setBanner('Checking cache…', 0);
     setMsg('Checking cache…');
 
     const cacheKey = url;
     let buffer = await _getIFCFromCache(cacheKey);
 
     if (buffer) {
+        _setBanner('Loading from cache — almost ready…', 50);
         setMsg('Loading from cache…');
     } else {
         try {
@@ -313,28 +333,36 @@ export async function loadSampleIFCByUrl(url, displayName) {
                 if (done) break;
                 chunks.push(value);
                 received += value.length;
-                if (total) setMsg(`Downloading… ${Math.round(received / total * 100)}%`);
-                else setMsg(`Downloading… ${Math.round(received / 1048576)} MB`);
+                const pct = total ? Math.round(received / total * 45) : 0;
+                const dlText = total
+                    ? `Downloading IFC… ${Math.round(received / total * 100)}%  — first load only, next time is instant`
+                    : `Downloading IFC… ${Math.round(received / 1048576)} MB`;
+                _setBanner(dlText, pct);
+                setMsg(total ? `Downloading… ${Math.round(received / total * 100)}%` : `Downloading… ${Math.round(received / 1048576)} MB`);
             }
             buffer = new Uint8Array(received);
             let offset = 0;
             for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.length; }
             buffer = buffer.buffer;
-            _putIFCInCache(cacheKey, buffer); // save for next time
+            _putIFCInCache(cacheKey, buffer);
         } catch (err) {
-            // URL unavailable — fall back to file picker
+            _hideBanner();
             console.warn('[loadSampleIFCByUrl] fetch failed, opening file picker:', err.message);
             if (loadingMsg) loadingMsg.style.display = 'none';
             addMessageToLog('System', 'Select your IFC file to load it as the main sample.');
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = '.ifc';
-            input.onchange = async (e) => { const f = e.target.files?.[0]; if (f) await _loadIFCModel(f); };
+            input.onchange = async (e) => {
+                const f = e.target.files?.[0];
+                if (f) { _setBanner('Parsing IFC model…', 50); await _loadIFCModel(f); }
+            };
             input.click();
             return;
         }
     }
 
+    _setBanner('Parsing IFC model — hang tight…', 50);
     const urlBasename = url.split('/').pop();
     const fileName = urlBasename.toLowerCase().endsWith('.ifc') ? urlBasename : (displayName || urlBasename) + '.ifc';
     const file = new File([buffer], fileName, { type: 'application/x-ifc' });
@@ -357,6 +385,7 @@ async function _loadIFCModel(file) {
         _resetView();
         const placementCheck = getPlacementCheck(group);
         if (placementCheck) console.log('[placement-check]', placementCheck);
+        _hideBanner();
         loadingMsg.style.display = 'none';
         const count = group.children.length;
         addMessageToLog('System', `✅ IFC model '${file.name}' loaded — ${count} element${count !== 1 ? 's' : ''}. Click any element to see its properties.`);
@@ -364,6 +393,7 @@ async function _loadIFCModel(file) {
         saveSceneState();
     } catch (e) {
         console.error('[loader] IFC load error:', e);
+        _hideBanner();
         addMessageToLog('System', `❌ Error loading IFC: ${e.message}`);
         loadingMsg.style.display = 'none';
     }
