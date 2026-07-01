@@ -208,6 +208,11 @@ function validateFileExtension(name = '') {
 
 function _loadGLBFromUrl(modelUrl, displayName) {
     const loader = new THREE.GLTFLoader();
+    if (typeof THREE.DRACOLoader !== 'undefined') {
+        const draco = new THREE.DRACOLoader();
+        draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
+        loader.setDRACOLoader(draco);
+    }
     loader.load(modelUrl, (gltf) => {
         const model = gltf.scene;
         model.name = displayName || `Sample (${modelUrl.split('/').pop()})`;
@@ -235,8 +240,9 @@ function _loadGLBFromUrl(modelUrl, displayName) {
             loadingMsg.textContent = `Loading ${Math.round(xhr.loaded / xhr.total * 100)}%…`;
         }
     }, (error) => {
+        const msg = error?.message || error?.type || String(error);
         console.error(`[loader] Error loading model from ${modelUrl}:`, error);
-        addMessageToLog('System', `Failed to load model. Error details in console.`);
+        addMessageToLog('System', `Failed to load model: ${msg}`);
         _speakResponse('Failed to load model.');
         if (loadingMsg) loadingMsg.style.display = 'none';
     });
