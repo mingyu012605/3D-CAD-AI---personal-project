@@ -53,13 +53,16 @@
         .context-card span { font-size: 10px; font-weight: 600; letter-spacing: .05em; }
         .viewer-hint { display: flex; gap: 12px; padding: 7px 10px; border-radius: var(--radius-md); color: #6f829a; background: rgba(15, 27, 43, .86); border: 1px solid rgba(93, 111, 134, .28); font-size: 10px; backdrop-filter: blur(8px); }
         .right-panel { position: absolute; inset: 58px 0 0 auto; width: 372px; min-width: 330px; padding: 14px 15px; background: var(--panel); border-left: 1px solid var(--line); box-shadow: -12px 0 30px rgba(0, 0, 0, .18); display: flex; flex-direction: column; height: calc(100vh - 58px); box-sizing: border-box; overflow: hidden; }
-        .editor-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin-bottom: 12px; padding-bottom: 13px; border-bottom: 1px solid var(--line); }
+        .editor-actions { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; padding-bottom: 13px; border-bottom: 1px solid var(--line); }
+        .editor-row { display: grid; gap: 6px; }
+        .editor-row-main { grid-template-columns: auto repeat(4, 1fr); }
+        .editor-row-util { grid-template-columns: 1fr 1fr 2fr 1fr; }
         .editor-actions button { min-width: 0; height: 34px; padding: 5px 8px; overflow: hidden; border: 1px solid rgba(93, 111, 134, .28); border-radius: 7px; color: #9cafc5; background: #152337; font-size: 10.5px; font-weight: 750; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; transition: border-color .16s ease, background-color .16s ease, color .16s ease; }
         .editor-actions button:hover:not(:disabled) { color: #eaf2fb; border-color: rgba(59, 130, 196, .45); background: #1c3048; }
         .editor-actions button.active, .editor-actions .primary-action { color: #fff; border-color: rgba(87, 139, 190, .48); background: #2f6fa3; }
         .editor-actions button:disabled { opacity: .35; cursor: not-allowed; }
         #backToUploadCircleButton { width: auto; height: 34px; border-radius: 7px; color: #94a3b8; background: #1e293b; box-shadow: none; }
-        .editor-actions .structure-action { grid-column: span 2; color: #fff; background: #326fa9; }
+        .editor-actions .structure-action { color: #fff; background: #326fa9; }
         .editor-actions .clear-action:not(:disabled) { color: #ffe4e6; background: #8f2328; }
         .cad-mode-tabs { position: fixed; top: 76px; left: 16px; z-index: 24; display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 6px; border: 1px solid rgba(93, 111, 134, .36); border-radius: var(--radius-lg); background: rgba(15, 27, 43, .94); box-shadow: 0 12px 24px rgba(0, 0, 0, .18); backdrop-filter: blur(10px); }
         .cad-mode-tab { width: 40px; height: 40px; padding: 9px; border: 1px solid transparent; border-radius: 9px; color: #64748b; background: transparent; cursor: pointer; font-size: 0; transition: .18s ease; }
@@ -597,7 +600,7 @@
 
         <section id="editorPage" class="page page-inactive">
             <header class="product-bar">
-                <div class="product-mark">
+                <div class="product-mark" onclick="window.goBack()" style="cursor:pointer;" title="Go to home">
                     <span class="product-logo"><svg viewBox="0 0 24 24"><path d="M12 2.5 3.5 7v10L12 21.5 20.5 17V7L12 2.5Zm0 2.4 5.9 3.1-5.9 3.1L6.1 8 12 4.9Zm-6.5 5 5.3 2.8v5.7l-5.3-2.8V9.9Zm7.7 8.5v-5.7l5.3-2.8v5.7l-5.3 2.8Z"/></svg></span>
                     <span>Forma Link <small>Spatial workspace</small></span>
                 </div>
@@ -633,15 +636,19 @@
             <!-- NEW: Right-side chat panel with updated buttons -->
             <div class="right-panel">
                 <nav id="headerEditorActions" class="editor-actions" aria-label="Editor actions">
-                    <button id="backToUploadCircleButton" onclick="window.goBack()" title="Back to start">Back</button>
-                    <button class="tab-button" id="chatTabButton">Chat</button>
-                    <button class="tab-button" id="codeEditorTabButton">Style</button>
-                    <button class="tab-button" id="uploadNewFileButton">Add</button>
-                    <button class="tab-button primary-action" id="saveButton">Save</button>
-                    <button id="undoButton">Undo</button>
-                    <button id="redoButton">Redo</button>
-                    <button id="structureHighlightButton" class="structure-action">Structure</button>
-                    <button id="clearStructureButton" class="clear-action">Clear</button>
+                    <div class="editor-row editor-row-main">
+                        <button id="backToUploadCircleButton" onclick="window.goBack()" title="Back to start">Back</button>
+                        <button class="tab-button" id="chatTabButton">Chat</button>
+                        <button class="tab-button" id="codeEditorTabButton">Style</button>
+                        <button class="tab-button" id="uploadNewFileButton">Add</button>
+                        <button class="tab-button primary-action" id="saveButton">Save</button>
+                    </div>
+                    <div class="editor-row editor-row-util">
+                        <button id="undoButton">Undo</button>
+                        <button id="redoButton">Redo</button>
+                        <button id="structureHighlightButton" class="structure-action">Structure</button>
+                        <button id="clearStructureButton" class="clear-action">Clear</button>
+                    </div>
                 </nav>
                 <div class="cad-mode-tabs" role="tablist" aria-label="Sidebar mode">
                     <button class="cad-mode-tab active" data-cad-mode="object" title="Object" aria-label="Object"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 7v10L12 21l7.5-4V7L12 3Z"/><path d="m4.5 7 7.5 4 7.5-4M12 11v10"/></svg></button>
