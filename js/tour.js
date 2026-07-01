@@ -54,9 +54,12 @@ const STEPS = [
   {
     title: 'Step 4 — Link Documents & URLs',
     body:  'Connect maintenance records, product data sheets, or reference links to any selected BIM element. Paste a URL, click <b>Save URL</b>, and open it anytime with <b>Open ↗</b>.',
-    targetSel: '.doc-link-group',
+    targetId:  'cadModeObject',
     placement: 'left',
     beforeShow() {
+      // Chat hides the sidebar-workspace, so close it first before switching tabs
+      const chatBtn = document.getElementById('chatTabButton');
+      if (chatBtn && chatBtn.classList.contains('active')) chatBtn.click();
       activateTab('object');
     },
   },
@@ -68,6 +71,8 @@ const STEPS = [
     targetSel: '.digital-twin-actions',
     placement: 'left',
     beforeShow() {
+      const chatBtn = document.getElementById('chatTabButton');
+      if (chatBtn && chatBtn.classList.contains('active')) chatBtn.click();
       activateTab('layers');
     },
   },
@@ -79,6 +84,8 @@ const STEPS = [
     targetSel: '.digital-twin-values',
     placement: 'left',
     beforeShow() {
+      const chatBtn = document.getElementById('chatTabButton');
+      if (chatBtn && chatBtn.classList.contains('active')) chatBtn.click();
       activateTab('layers');
     },
   },
@@ -90,6 +97,8 @@ const STEPS = [
     targetSel: '.digital-twin-level-filter',
     placement: 'left',
     beforeShow() {
+      const chatBtn = document.getElementById('chatTabButton');
+      if (chatBtn && chatBtn.classList.contains('active')) chatBtn.click();
       activateTab('layers');
     },
   },
@@ -321,13 +330,13 @@ function showStep(index) {
     hint.style.display = 'none';
   }
 
-  // Position elements (small delay lets beforeShow finish DOM updates)
+  // Delay long enough for any CSS transitions (e.g. chat-close) to settle
   setTimeout(() => {
     const target = getTarget(step);
     positionHighlight(target, step);
     positionTooltip(target, step);
     positionPointer(target, step);
-  }, 80);
+  }, 200);
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
