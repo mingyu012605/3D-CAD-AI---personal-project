@@ -7,6 +7,7 @@
     <!-- Using Inter font from Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/tour.css" />
     <style>
         :root {
             --ink: #e2e8f0;
@@ -611,7 +612,7 @@
                 </label>
                 <div class="live-pill">Workspace ready</div>
             </header>
-            <main id="cadViewer">
+            <main id="cadViewer" data-tour-id="viewer">
                 <canvas id="cadCanvas"></canvas>
                 <div id="viewAxesContainer"></div>
                 <div class="viewer-context top-left">
@@ -622,7 +623,7 @@
                 </div>
 
                 <!-- Floating view control toolbar -->
-                <div id="viewToolbar">
+                <div id="viewToolbar" data-tour-id="view-controls">
                     <button class="view-btn" onclick="setView('top')"    title="Top View">Top</button>
                     <button class="view-btn" onclick="setView('front')"  title="Front View">Front</button>
                     <button class="view-btn" onclick="setView('right')"  title="Right View">Right</button>
@@ -638,7 +639,7 @@
                 <nav id="headerEditorActions" class="editor-actions" aria-label="Editor actions">
                     <div class="editor-row editor-row-main">
                         <button id="backToUploadCircleButton" onclick="window.goBack()" title="Back to start">Back</button>
-                        <button class="tab-button" id="chatTabButton">Chat</button>
+                        <button class="tab-button" id="chatTabButton" data-tour-id="chat-btn">Chat</button>
                         <button class="tab-button" id="codeEditorTabButton">Style</button>
                         <button class="tab-button" id="uploadNewFileButton">Add</button>
                         <button class="tab-button primary-action" id="saveButton">Save</button>
@@ -659,7 +660,7 @@
                 </div>
 
                 <div class="sidebar-workspace">
-                    <section id="cadModeObject" class="cad-mode-panel active">
+                    <section id="cadModeObject" class="cad-mode-panel active" data-tour-id="object-inspector">
                         <h3 class="cad-panel-heading">Object Inspector</h3>
                         <div id="cadObjectEmpty" class="cad-empty-state">
                             <strong>No object selected</strong><br>
@@ -773,14 +774,14 @@
                         </div>
                     </section>
 
-                    <section id="cadModeLayers" class="cad-mode-panel">
+                    <section id="cadModeLayers" class="cad-mode-panel" data-tour-id="layers-panel">
                         <h3 class="cad-panel-heading">Digital Twin Data Layers</h3>
                         <div class="cad-panel-subtitle">Live weather when configured, with clearly labelled operational simulations.</div>
                         <div class="digital-twin-active-card">
                             <span>Active Layer</span><em id="digitalTwinActiveFragments">No fragments coloured</em>
                             <b id="digitalTwinActiveLayerName">None</b><small id="digitalTwinActiveLayerValue">Choose Energy, Occupancy, or Maintenance.</small>
                         </div>
-                        <div class="digital-twin-actions">
+                        <div class="digital-twin-actions" data-tour-id="dt-layer-btns">
                             <button data-digital-twin-layer="energy">Energy Usage</button>
                             <button data-digital-twin-layer="occupancy">Occupancy</button>
                             <button data-digital-twin-layer="maintenance">Maintenance</button>
@@ -793,7 +794,7 @@
                             </div>
                             <input id="digitalTwinTimeSlider" type="range" min="0" max="23" step="1" value="9" aria-label="Digital twin simulation hour">
                         </div>
-                        <div class="digital-twin-level-filter">
+                        <div class="digital-twin-level-filter" data-tour-id="level-filter">
                             <label for="digitalTwinLevelFilter">Level Filter</label>
                             <select id="digitalTwinLevelFilter">
                                 <option value="__all__">All Levels</option>
@@ -804,7 +805,7 @@
                             </select>
                             <span id="digitalTwinLevelFilterStatus">All levels visible</span>
                         </div>
-                        <div class="digital-twin-values">
+                        <div class="digital-twin-values" data-tour-id="weather-values">
                             <span>Weather temperature</span><b id="digitalTwinWeatherValue">Loading...</b>
                             <span>Energy load</span><b id="digitalTwinEnergyValue">Inactive</b>
                             <span>Occupancy</span><b id="digitalTwinOccupancyValue">Inactive</b>

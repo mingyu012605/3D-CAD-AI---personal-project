@@ -28,6 +28,7 @@ import { initDocLink, onObjectSelected as docLinkOnSelected } from './docLink.js
 import { getIFCElementProperties } from './ifcLoader.js';
 import { initDigitalTwinLayers, onDigitalTwinObjectSelected } from './digitalTwinLayers.js';
 import { saveNativeProject } from './project.js';
+import { startTourIfFirstTime, tourOnElementSelected, hideTourBtn } from './tour.js';
 import { initCADTools } from './cadTools.js';
 import {
     initFaceEditCallbacks,
@@ -171,6 +172,7 @@ import {
             onObjectSelected: object => {
                 docLinkOnSelected(object);
                 onDigitalTwinObjectSelected(object);
+                if (object) tourOnElementSelected();
             }
         });
 
@@ -3532,6 +3534,7 @@ import {
             uploadPage.classList.remove('page-inactive');
             uploadPage.classList.add('page-active');
             headerEditorActions.hidden = true;
+            hideTourBtn();
             stopVoiceAssist();
             window.removeEventListener('resize', onWindowResize, false);
             disposeSceneResources(); // This will clear all models and re-initialize the state.scene
@@ -3689,6 +3692,7 @@ import {
                 loadSampleByUrl(url, displayName);
             }
             addMessageToLog('System', `Loading sample: ${name}`);
+            startTourIfFirstTime();
         };
 
         // Show/hide dropZone overlay when files are dragged onto the start page
