@@ -3562,18 +3562,18 @@ import {
 
         const SAMPLE_URLS = {
             building: 'https://raw.githubusercontent.com/mingyu012605/3D-CAD-AI---personal-project/main/samples/rmebasicsampleproject.ifc',
-            sponza:   'https://media.githubusercontent.com/media/KhronosGroup/glTF-Sample-Models/master/2.0/Sponza/glTF-Binary/Sponza.glb',
-            dome:     'https://media.githubusercontent.com/media/KhronosGroup/glTF-Sample-Models/master/2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb',
-            transit:  'https://media.githubusercontent.com/media/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/glTF-Binary/CesiumMilkTruck.glb',
-            greenhouse: 'https://media.githubusercontent.com/media/KhronosGroup/glTF-Sample-Models/master/2.0/Avocado/glTF-Binary/Avocado.glb',
-            industrial: 'https://media.githubusercontent.com/media/KhronosGroup/glTF-Sample-Models/master/2.0/FlightHelmet/glTF-Binary/FlightHelmet.glb',
+            sponza:   'https://threejs.org/examples/models/gltf/LittlestTokyo.glb',
+            dome:     'https://modelviewer.dev/shared-assets/models/Astronaut.glb',
+            transit:  'https://threejs.org/examples/models/gltf/Soldier.glb',
+            greenhouse: 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
+            industrial: 'https://modelviewer.dev/shared-assets/models/Horse.glb',
             manor:    'https://raw.githubusercontent.com/mingyu012605/3D-CAD-AI---personal-project/main/samples/rmebasicsampleproject.ifc',
-            tower:    'https://media.githubusercontent.com/media/KhronosGroup/glTF-Sample-Models/master/2.0/BoomBox/glTF-Binary/BoomBox.glb',
-            duck:     'https://media.githubusercontent.com/media/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
-            helmet:   'https://media.githubusercontent.com/media/KhronosGroup/glTF-Sample-Models/master/2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb',
-            truck:    'https://media.githubusercontent.com/media/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/glTF-Binary/CesiumMilkTruck.glb',
-            avocado:  'https://media.githubusercontent.com/media/KhronosGroup/glTF-Sample-Models/master/2.0/Avocado/glTF-Binary/Avocado.glb',
-            box:      'https://media.githubusercontent.com/media/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF-Binary/Box.glb',
+            tower:    'https://threejs.org/examples/models/gltf/Flamingo.glb',
+            duck:     'https://modelviewer.dev/shared-assets/models/Horse.glb',
+            helmet:   'https://modelviewer.dev/shared-assets/models/Astronaut.glb',
+            truck:    'https://threejs.org/examples/models/gltf/Soldier.glb',
+            avocado:  'https://threejs.org/examples/models/gltf/Flamingo.glb',
+            box:      'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
         };
 
         function getRecentFiles() {
