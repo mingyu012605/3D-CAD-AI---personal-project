@@ -5390,8 +5390,24 @@ import {
         }
 
         // Event listeners for tab buttons (now that setActiveTab is global)
-        chatTabButton.addEventListener('click', () => setActiveTab('chat'));
-        codeEditorTabButton.addEventListener('click', () => setActiveTab('codeEditor'));
+        chatTabButton.addEventListener('click', () => {
+            if (chatTabButton.classList.contains('active')) {
+                chatTabButton.classList.remove('active');
+                chatContent.classList.remove('active');
+                if (sidebarWorkspace) sidebarWorkspace.style.display = '';
+            } else {
+                setActiveTab('chat');
+            }
+        });
+        codeEditorTabButton.addEventListener('click', () => {
+            if (codeEditorTabButton.classList.contains('active')) {
+                codeEditorTabButton.classList.remove('active');
+                codeEditorContent.classList.remove('active');
+                if (sidebarWorkspace) sidebarWorkspace.style.display = '';
+            } else {
+                setActiveTab('codeEditor');
+            }
+        });
 
 
         // Check if user is typing in UI elements - ENHANCED
