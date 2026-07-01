@@ -3561,19 +3561,19 @@ import {
         const RECENT_FILES_KEY = 'forma-link-recent-files-v1';
 
         const SAMPLE_URLS = {
-            building: 'https://raw.githubusercontent.com/mingyu012605/3D-CAD-AI---personal-project/main/samples/rmebasicsampleproject.ifc',
-            sponza:   'https://threejs.org/examples/models/gltf/LittlestTokyo.glb',
-            dome:     'https://modelviewer.dev/shared-assets/models/Astronaut.glb',
-            transit:  'https://threejs.org/examples/models/gltf/Soldier.glb',
-            greenhouse: 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
-            industrial: 'https://modelviewer.dev/shared-assets/models/Horse.glb',
-            manor:    'https://raw.githubusercontent.com/mingyu012605/3D-CAD-AI---personal-project/main/samples/rmebasicsampleproject.ifc',
-            tower:    'https://threejs.org/examples/models/gltf/Flamingo.glb',
-            duck:     'https://modelviewer.dev/shared-assets/models/Horse.glb',
-            helmet:   'https://modelviewer.dev/shared-assets/models/Astronaut.glb',
-            truck:    'https://threejs.org/examples/models/gltf/Soldier.glb',
-            avocado:  'https://threejs.org/examples/models/gltf/Flamingo.glb',
-            box:      'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
+            building: './samples/rmebasicsampleproject.ifc',
+            sponza:   './samples/littlest_tokyo.glb',
+            dome:     './samples/astronaut.glb',
+            transit:  './samples/soldier.glb',
+            greenhouse: './samples/robot.glb',
+            industrial: './samples/horse.glb',
+            manor:    './samples/rmebasicsampleproject.ifc',
+            tower:    './samples/flamingo.glb',
+            duck:     './samples/horse.glb',
+            helmet:   './samples/astronaut.glb',
+            truck:    './samples/soldier.glb',
+            avocado:  './samples/flamingo.glb',
+            box:      './samples/robot.glb',
         };
 
         function getRecentFiles() {
