@@ -54,13 +54,18 @@ const STEPS = [
   {
     title: 'Step 4 — Link Documents & URLs',
     body:  'Connect maintenance records, product data sheets, or reference links to any selected BIM element. Paste a URL, click <b>Save URL</b>, and open it anytime with <b>Open ↗</b>.',
-    targetId:  'cadModeObject',
+    targetSel: '.doc-link-group',
     placement: 'left',
     beforeShow() {
       // Chat hides the sidebar-workspace, so close it first before switching tabs
       const chatBtn = document.getElementById('chatTabButton');
       if (chatBtn && chatBtn.classList.contains('active')) chatBtn.click();
       activateTab('object');
+      // The Linked Document section sits below the fold inside the scrollable
+      // object panel — without this it stays wherever step 2 left the scroll
+      // position, so the highlight ends up framing the same area as step 2.
+      const docSection = document.querySelector('.doc-link-group');
+      if (docSection) docSection.scrollIntoView({ block: 'center', behavior: 'auto' });
     },
   },
 
