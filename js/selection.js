@@ -353,8 +353,21 @@ export function duplicateSelection() {
 }
 
 export function onCanvasClick(event) {
+    // OrbitControls listens for 'pointerdown' and calls preventDefault() for
+    // mouse/pen input, which per the Pointer Events spec suppresses the
+    // browser's follow-up synthetic 'mousedown' — so a 'mousedown' listener
+    // here would silently never fire for real mouse clicks (dragging still
+    // worked because OrbitControls itself uses 'pointerdown', not
+    // 'mousedown'). Listening for 'pointerdown' directly sidesteps that,
+    // since preventDefault doesn't stop other listeners on the same event.
+    // Touch is still handled via native 'touchstart' below to avoid double
+    // handling the same tap (which also dispatches a 'pointerdown').
+    if (event.type === 'pointerdown' && event.pointerType === 'touch') {
+        return;
+    }
+
     // Only process left-click (state.mouse button 0) or touchstart
-    if (event.type === 'mousedown' && event.button !== 0) {
+    if (event.type === 'pointerdown' && event.button !== 0) {
         return;
     }
 
@@ -363,7 +376,7 @@ export function onCanvasClick(event) {
         return;
     }
 
-    // Store initial pointer position on mousedown/touchstart
+    // Store initial pointer position on pointerdown/touchstart
     if (event.type === 'touchstart') {
         mouseDownX = event.touches[0].clientX;
         mouseDownY = event.touches[0].clientY;
@@ -373,7 +386,7 @@ export function onCanvasClick(event) {
     }
     const clickTolerance = event.type === 'touchstart' ? TOUCH_CLICK_TOLERANCE : MOUSE_CLICK_TOLERANCE;
 
-    // Add a temporary mouseup/touchend listener to check for drag vs click
+    // Add a temporary pointerup/touchend listener to check for drag vs click
     const onPointerUp = (upEvent) => {
         let currentX, currentY;
         if (upEvent.type === 'touchend') {
@@ -442,12 +455,12 @@ export function onCanvasClick(event) {
         }
 
         // Clean up the temporary listeners
-        state.renderer.domElement.removeEventListener('mouseup', onPointerUp);
+        state.renderer.domElement.removeEventListener('pointerup', onPointerUp);
         state.renderer.domElement.removeEventListener('touchend', onPointerUp);
     };
 
-    // Attach temporary listeners for mouseup/touchend
-    state.renderer.domElement.addEventListener('mouseup', onPointerUp, { once: true });
+    // Attach temporary listeners for pointerup/touchend
+    state.renderer.domElement.addEventListener('pointerup', onPointerUp, { once: true });
     state.renderer.domElement.addEventListener('touchend', onPointerUp, { once: true });
 }
 

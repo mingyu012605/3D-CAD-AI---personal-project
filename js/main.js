@@ -3428,7 +3428,7 @@ import {
                     state.controls = null;
                 }
                 if (cadCanvas) {
-                    cadCanvas.removeEventListener('mousedown', onCanvasClick, false);
+                    cadCanvas.removeEventListener('pointerdown', onCanvasClick, false);
                     cadCanvas.removeEventListener('touchstart', onCanvasClick, false);
                 }
                 if (state.transformControls) {
@@ -3781,9 +3781,13 @@ import {
             state.raycaster = new THREE.Raycaster();
             state.mouse = new THREE.Vector2();
             // Remove previous listeners before adding new ones to prevent duplicates on re-init
-            cadCanvas.removeEventListener('mousedown', onCanvasClick, false);
+            // Uses 'pointerdown' rather than 'mousedown' — OrbitControls calls
+            // preventDefault() on pointerdown for mouse input, which suppresses
+            // the browser's follow-up synthetic 'mousedown' entirely (see
+            // selection.js:onCanvasClick for the full explanation).
+            cadCanvas.removeEventListener('pointerdown', onCanvasClick, false);
             cadCanvas.removeEventListener('touchstart', onCanvasClick, false);
-            cadCanvas.addEventListener('mousedown', onCanvasClick, false);
+            cadCanvas.addEventListener('pointerdown', onCanvasClick, false);
             cadCanvas.addEventListener('touchstart', onCanvasClick, false);
             cadCanvas.removeEventListener('mousemove', onCanvasMouseMove, false);
             cadCanvas.addEventListener('mousemove', onCanvasMouseMove, false);
