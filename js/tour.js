@@ -401,19 +401,26 @@ export function tourOnElementSelected() {
   setTimeout(() => nextStep(), 900);
 }
 
-/**
- * Show the guide automatically for first-time users.
- * Call this from main.js after transitioning to the editor page.
- */
-export function startTourIfFirstTime() {
+/** Show the persistent "Guide" replay button (safe to call as soon as the editor is shown). */
+export function showTourReplayButton() {
   buildDOM();
-  // Show the replay button whenever we're in editor mode
   const replayBtn = $id('tourStartBtn');
   if (replayBtn) replayBtn.classList.add('tour-btn-show');
+}
+
+/**
+ * Show the guide automatically for first-time users.
+ * Call this from main.js once the model has actually finished loading —
+ * step 1 asks the user to click an element, so starting any earlier (e.g.
+ * a fixed delay while a large IFC file is still parsing) points the tour
+ * at an empty viewport.
+ */
+export function startTourIfFirstTime() {
+  showTourReplayButton();
 
   if (!localStorage.getItem(LS_KEY)) {
-    // Delay slightly so the canvas and model have a moment to initialise
-    setTimeout(startTour, 1400);
+    // Small extra delay so the just-finished scene has a moment to settle
+    setTimeout(startTour, 400);
   }
 }
 

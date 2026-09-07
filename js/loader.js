@@ -207,59 +207,63 @@ function validateFileExtension(name = '') {
 }
 
 function _loadGLBFromUrl(modelUrl, displayName) {
-    const loader = new THREE.GLTFLoader();
-    if (typeof THREE.DRACOLoader !== 'undefined') {
-        const draco = new THREE.DRACOLoader();
-        draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
-        loader.setDRACOLoader(draco);
-    }
-    loader.load(modelUrl, (gltf) => {
-        const model = gltf.scene;
-        model.name = displayName || `Sample (${modelUrl.split('/').pop()})`;
-        state.scene.add(model);
-        model.traverse((obj) => {
-            if (obj.isMesh && obj.material) {
-                if (Array.isArray(obj.material)) {
-                    obj.userData.initialMaterial = obj.material.map(mat => mat.clone());
-                } else {
-                    obj.userData.initialMaterial = obj.material.clone();
-                }
-            }
-        });
-        state.loadedModels.push(model);
-        state.navigationModelSize = null;
-        normalizeModelsToGround([model]);
-        _resetView();
-        addMessageToLog('System', `Model "${model.name}" loaded successfully.`);
-        _speakResponse('Model loaded.');
-        if (loadingMsg) loadingMsg.style.display = 'none';
-        saveSceneState();
-    }, (xhr) => {
-        if (loadingMsg && xhr.total) {
-            loadingMsg.style.display = 'block';
-            loadingMsg.textContent = `Loading ${Math.round(xhr.loaded / xhr.total * 100)}%…`;
+    return new Promise((resolve) => {
+        const loader = new THREE.GLTFLoader();
+        if (typeof THREE.DRACOLoader !== 'undefined') {
+            const draco = new THREE.DRACOLoader();
+            draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
+            loader.setDRACOLoader(draco);
         }
-    }, (error) => {
-        const msg = error?.message || error?.type || String(error);
-        console.error(`[loader] Error loading model from ${modelUrl}:`, error);
-        addMessageToLog('System', `Failed to load model: ${msg}`);
-        _speakResponse('Failed to load model.');
-        if (loadingMsg) loadingMsg.style.display = 'none';
+        loader.load(modelUrl, (gltf) => {
+            const model = gltf.scene;
+            model.name = displayName || `Sample (${modelUrl.split('/').pop()})`;
+            state.scene.add(model);
+            model.traverse((obj) => {
+                if (obj.isMesh && obj.material) {
+                    if (Array.isArray(obj.material)) {
+                        obj.userData.initialMaterial = obj.material.map(mat => mat.clone());
+                    } else {
+                        obj.userData.initialMaterial = obj.material.clone();
+                    }
+                }
+            });
+            state.loadedModels.push(model);
+            state.navigationModelSize = null;
+            normalizeModelsToGround([model]);
+            _resetView();
+            addMessageToLog('System', `Model "${model.name}" loaded successfully.`);
+            _speakResponse('Model loaded.');
+            if (loadingMsg) loadingMsg.style.display = 'none';
+            saveSceneState();
+            resolve();
+        }, (xhr) => {
+            if (loadingMsg && xhr.total) {
+                loadingMsg.style.display = 'block';
+                loadingMsg.textContent = `Loading ${Math.round(xhr.loaded / xhr.total * 100)}%…`;
+            }
+        }, (error) => {
+            const msg = error?.message || error?.type || String(error);
+            console.error(`[loader] Error loading model from ${modelUrl}:`, error);
+            addMessageToLog('System', `Failed to load model: ${msg}`);
+            _speakResponse('Failed to load model.');
+            if (loadingMsg) loadingMsg.style.display = 'none';
+            resolve(); // Resolve even on error so callers waiting on this don't hang.
+        });
     });
 }
 
 export function loadRandomModel() {
     if (RANDOM_MODEL_URLS.length === 0) {
         addMessageToLog('System', 'No random models available.');
-        return;
+        return Promise.resolve();
     }
     const url = RANDOM_MODEL_URLS[Math.floor(Math.random() * RANDOM_MODEL_URLS.length)];
-    _loadGLBFromUrl(url);
+    return _loadGLBFromUrl(url);
 }
 
 export function loadSampleByUrl(url, displayName) {
-    if (!url) return;
-    _loadGLBFromUrl(url, displayName);
+    if (!url) return Promise.resolve();
+    return _loadGLBFromUrl(url, displayName);
 }
 
 async function _getIFCFromCache(cacheKey) {

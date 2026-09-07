@@ -28,7 +28,7 @@ import { initDocLink, onObjectSelected as docLinkOnSelected } from './docLink.js
 import { getIFCElementProperties } from './ifcLoader.js';
 import { initDigitalTwinLayers, onDigitalTwinObjectSelected } from './digitalTwinLayers.js';
 import { saveNativeProject } from './project.js';
-import { startTourIfFirstTime, tourOnElementSelected, hideTourBtn, hasSeenTour } from './tour.js';
+import { startTourIfFirstTime, showTourReplayButton, tourOnElementSelected, hideTourBtn, hasSeenTour } from './tour.js';
 import { initCADTools } from './cadTools.js';
 import {
     initFaceEditCallbacks,
@@ -3485,15 +3485,16 @@ import {
         }
 
 
-        function goToEditor(loadType = 'empty') { // Default to 'empty' if no type specified
+        async function goToEditor(loadType = 'empty') { // Default to 'empty' if no type specified
             console.log(`[goToEditor] Function called with load type: ${loadType}.`); // Added log
 
             // Dispose and re-init state.scene to ensure a clean state for new or loaded models
             disposeSceneResources();
 
+            let randomModelPromise = null;
             if (loadType === 'random') {
                 console.log("[goToEditor] Loading a random model.");
-                loadRandomModel();
+                randomModelPromise = loadRandomModel();
                 addMessageToLog('System', 'Loading a random model. Use "Upload New File" to add more models.');
                 speakResponse('Loading a random model. You can upload files from the editor.');
             } else if (loadType === 'empty') {
@@ -3525,6 +3526,14 @@ import {
 
             // The renderer was sized before the page became visible — fix it now
             requestAnimationFrame(() => onWindowResize());
+            showTourReplayButton();
+            // Wait for an actual model load (random) to finish before auto-starting
+            // the guide, so step 1 doesn't point at an empty, still-loading viewport.
+            // 'empty' has nothing to load; 'uploaded' isn't reliably awaitable here,
+            // so both start the guide immediately as before.
+            if (randomModelPromise) {
+                await randomModelPromise;
+            }
             startTourIfFirstTime();
         }
 
@@ -3675,7 +3684,7 @@ import {
             if (title)   title.textContent = section === 'samples' ? 'Samples' : 'Recent';
         };
 
-        window.loadSample = function(name) {
+        window.loadSample = async function(name) {
             if (name === 'empty') { goToEditor('empty'); return; }
             const url = SAMPLE_URLS[name];
             if (!url) { goToEditor('random'); return; }
@@ -3686,13 +3695,16 @@ import {
             editorPage.classList.add('page-active');
             headerEditorActions.hidden = false;
             requestAnimationFrame(() => onWindowResize());
+            showTourReplayButton();
             const displayName = name.charAt(0).toUpperCase() + name.slice(1) + ' (Sample)';
-            if (url.toLowerCase().endsWith('.ifc')) {
-                loadSampleIFCByUrl(url, displayName);
-            } else {
-                loadSampleByUrl(url, displayName);
-            }
             addMessageToLog('System', `Loading sample: ${name}`);
+            if (url.toLowerCase().endsWith('.ifc')) {
+                await loadSampleIFCByUrl(url, displayName);
+            } else {
+                await loadSampleByUrl(url, displayName);
+            }
+            // Only auto-start the guide once the model has actually finished
+            // loading — otherwise step 1 points at an empty, still-loading viewport.
             startTourIfFirstTime();
         };
 
