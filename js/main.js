@@ -3525,6 +3525,7 @@ import {
 
             // The renderer was sized before the page became visible — fix it now
             requestAnimationFrame(() => onWindowResize());
+            startTourIfFirstTime();
         }
 
         function goBack() {
