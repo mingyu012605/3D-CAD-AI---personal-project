@@ -417,3 +417,8 @@ export function hideTourBtn() {
   const btn = $id('tourStartBtn');
   if (btn) btn.classList.remove('tour-btn-show');
 }
+
+/** True once the user has completed or skipped the tour at least once. */
+export function hasSeenTour() {
+  return !!localStorage.getItem(LS_KEY);
+}

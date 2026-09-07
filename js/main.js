@@ -28,7 +28,7 @@ import { initDocLink, onObjectSelected as docLinkOnSelected } from './docLink.js
 import { getIFCElementProperties } from './ifcLoader.js';
 import { initDigitalTwinLayers, onDigitalTwinObjectSelected } from './digitalTwinLayers.js';
 import { saveNativeProject } from './project.js';
-import { startTourIfFirstTime, tourOnElementSelected, hideTourBtn } from './tour.js';
+import { startTourIfFirstTime, tourOnElementSelected, hideTourBtn, hasSeenTour } from './tour.js';
 import { initCADTools } from './cadTools.js';
 import {
     initFaceEditCallbacks,
@@ -5554,6 +5554,12 @@ import {
 
             // Automatically test AI connection on load
             testAIConnection(); // Still call to log backend status to console
+
+            // First-time visitors: skip the click, jump straight into the main
+            // sample with the guide running so the app explains itself immediately.
+            if (!hasSeenTour()) {
+                setTimeout(() => window.loadSample('building'), 300);
+            }
 
             // Removed event listeners for view control buttons as the HTML is removed
             // topViewBtn.addEventListener('click', setTopView);
