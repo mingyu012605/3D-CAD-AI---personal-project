@@ -3,7 +3,7 @@ import { addMessageToLog } from './utils.js';
 
 let mouseDownX = 0;
 let mouseDownY = 0;
-const MOUSE_CLICK_TOLERANCE = 9;
+const MOUSE_CLICK_TOLERANCE = 16;
 const TOUCH_CLICK_TOLERANCE = 12;
 const SELECTION_ASSIST_RADIUS_PX = 7;
 const highlightMaterial = new THREE.MeshBasicMaterial({
