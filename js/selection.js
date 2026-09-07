@@ -420,7 +420,10 @@ export function onCanvasClick(event) {
             }
 
             // PRIORITY 2: Normal object intersection
-            const intersects = findObjectIntersections(currentX, currentY, objectsToIntersect, event.type === 'touchstart');
+            // Give mouse clicks the same nearby-pixel assist as touch — a plain
+            // exact-pixel raycast misses thin/complex geometry easily and made
+            // mouse selection feel broken while touch (already assisted) worked.
+            const intersects = findObjectIntersections(currentX, currentY, objectsToIntersect, true);
 
             if (intersects.length > 0) {
                 const intersectedObject = intersects[0].object;
