@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { addMessageToLog } from './utils.js';
-import { saveSceneState } from './history.js';
+import { saveSceneStateDebounced } from './history.js';
 import { loadIFCFile } from './ifcLoader.js';
 import { loadNativeProjectFile } from './project.js';
 import { normalizeModelsToGround, getPlacementCheck } from './scene.js';
@@ -234,7 +234,7 @@ function _loadGLBFromUrl(modelUrl, displayName) {
             addMessageToLog('System', `Model "${model.name}" loaded successfully.`);
             _speakResponse('Model loaded.');
             if (loadingMsg) loadingMsg.style.display = 'none';
-            saveSceneState();
+            saveSceneStateDebounced();
             resolve();
         }, (xhr) => {
             if (loadingMsg && xhr.total) {
@@ -421,7 +421,12 @@ async function _loadIFCModel(file) {
         const count = group.children.length;
         addMessageToLog('System', `✅ IFC model '${file.name}' loaded — ${count} element${count !== 1 ? 's' : ''}. Click any element to see its properties.`);
         _speakResponse('IFC model loaded.');
-        saveSceneState();
+        // Deferred (debounced) rather than synchronous: saveSceneState()'s
+        // undo-baseline bookkeeping was previously also a full deep-clone of
+        // every mesh's geometry and material, which alone could take several
+        // seconds on a large model and was blocking the "loaded" moment (and
+        // the guide) on nothing the user needs immediately.
+        saveSceneStateDebounced();
     } catch (e) {
         console.error('[loader] IFC load error:', e);
         _hideBanner();
@@ -435,7 +440,7 @@ export function loadModel(file) {
         loadNativeProjectFile(file)
             .then(() => {
                 loadingMsg.style.display = 'none';
-                saveSceneState();
+                saveSceneStateDebounced();
             })
             .catch(error => {
                 console.error('[loader] Native project load error:', error);
@@ -529,7 +534,7 @@ export function loadModel(file) {
             _speakResponse(`Model loaded successfully. You now have ${state.loadedModels.length} models in the state.scene.`);
             console.log("[loadModel] Model successfully added to state.scene. Current state.loadedModels:", state.loadedModels);
 
-            saveSceneState(); // Save state after loading a new model
+            saveSceneStateDebounced(); // Save state after loading a new model
         }, (xhr) => { // Progress callback
             loadingMsg.textContent = `Loading ${file.name}: ${Math.round(xhr.loaded / xhr.total * 100)}%`;
         }, (error) => {

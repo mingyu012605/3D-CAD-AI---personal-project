@@ -124,82 +124,19 @@ export function saveSceneStateDebounced(delay = 500) {
     }, delay);
 }
 
-// Function to save the current state of the state.scene
+// Called once a model has finished loading, to mark a clean baseline and
+// clear stale redo history (a new/added model invalidates any prior redo).
+//
+// This used to also push a full deep-clone snapshot (every mesh's geometry
+// AND material cloned) onto the undo stack via getCurrentState(). For a
+// large model that clone alone could block the main thread for multiple
+// seconds — and it was never actually useful: real edits are tracked by the
+// grouped undo-action system (beginUndoGroup/addUndoAction/endUndoGroup),
+// which manages state.undoStack directly and never calls this function, so
+// the snapshot only mattered if a user hit Undo before making any edit,
+// where "restoring" it just rebuilt the same scene it already showed.
 export function saveSceneState() {
-    // For the very first save, save the state BEFORE the action
-    // This ensures undo goes back to the previous state, not empty
-    if (history.length === 0 && state.loadedModels.length > 0) {
-        // If this is the first save and we have objects, save the current state as baseline
-        console.log("[History] Saving first state as baseline");
-    }
-
-    // Clear any redo history if a new action is performed
-    if (historyPointer < history.length - 1) {
-        history = history.slice(0, historyPointer + 1);
-    }
-
-    const currentState = [];
-    state.loadedModels.forEach(model => {
-        const modelState = {
-            uuid: model.uuid, // Store UUID to identify the object when restoring
-            name: model.name,
-            type: model.type, // e.g., Group, Mesh
-            position: model.position.toArray(),
-            rotation: model.rotation.toArray(),
-            scale: model.scale.toArray(),
-            // Store original file data if it's an uploaded model
-            isFileModel: model.userData.isFileModel || false,
-            fileData: model.userData.fileData || null, // Store original file blob or URL
-            // Store primitive type if it's a created primitive
-            isPrimitive: model.userData.isPrimitive || false,
-            primitiveType: model.userData.primitiveType || null,
-            // Store material properties for meshes within this model
-            materials: [],
-        };
-
-        model.traverse(obj => {
-            if (obj.isMesh && obj.material) {
-                const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
-                const initialMaterials = obj.userData.initialMaterial ? (Array.isArray(obj.userData.initialMaterial) ? obj.userData.initialMaterial : [obj.userData.initialMaterial]) : null;
-
-                const materialStates = materials.map((mat, index) => {
-                    const matState = {
-                        uuid: mat.uuid,
-                        color: mat.color ? mat.color.getHex() : null,
-                        emissive: mat.emissive ? mat.emissive.getHex() : null,
-                        emissiveIntensity: mat.emissiveIntensity !== undefined ? mat.emissiveIntensity : null,
-                        // Add other relevant material properties if needed (e.g., roughness, metalness)
-                    };
-                    // If there's an initial material, store its properties too for true reversion
-                    if (initialMaterials && initialMaterials[index]) {
-                        matState.initialColor = initialMaterials[index].color ? initialMaterials[index].color.getHex() : null;
-                        matState.initialEmissive = initialMaterials[index].emissive ? initialMaterials[index].emissive.getHex() : null;
-                        matState.initialEmissiveIntensity = initialMaterials[index].emissiveIntensity !== undefined ? initialMaterials[index].emissiveIntensity : null;
-                    }
-                    return matState;
-                });
-                modelState.materials.push({ meshUuid: obj.uuid, states: materialStates });
-            }
-        });
-        currentState.push(modelState);
-    });
-
-    history.push(currentState);
-    historyPointer = history.length - 1;
-
-    state.undoStack.push(getCurrentState());
-    if (state.undoStack.length > MAX_HISTORY_SIZE) {
-        disposeHistoryItem(state.undoStack.shift());
-    }
     clearRedoStack();
-
-    // Trim history if it exceeds max size
-    if (history.length > MAX_HISTORY_SIZE) {
-        history.shift(); // Remove the oldest state
-        historyPointer--; // Adjust pointer
-    }
-
-    console.log(`[History] Saved state. History size: ${history.length}, Pointer: ${historyPointer}`);
     updateUndoRedoButtons();
 }
 
