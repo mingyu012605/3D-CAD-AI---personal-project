@@ -424,6 +424,17 @@ export function startTourIfFirstTime() {
   }
 }
 
+/**
+ * Show the guide every time a sample loads — unlike startTourIfFirstTime(),
+ * this ignores the "already seen it" flag, so loading a sample always walks
+ * the user through it again rather than only on their very first visit ever.
+ * Call once the sample has actually finished loading.
+ */
+export function startTourForSample() {
+  showTourReplayButton();
+  setTimeout(startTour, 400);
+}
+
 /** Hide the Guide button (call when leaving editor). */
 export function hideTourBtn() {
   const btn = $id('tourStartBtn');

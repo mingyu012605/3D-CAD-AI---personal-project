@@ -28,7 +28,7 @@ import { initDocLink, onObjectSelected as docLinkOnSelected } from './docLink.js
 import { getIFCElementProperties } from './ifcLoader.js';
 import { initDigitalTwinLayers, onDigitalTwinObjectSelected } from './digitalTwinLayers.js';
 import { saveNativeProject } from './project.js';
-import { startTourIfFirstTime, showTourReplayButton, tourOnElementSelected, hideTourBtn, hasSeenTour } from './tour.js';
+import { startTourIfFirstTime, startTourForSample, showTourReplayButton, tourOnElementSelected, hideTourBtn, hasSeenTour } from './tour.js';
 import { initCADTools } from './cadTools.js';
 import {
     initFaceEditCallbacks,
@@ -3703,9 +3703,11 @@ import {
             } else {
                 await loadSampleByUrl(url, displayName);
             }
-            // Only auto-start the guide once the model has actually finished
-            // loading — otherwise step 1 points at an empty, still-loading viewport.
-            startTourIfFirstTime();
+            // Loading a sample always walks the user through the guide again
+            // (not just on their first-ever visit) — wait for the model to
+            // actually finish loading first so step 1 isn't pointing at an
+            // empty, still-loading viewport.
+            startTourForSample();
         };
 
         // Show/hide dropZone overlay when files are dragged onto the start page
