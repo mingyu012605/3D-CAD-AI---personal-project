@@ -38,11 +38,24 @@ async function buildSpatialLevelIndex(modelID) {
     const levelByExpressID = new Map();
 
     try {
-        const spatialTree = await ifcAPI.properties.getSpatialStructure(modelID, true);
+        // includeProperties=false: the spatial containment tree has a node for
+        // every element in the model (not just storeys), and passing `true`
+        // here fetches full item properties for EVERY one of those nodes —
+        // this was the single most expensive step in loading a large model,
+        // even though the only property actually used below (Name/LongName)
+        // is needed for a handful of IFCBUILDINGSTOREY nodes. Walk the cheap
+        // tree instead and fetch the name only for the storeys themselves.
+        const spatialTree = await ifcAPI.properties.getSpatialStructure(modelID, false);
         const visit = (node, currentLevel = null) => {
-            const level = node.type === 'IFCBUILDINGSTOREY'
-                ? node.Name?.value || node.LongName?.value || `Storey ${node.expressID}`
-                : currentLevel;
+            let level = currentLevel;
+            if (node.type === 'IFCBUILDINGSTOREY') {
+                try {
+                    const line = ifcAPI.GetLine(modelID, node.expressID);
+                    level = line.Name?.value || line.LongName?.value || `Storey ${node.expressID}`;
+                } catch {
+                    level = `Storey ${node.expressID}`;
+                }
+            }
             if (level && node.expressID != null) levelByExpressID.set(node.expressID, level);
             (node.children || []).forEach(child => visit(child, level));
         };
